@@ -8,6 +8,7 @@
 #Version: 0.1
 #This part of the script contains the main function:
 
+#connection
 bsrc.conredcap <- function(uri,token,batch_size,ouput) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
@@ -37,7 +38,9 @@ bsrc.conredcap <- function(uri,token,batch_size,ouput) {
     return(funbsrc)}
 }
 
-bsrc.checkdatabase<-function(replace,forcerun) {
+#checkdatebase
+bsrc.checkdatabase<-function(replace,forcerun, token) {
+  if(missing(token)){token<-input.token}
   if(missing(forcerun)){forcerun=FALSE}
   if(!missing(replace)){funbsrc<-replace}
   if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
@@ -45,22 +48,38 @@ bsrc.checkdatabase<-function(replace,forcerun) {
     jzc.connection.date<-NA}
   if (jzc.connection.yesno == 1) {
     if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
+      print("Database is loaded or was loaded today")
       ifrun<-TRUE
     }
     else {print("Local database is out of date, redownload now")
-      bsrc.conredcap()
+      bsrc.conredcap(token = token)
       bsrc.checkdatabase()}
   }
   else {print("RedCap Connection is not loaded, Retry Now")
-    bsrc.conredcap()
+    bsrc.conredcap(token = token)
     bsrc.checkdatabase()}
   
   return(ifrun)
 }
 
-
-bsrc.refresh<-function (forcerun) {
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
+#refresh
+bsrc.refresh<-function (forcerun,token) {
+  if (missing(token)){token<-input.token}
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
   if (ifrun){
+    subreg<-funbsrc[funbsrc$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
+    subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get age
+    subreg$as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
+    as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()))$year #get yrs
+    as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()))$month #get month
+    #find max fudate:
+    maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
+    names(maxfudate)<-c("registration_redcapid","fudemo_visitdate")
+    #find max fuevent:
+    subevent<-subset(funbsrc,select = c("registration_redcapid","redcap_event_name","fudemo_visitdate"))
+    maxevent<-subevent[match(interaction(maxfudate$registration_redcapid,maxfudate$fudemo_visitdate),interaction(subevent$registration_redcapid,subevent$fudemo_visitdate)),]
+    maxevent$months<-gsub("_months_.*$","",maxevent$redcap_event_name)
+    maxevent$daysincefu<-as.numeric(Sys.Date()-as.Date(maxevent$fudemo_visitdate))
+
   }
 }
