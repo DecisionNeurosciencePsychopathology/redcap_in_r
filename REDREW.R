@@ -14,7 +14,7 @@ author: "Jiazhou Chen"
 #- Within ID, find event that doesn't have a FUDate, remove the whole event
 #0/1 Missingness check arm specific
 #- Event variable name: "redcap_event_name"
-#-------------- Data Function ------------- 
+#-------------- Data Function ------------- c
 #0/1 Audit & basic demographic 
 #0/1 EMA & fMRI status
 #0/1 Match list of ID & list of assessments
@@ -32,7 +32,7 @@ author: "Jiazhou Chen"
 eval(parse(text='test'))
 #find string to replace:
 gsub("^.*?test.single.","",k)
-
+gsub("_months_.*$","",maxevent$redcap_event_name)
 
 ##### Install Packages####
 install.packages('REDCapR')
@@ -121,23 +121,7 @@ bsrc.getinst <- function(form_name)
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 bsrc.getdemo <- function(id,funbsrc,flavor,forcerun=FALSE){
-  if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
-  if (jzc.connection.yesno == 1) {
-    
-    if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
-      if (missing(flavor)){flavor<-'single'}
-      ifrun<-TRUE
-    }
-    else {print("Local database is out of date, redownload now")
-      bsrc.conredcap()
-      bsrc.getdemo(flavor)}
-  }
-  else {print("RedCap Connection is not loaded, Retry Now")
-    bsrc.conredcap()
-    bsrc.getdemo(flavor)}
-  
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (ifrun==TRUE){
     if (flavor == 'single'){
       if(missing(id)){idt<-readline(prompt = "Please enter the participant's 6 digits or 4 digits ID: ")}else{idt<-id}
@@ -170,7 +154,12 @@ bsrc.getdemo <- function(id,funbsrc,flavor,forcerun=FALSE){
 bsrc.getevent.single<-
   
   bsrc.getform.single<-
-  #############################
+  
+#############################
+
+
+
+###########################
 
 bsrc.report<-function(flavor,forcerun=FALSE){
   if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
@@ -212,8 +201,12 @@ odz$iftranx<-is.na( match(odz$ID,idmatch$soloffid))
 bsrc.getidmatchdb<-function(db) {
   idmatch.k<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
   names(idmatch.k)<-c('id','soloffid','redcapid')
-  db$registration_redcapid<-idmatch.k$redcapid[match(db$ID,idmatch.k$soloffid)]
-  db$iftranx<-is.na(match(db$ID,idmatch.k$soloffid))
+  if (("ID" %in% names(db))) {
+    db$registration_redcapid<-idmatch.k$redcapid[match(db$ID,idmatch.k$soloffid)]
+    db$iftranx<-is.na(match(db$ID,idmatch.k$soloffid))
+    }
+  else stop("NO ID COLUMN FOUND IN SPECIFIED DATAFRAME")
+  
   return(db)
 }
 
@@ -294,12 +287,47 @@ bsrc.process.race<-function(odk,Race) {
     }
   }
 }
-```
+
+###################################
+######  Admin Number Cal ##########
+###################################
+bsrc.irb.numsum<-function() {
+  ID_SUPREME <- read_excel("Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
+  ID_SUPREME[,5:8]<-NULL
+  tkj<-bsrc.getidmatchdb(ID_SUPREME)
+  tkj<-as.data.frame(tkj)
+  newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
+  names(newid)<-c("registration_redcapid")
+  jrk<-merge(tkj,newid,all = T)
+  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid"))
+  nui<-merge(jrk,nui,all = T)
+  if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
+        #Info user the conflict:
+        return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
+        #which direction:
+        direct.r<-readline(prompt = "Please type 'RC' for picking RedCap Status, or 'OG' for picking legacy status: ")
+        direct.r<-as.numeric(direct.r)
+        switch (direct.r,RC = nui$Status[which(!nui$Status==nui$registration_status)]<-nui$registration_status[which(!nui$Status==nui$registration_status)],
+                OG = nui$Status[which(!nui$Status==nui$registration_status)]->nui$registration_status[which(!nui$Status==nui$registration_status)])}
+  nui$Status[which(is.na(nui$Status))]<-nui$registration_status[which(is.na(nui$Status))]
+  nui$iftranx<-NULL
+  nui$StatusWord[nui$Status==88]<-"Ineligible Drop"
+  nui$StatusWord[nui$Status==7]<-"IRB Admin Drop"
+  nui$StatusWord[nui$Status==6]<-"Lost Contact/Drop"
+  nui$StatusWord[nui$Status==5]<-"Deceased"
+  nui$StatusWord[nui$Status==4]<-"Do Not Contact"
+  nui$StatusWord[nui$Status==3]<-"In Jail"
+  nui$StatusWord[nui$Status==2]<-"Missing"
+  nui$StatusWord[nui$Status==1]<-"Active"
+
+}
 
 
-Following is for Shiny Web App, 
-0/1 Single Participant Record Display
-```{r Shiny Web App}
+
+#Following is for Shiny Web App, 
+#0/1 Single Participant Record Display
+
+
 #This chunk is for shiny web app
 library(shiny)
 
@@ -315,12 +343,9 @@ ui <- fluidPage(
     helpText("Note: help text isn't a true widget,", 
              "but it provides an easy way to add text to",
              "accompany other widgets."),
-    actionButton(inputId = "changeid", "Submit")
-  )
+    actionButton(inputId = "changeid", "Submit")),
   
-  mainPanel(
-    tableOutput("view")
-  )
+  mainPanel(tableOutput("view"))
 )
 
 # Define server logic here:
@@ -338,7 +363,7 @@ server <- function(input, output) {
 # Run the app ----
 shinyApp(ui = ui, server = server)
 
-```
+
 
 
 ############
