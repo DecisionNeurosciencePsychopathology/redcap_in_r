@@ -6,15 +6,21 @@
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
 #Also contain function to generate csv calendar event (good for google) for EMA participants
 #Version: 0.1
-#This part of the script contains the main function:
+#This part of the script contains the main functions:
+  #0/1 Try to package it so call library(bsrc) can load all functions
+  #1/1 start up function
+
+
 
 #connection
-bsrc.conredcap <- function(uri,token,batch_size,ouput) {
+bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
-  if (missing(batch_size)) {batch_size<-"50"}
-  if (missing(ouput)) {output<-F
-  print("By default, the database will be assigned to `funbsrc` as a data frame.")}
+  if (missing(batch_size)) {batch_size<-"50" 
+  print("By default, the batch size is 50 unique records")}
+  if (missing(output)) {output<-F
+  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing
+        if wish to assign db to something, use arguement output = T")}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -34,52 +40,117 @@ bsrc.conredcap <- function(uri,token,batch_size,ouput) {
   else {
     print("Connection Failed, Please Try Again.") 
     jzc.connection.yesno<<-0}
-  if (ouput<-F){
+  if (output==T){
     return(funbsrc)}
 }
 
 #checkdatebase
-bsrc.checkdatabase<-function(replace,forcerun, token) {
+bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
   if(missing(token)){token<-input.token}
   if(missing(forcerun)){forcerun=FALSE}
+  if(missing(forceupdate)){forceupdate=FALSE}
   if(!missing(replace)){funbsrc<-replace}
   if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
     jzc.connection.yesno<-0 
     jzc.connection.date<-NA}
+  if (forceupdate==TRUE) {
+    print("FORCEUPDATE")
+    bsrc.conredcap(token = token)
+  }
   if (jzc.connection.yesno == 1) {
     if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
       print("Database is loaded or was loaded today")
       ifrun<-TRUE
     }
     else {print("Local database is out of date, redownload now")
+      ifrun<-FALSE
       bsrc.conredcap(token = token)
-      bsrc.checkdatabase()}
+      ifrun<-bsrc.checkdatabase()}
   }
   else {print("RedCap Connection is not loaded, Retry Now")
+    ifrun<-FALSE
     bsrc.conredcap(token = token)
-    bsrc.checkdatabase()}
+    ifrun<-bsrc.checkdatabase()
+    }
   
   return(ifrun)
 }
 
+
 #refresh
-bsrc.refresh<-function (forcerun,token) {
+bsrc.refresh<-function (forcerun,token, forceupdate, upload) {
+  if (!exists("input.token")) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
   if (missing(token)){token<-input.token}
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
+  if (missing(upload)) {upload<-TRUE
+  print("By default the refresh function will always upload to RedCap")}
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token, forceupdate = forceupdate)
   if (ifrun){
+    #get info from registration
     subreg<-funbsrc[funbsrc$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
-    subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get age
-    subreg$as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
-    as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()))$year #get yrs
-    as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()))$month #get month
+    subreg<-subreg[,1:50] #take only the regi part
+    subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
+    subreg$sincelastfu<-as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
+    subreg$fudue<-round((as.numeric(as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
+    regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("registration_consentdate",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
     #find max fudate:
+    funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
     maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
     names(maxfudate)<-c("registration_redcapid","fudemo_visitdate")
     #find max fuevent:
     subevent<-subset(funbsrc,select = c("registration_redcapid","redcap_event_name","fudemo_visitdate"))
     maxevent<-subevent[match(interaction(maxfudate$registration_redcapid,maxfudate$fudemo_visitdate),interaction(subevent$registration_redcapid,subevent$fudemo_visitdate)),]
-    maxevent$months<-gsub("_months_.*$","",maxevent$redcap_event_name)
+    maxevent<-merge(regitemp,maxevent,all.x = T)
+    maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0]<-0.25
+    maxevent$fudemo_visitdate[is.na(maxevent$fudemo_visitdate)]<-maxevent$registration_consentdate[is.na(maxevent$fudemo_visitdate)]
     maxevent$daysincefu<-as.numeric(Sys.Date()-as.Date(maxevent$fudemo_visitdate))
-
+    maxevent$months<-as.numeric(gsub("_months_.*$","",maxevent$redcap_event_name))
+    maxevent$months[is.na(maxevent$months)]<-0
+    maxevent$years<-maxevent$months/12
+    maxevent$diff<-maxevent$fudue-maxevent$years
+    #Get the names of progress report [remember to organize the dataframe in RedCap order]
+    append("registration_redcapid", names(subreg)[grep("prog_",names(subreg))])
+    
   }
 }
+
+#MetricWire:
+bsrc.metric2redcap <- function(forcerun,token) {
+  if (missing(token)){token<-input.token}
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
+  read
+}
+
+
+
+####################
+###   Part II:   ###
+###  Main Script ###
+####################
+
+#Packages:
+library(REDCapR)
+library(lubridate)
+
+#Load configuration 
+jiazhou.startup()
+
+#Connect to RedCap
+bsrc.checkdatabase(forceupdate = T, token = input.token)
+
+#Refresh RedCap values
+result<-bsrc.refresh(forceupdate = T,token = input.token)
+if(result$success) {
+#MailR
+  #Send an confirmation of the process to myself
+}
+csvname<-paste("Redcap_Log",Sys.Date(),".csv",sep = "_")
+write.csv(as.data.frame(result$outcome_message,result$affected_ids,result$status_code), file = csvname)
+
+
+#Grab metricwire function:
+bsrc.metric2redcap()
+
+#produce excel function:
+bsrc.excelproduction()
+
+
