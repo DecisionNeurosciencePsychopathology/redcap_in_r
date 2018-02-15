@@ -19,8 +19,7 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(batch_size)) {batch_size<-"50" 
   print("By default, the batch size is 50 unique records")}
   if (missing(output)) {output<-F
-  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing
-        if wish to assign db to something, use arguement output = T")}
+  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing if wish to assign db to something, use arguement output = T")}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -30,7 +29,7 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   #test connection:
   funbsrc<-redcap$read(batch_size = batch_size)
   funbsrc<<-funbsrc$data
-  funstrc<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
+  strc<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
   funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
   names(strc)<-c('field_name','form_name','field_label')
   if (length(funbsrc$data$registration_redcapid)>0) {
@@ -78,7 +77,9 @@ bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
 
 
 #refresh
-bsrc.refresh<-function (forcerun,token, forceupdate, upload) {
+bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID="all") {
+  if (missing(output)) {output<-FALSE
+  print("No output by default")}
   if (!exists("input.token")) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
   if (missing(token)){token<-input.token}
   if (missing(upload)) {upload<-TRUE
@@ -102,14 +103,55 @@ bsrc.refresh<-function (forcerun,token, forceupdate, upload) {
     maxevent<-merge(regitemp,maxevent,all.x = T)
     maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0]<-0.25
     maxevent$fudemo_visitdate[is.na(maxevent$fudemo_visitdate)]<-maxevent$registration_consentdate[is.na(maxevent$fudemo_visitdate)]
-    maxevent$daysincefu<-as.numeric(Sys.Date()-as.Date(maxevent$fudemo_visitdate))
     maxevent$months<-as.numeric(gsub("_months_.*$","",maxevent$redcap_event_name))
     maxevent$months[is.na(maxevent$months)]<-0
     maxevent$years<-maxevent$months/12
     maxevent$diff<-maxevent$fudue-maxevent$years
-    #Get the names of progress report [remember to organize the dataframe in RedCap order]
-    append("registration_redcapid", names(subreg)[grep("prog_",names(subreg))])
+    maxevent$daysincefu<-as.numeric(Sys.Date()-as.Date(maxevent$fudemo_visitdate))
+    maxevent$registration_consentdate<-NULL
+    maxevent$redcap_event_name<-NULL
+    maxevent$months<-NULL
+    maxevent$fudemo_visitdate<-NULL
     
+    #find IPDE Date:
+    funbsrc$ipde_date[which(funbsrc$ipde_date=="")]<-NA
+    funbsrc$ipde_bpd_date[which(funbsrc$ipde_bpd_date=="")]<-NA
+    ipdedateonly<-data.frame(funbsrc$registration_redcapid,as.Date(funbsrc$ipde_date),as.Date(funbsrc$ipde_bpd_date))
+    names(ipdedateonly)<-c("registration_redcapid","ipde_date","ipde_bpd_date")
+    ipdedateonly<-ipdedateonly[which(!is.na(ipdedateonly$ipde_date) | !is.na(ipdedateonly$ipde_bpd_date)),]
+    ipdedateonly$ipde_date[is.na(ipdedateonly$ipde_date)]<-ipdedateonly$ipde_bpd_date[is.na(ipdedateonly$ipde_date)]
+    ipdedateonly$ipde_bpd_date<-NULL
+    ipdedate<-aggregate(ipdedateonly$ipde_date,by=list(ipdedateonly$registration_redcapid), FUN=max)
+    names(ipdedate)<-c("registration_redcapid","ipde_date")
+    maxevent<-merge(maxevent,ipdedate,all = T)
+    
+    #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
+    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate")
+    
+    
+    
+    if(any(ID %in% idmatch$soloffid | ID %in% idmatch$id)){
+      if(ID %in% idmatch$soloffid){ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
+      else{ID<-as.character(idmatch$redcapid[which(idmatch$id==ID)])}
+    
+    if (ID %in% maxevent$registration_redcapid) {
+      singleid<-maxevent[which(maxevent$registration_redcapid==ID),]
+      upload<-FALSE
+      print("Single ID mode will not refresh RedCap")
+      print(singleid)
+    }
+    
+    if (output) {return(maxevent) 
+      print("Here you go, you asked for it.")
+    }
+       
+    if (upload) {
+    result.maxevent<-redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
+    return(result.maxevent)
+    if (result.maxevent$success) {
+      Print("Congrats, Upload was successful")}
+    else ("Something went wrong during uploading, double check")
+  }  
   }
 }
 
