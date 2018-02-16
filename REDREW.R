@@ -2,22 +2,28 @@
 title: "REDREW"
 author: "Jiazhou Chen"
 ---
-#Current Version: 0.1
+#Current Version: 1.0
 
 #This R Notebook records Jiazhou's effort to pull/input RedCap data.
 
 
-#Version 0.1:
-#0/0 Pull RedCap record into separate csv files (Not sure if that's the most efficient way; it's not)
+#Version 1.0
 #1/1 Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
-#0/1 Elimination Function: only take arms that has data if all 
-#- Within ID, find event that doesn't have a FUDate, remove the whole event
-#0/1 Missingness check arm specific
+#1/1 Pull Demo for given sinlge ID
+#1/1 Check if environment has up to date local redcap database
+#1/1 Get all data of given form
+#1/1 Get RedCap ID for Soloff ID [V useful]
+#1/1 Get MetircWire Identifier
+#1/1 Get IRB Report Numbers (Total)
+  #0/1 Get IRB Report Numbers, since last IRB Renewal
+#1/1 Race/Gender/Status Processing 
+#1/1 Missingness check ID specific
+#0/1 Numbes for annual report
+#0.5/1 Attach demo info for given list of IDs
+#0/1 EMA end of study report generating
+#0/1 Clean up funbsrc, #- Within ID, find event that doesn't have a FUDate, remove the whole event
+#0/1 Missingness check arm specific 
 #- Event variable name: "redcap_event_name"
-#-------------- Data Function ------------- c
-#0/1 Audit & basic demographic 
-#0/1 EMA & fMRI status
-#0/1 Match list of ID & list of assessments
 #------------Over-arching goals------------
 #0/1 Shiny App to create interactive data presentation and retrival tool
 
@@ -51,12 +57,12 @@ library(lubridate)
 #-------END-----#
 
 #example of how the data is structured:
-bsocial.all<-redcap.bsocial$read(batch=batch_size = '200')
-bsocial.enrollment<-bsocial.all$data[bsocial.all$data$redcap_event_name=="enrollment_arm_1",]
+#bsocial.all<-redcap.bsocial$read(batch=batch_size = '200')
+#bsocial.enrollment<-bsocial.all$data[bsocial.all$data$redcap_event_name=="enrollment_arm_1",]
 
 
 #prompt user input
-test<-as.character(readline(prompt = "Please Enter Assessment: "))
+#test<-as.character(readline(prompt = "Please Enter Assessment: "))
 
 #######customized functions#######
 #all function need to pre-define bsocial.all&redcap.bsocial 
@@ -69,12 +75,13 @@ test<-as.character(readline(prompt = "Please Enter Assessment: "))
 ##jk, with all new ppl, it can't handle it anymore##
 ##            default batch size to 50            ##
 
-bsrc.conredcap <- function(uri,token,batch_size,ouput) {
+bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
-  if (missing(batch_size)) {batch_size<-"50"}
-  if (missing(ouput)) {output<-F
-  print("By default, the database will be assigned to `funbsrc` as a data frame.")}
+  if (missing(batch_size)) {batch_size<-"50" 
+  print("By default, the batch size is 50 unique records")}
+  if (missing(output)) {output<-F
+  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing if wish to assign db to something, use arguement 'output = T'")}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -83,10 +90,12 @@ bsrc.conredcap <- function(uri,token,batch_size,ouput) {
   token<<-input.token
   #test connection:
   funbsrc<-redcap$read(batch_size = batch_size)
-  funbsrc<<-funbsrc$data
   strc<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-  strc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
+  funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
   names(strc)<-c('field_name','form_name','field_label')
+  funbsrc<<-funbsrc$data
+  subreg<-funbsrc$data[funbsrc$data$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
+  subreg<<-subreg[,1:50] #take only the regi part
   if (length(funbsrc$data$registration_redcapid)>0) {
     print("Success! Database Loaded")
     jzc.connection.yesno<<-1
@@ -94,9 +103,42 @@ bsrc.conredcap <- function(uri,token,batch_size,ouput) {
   else {
     print("Connection Failed, Please Try Again.") 
     jzc.connection.yesno<<-0}
-  if (ouput<-F){
+  if (output==T){
     return(funbsrc)}
 }
+##############################
+#checkdatebase
+bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
+  if(missing(token)){token<-input.token}
+  if(missing(forcerun)){forcerun=FALSE}
+  if(missing(forceupdate)){forceupdate=FALSE}
+  if(!missing(replace)){funbsrc<-replace}
+  if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
+    jzc.connection.yesno<-0 
+    jzc.connection.date<-NA}
+  if (forceupdate==TRUE) {
+    print("FORCEUPDATE")
+    bsrc.conredcap(token = token)
+  }
+  if (jzc.connection.yesno == 1) {
+    if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
+      print("Database is loaded or was loaded today")
+      ifrun<-TRUE
+    }
+    else {print("Local database is out of date, redownload now")
+      ifrun<-FALSE
+      bsrc.conredcap(token = token)
+      ifrun<-bsrc.checkdatabase()}
+  }
+  else {print("RedCap Connection is not loaded, Retry Now")
+    ifrun<-FALSE
+    bsrc.conredcap(token = token)
+    ifrun<-bsrc.checkdatabase()
+  }
+  
+  return(ifrun)
+}
+
 
 
 ##############################
@@ -152,41 +194,21 @@ bsrc.getdemo <- function(id,funbsrc,flavor,forcerun=FALSE){
 
 
 bsrc.getevent.single<-
+
   
-  bsrc.getform.single<-
+#####################################
+#Functions to get all data from given forms: 
+bsrc.getform<-function(formname) {
+  if (missing(formname)){
+  print(as.character(unique(funstrc$strc.data.form_name)))
+  formname<-readline(prompt = "Please type in the form name that you wish to get, if multiple, c('','')")}
+  raw<-funbsrc[,c(1,2,which(names(funbsrc) %in% as.character(funstrc$strc.data.field_name[which(as.character(funstrc$strc.data.form_name) %in% formname)])))]
+  new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]
+
+}
   
 #############################
 
-
-
-###########################
-
-bsrc.report<-function(flavor,forcerun=FALSE){
-  if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
-  if (jzc.connection.yesno == 1) {
-    
-    if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
-      if (missing(flavor)){flavor<-readline(prompt = "Please input report type: ")}
-      ifrun<-TRUE
-    }
-    else {print("Local database is out of date, redownload now")
-      bsrc.conredcap()
-      bsrc.report(flavor)}
-  }
-  else {print("RedCap Connection is not loaded, Retry Now")
-    bsrc.conredcap()
-    bsrc.report(flavor)}
-  
-  
-  if (ifrun==T){
-    if (flavor == 'renewal'|flavor == 'Renewal') {print("Renewal Report")
-    }
-    if (flavor == 'monthly'|flavor == 'Monthly') {print("Monthly Report")
-    }
-  }
-}  
 
 ##############################
 ## Notes when exporting db  ##
@@ -210,8 +232,18 @@ bsrc.getidmatchdb<-function(db) {
   return(db)
 }
 
-bsrc.writerecord<-function(flavor,) {}
 
+bsrc.sanitize_onlyidentifier<-function(db,only=F) {
+  if(missing(db)) stop("No DB")
+  mwidonly<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
+  names(mwidonly)<-c('redcapid','mwidentifier')
+  mwidonly$mwidentifier<-as.character(mwidonly$mwidentifier)
+  mwidonly$mwidentifier[which(mwidonly$mwidentifier=="")]<-NA
+  mwidonly<-na.omit(mwidonly)
+  db$mwidentifier<-mwidonly$mwidentifier[match(db$registration_redcapid,mwidonly$redcapid)]
+  if (only) {db<-db[which(!is.na(db$mwidentifier)),]}
+  return(db)
+}
 
 
 bsrc.process.race<-function(odk,Race) {
