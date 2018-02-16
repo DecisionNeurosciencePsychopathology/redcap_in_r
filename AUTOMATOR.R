@@ -5,79 +5,20 @@
 
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
 #Also contain function to generate csv calendar event (good for google) for EMA participants
-#Version: 0.1
+#Version: 1.0
 #This part of the script contains the main functions:
   #0/1 Try to package it so call library(bsrc) can load all functions
-  #1/1 start up function
+  #1/1 start up function: 
+jiazhou.startup()
+  #1/1 REFRESH main function, now with single ID mode:
+    #Force update, force run, if output maxevent db, if upload
+  #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
+  #0/1 MetricWire Data Grab and progress update
+  #0/1 EMA and MRI status update [pending MRI status write to RedCap]
 
-
-
-#connection
-bsrc.conredcap <- function(uri,token,batch_size,output) {
-  if (missing(uri)) {uri<-'DNPL'
-  print("By default, the location is set to Pitt's RedCap.")}
-  if (missing(batch_size)) {batch_size<-"50" 
-  print("By default, the batch size is 50 unique records")}
-  if (missing(output)) {output<-F
-  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing if wish to assign db to something, use arguement output = T")}
-  if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
-  else (input.uri<-uri)
-  if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
-  redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
-  uri<<-input.uri
-  token<<-input.token
-  #test connection:
-  funbsrc<-redcap$read(batch_size = batch_size)
-  funbsrc<<-funbsrc$data
-  strc<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-  funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
-  names(strc)<-c('field_name','form_name','field_label')
-  if (length(funbsrc$data$registration_redcapid)>0) {
-    print("Success! Database Loaded")
-    jzc.connection.yesno<<-1
-    jzc.connection.date<<-Sys.Date()} 
-  else {
-    print("Connection Failed, Please Try Again.") 
-    jzc.connection.yesno<<-0}
-  if (output==T){
-    return(funbsrc)}
-}
-
-#checkdatebase
-bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
-  if(missing(token)){token<-input.token}
-  if(missing(forcerun)){forcerun=FALSE}
-  if(missing(forceupdate)){forceupdate=FALSE}
-  if(!missing(replace)){funbsrc<-replace}
-  if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
-  if (forceupdate==TRUE) {
-    print("FORCEUPDATE")
-    bsrc.conredcap(token = token)
-  }
-  if (jzc.connection.yesno == 1) {
-    if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
-      print("Database is loaded or was loaded today")
-      ifrun<-TRUE
-    }
-    else {print("Local database is out of date, redownload now")
-      ifrun<-FALSE
-      bsrc.conredcap(token = token)
-      ifrun<-bsrc.checkdatabase()}
-  }
-  else {print("RedCap Connection is not loaded, Retry Now")
-    ifrun<-FALSE
-    bsrc.conredcap(token = token)
-    ifrun<-bsrc.checkdatabase()
-    }
-  
-  return(ifrun)
-}
-
-
-#refresh
-bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID="all") {
+######refresh######
+bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
+  if (missing(ID)) {ID<-NA}
   if (missing(output)) {output<-FALSE
   print("No output by default")}
   if (!exists("input.token")) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -128,18 +69,21 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID="all") {
     #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
     names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate")
     
+    idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
+    names(idmatch)<-c('id','soloffid','redcapid')
     
-    
+    if (!is.na(ID)){
     if(any(ID %in% idmatch$soloffid | ID %in% idmatch$id)){
-      if(ID %in% idmatch$soloffid){ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
+      if(ID %in% idmatch$soloffid) {ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
       else{ID<-as.character(idmatch$redcapid[which(idmatch$id==ID)])}
-    
+    }
     if (ID %in% maxevent$registration_redcapid) {
       singleid<-maxevent[which(maxevent$registration_redcapid==ID),]
+      ids<-idmatch[which(idmatch$redcapid==ID),]
       upload<-FALSE
       print("Single ID mode will not refresh RedCap")
-      print(singleid)
-    }
+      print(ids)
+      print(singleid)}}
     
     if (output) {return(maxevent) 
       print("Here you go, you asked for it.")
@@ -155,14 +99,61 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID="all") {
   }
 }
 
+####EMA/fMRI Status#####
+
+
+####Missing Assessment####
+
+
+####Back-up######
+bsrc.backup<-function(forcerun,token, path,clean=T,expiration=30) {
+  if (missing(token)){token<-input.token}
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
+  if (missing(path)) {path<-"/Volumes/llmd/BPD Database/RedCap Database Back-Up"
+    print("Default Location is L Drive/BPD Database")}
+  if (ifrun) {
+    csvname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.csv")
+    csv<-paste(path,csvname,sep = "/")
+    write.csv(funbsrc,csv)
+    print("Success")
+    
+    lfile<-list.files(path=path,pattern="*.csv")
+    yur<-as.numeric(Sys.Date()-as.Date(as.character(as.data.table(strsplit(lfile,split = "_"))[2])))
+    delfile<-lfile[which(yur>expiration)]  
+    if (clean & length(delfile)>0) {
+      print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
+      print("Removing old files")
+      file.remove(delfile)
+    }
+  print("DONE")
+  }
+}
+
+      
+
+
+
+
+
+
 #MetricWire:
 bsrc.metric2redcap <- function(forcerun,token) {
   if (missing(token)){token<-input.token}
   ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
-  read
+  llist<-list.files(path=)
 }
 
 
+#Find ID:
+
+bsrc.name2id <- function(ID,forcerun=FALSE){
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
+  if (ifrun==TRUE){
+    
+  }
+
+  
+}
 
 ####################
 ###   Part II:   ###
@@ -175,9 +166,6 @@ library(lubridate)
 
 #Load configuration 
 jiazhou.startup()
-
-#Connect to RedCap
-bsrc.checkdatabase(forceupdate = T, token = input.token)
 
 #Refresh RedCap values
 result<-bsrc.refresh(forceupdate = T,token = input.token)
