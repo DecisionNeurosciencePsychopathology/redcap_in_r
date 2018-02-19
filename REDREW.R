@@ -1,11 +1,8 @@
 ---
-title: "REDREW"
-author: "Jiazhou Chen"
+Title: "REDREW"
+Author: "Jiazhou Chen"
+Version: 1.0
 ---
-#Current Version: 1.0
-
-#This R Notebook records Jiazhou's effort to pull/input RedCap data.
-
 
 #Version 1.0
 #1/1 Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
@@ -114,27 +111,26 @@ bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
   if(missing(forceupdate)){forceupdate=FALSE}
   if(!missing(replace)){funbsrc<-replace}
   if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
+      jzc.connection.yesno<-0 
+      jzc.connection.date<-NA}
   if (forceupdate==TRUE) {
     print("FORCEUPDATE")
     bsrc.conredcap(token = token)
   }
-  if (jzc.connection.yesno == 1) {
-    if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
-      print("Database is loaded or was loaded today")
-      ifrun<-TRUE
-    }
-    else {print("Local database is out of date, redownload now")
+    if (jzc.connection.yesno == 1) {
+      if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
+        print("Database is loaded or was loaded today")
+        ifrun<-TRUE}
+      else {print("Local database is out of date, redownload now")
+        ifrun<-FALSE
+        bsrc.conredcap(token = token)
+        ifrun<-bsrc.checkdatabase()}
+        }
+    else {print("RedCap Connection is not loaded, Retry Now")
       ifrun<-FALSE
       bsrc.conredcap(token = token)
-      ifrun<-bsrc.checkdatabase()}
-  }
-  else {print("RedCap Connection is not loaded, Retry Now")
-    ifrun<-FALSE
-    bsrc.conredcap(token = token)
-    ifrun<-bsrc.checkdatabase()
-  }
+      ifrun<-bsrc.checkdatabase()
+      }
   
   return(ifrun)
 }
@@ -156,13 +152,12 @@ bsrc.findid.mass <- function (df, IDfieldname) {
 bsrc.getlabel <- function(field_name) {
   
 }
-
-bsrc.getinst <- function(form_name)
   
   ###############################
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
-bsrc.getdemo <- function(id,funbsrc,flavor,forcerun=FALSE){
+bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace){
+  if (missing(replace)){replace=F} else {replace->funbsrc} 
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (ifrun==TRUE){
     if (flavor == 'single'){
@@ -187,24 +182,45 @@ bsrc.getdemo <- function(id,funbsrc,flavor,forcerun=FALSE){
       }
       else {print("NO ID FOUND, PLEASE DOUBLE CHECK")}
     }}
-  
 }
-
+#######
+#Combined use of the following allow extraction of data within
 ############################
+#Function to get all data of given event:
 
-
-bsrc.getevent.single<-
+bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="anyfile"){
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
+  if (missing(replace)){replace=F} else {replace->funbsrc} 
+  if(ifrun) {
+    if (missing(eventname)){
+      print(as.character(unique(funbsrc$redcap_event_name)))
+      eventname<-readline(prompt = "Please type in the event name that you wish to extract (use argument eventname=c('','') for multiple): ")}
+    funbsrc$redcap_event_name[which(funbsrc$redcap_event_name %in% eventname)]
+    switch(whivarform,
+    default=getvariable<-read.csv("/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/BSocial_InstrumentDesignations.csv"),
+    user=getvariable<-read.csv(readline(prompt = "Please paste the path and file name of the vari file")),
+    anyfile=getvariable<-read.csv(file.choose())
+    )
+    return(getvariable)
+    
+  }
+}
 
   
 #####################################
 #Functions to get all data from given forms: 
-bsrc.getform<-function(formname) {
+bsrc.getform<-function(formname,replace,forcerun=FALSE) {
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
+  if (missing(replace)){replace=F} else {replace->funbsrc} 
+  if (ifrun) {
   if (missing(formname)){
   print(as.character(unique(funstrc$strc.data.form_name)))
-  formname<-readline(prompt = "Please type in the form name that you wish to get, if multiple, c('','')")}
+  formname<-readline(prompt = "Please type in one form name that you wish to get, if multiple, use argument formname = c('',''): ")
+  }
   raw<-funbsrc[,c(1,2,which(names(funbsrc) %in% as.character(funstrc$strc.data.field_name[which(as.character(funstrc$strc.data.form_name) %in% formname)])))]
   new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]
-
+  return(new_raw)
+  }
 }
   
 #############################
@@ -394,66 +410,3 @@ server <- function(input, output) {
 
 # Run the app ----
 shinyApp(ui = ui, server = server)
-
-
-
-
-############
-#Past Code:#
-############
-
-  #main function:
-  result <- postForm(
-    uri='https://www.ctsiredcap.pitt.edu/redcap/api/',
-    token='F4D36C656D822DF09832B5A4A8F323E6',
-    content='record',
-    format='csv',
-    type='flat',
-    rawOrLabel='raw',
-    rawOrLabelHeaders='raw',
-    exportCheckboxLabel='false',
-    exportSurveyFields='false',
-    exportDataAccessGroups='false',
-    returnFormat='csv'
-  )
-
-#Special pull of specific assessment:
-result <- postForm(
-  uri='https://www.ctsiredcap.pitt.edu/redcap/api/',
-  token='F4D36C656D822DF09832B5A4A8F323E6',
-  content='record',
-  format='csv',
-  type='flat',
-  'records[0]'='6510',
-  'records[1]'='6515',
-  'forms[0]'='hamd24',
-  rawOrLabel='raw',
-  rawOrLabelHeaders='raw',
-  exportCheckboxLabel='false',
-  exportSurveyFields='false',
-  exportDataAccessGroups='false',
-  returnFormat='csv'
-)
-print(result)
-
-#Get names
-jrs<-NULL
-jrs<-data.frame(bsocial.enrollment$registration_id,bsocial.enrollment$registration_soloffid,
-                bsocial.enrollment$registration_ln,bsocial.enrollment$registration_fn,
-                paste(bsocial.enrollment$registration_fn,bsocial.enrollment$registration_ln))
-names(jrs)<-c("ID","Soloff ID","Last Name","First Name","Full Name")
-write.csv(jrs,'bsocial_idname.csv')
-
-bsrc.getdemo.single.a <- function(flavor){
-  idt<-readline(prompt = "Please enter the participant's 6 digits or 4 digits ID: ")
-  idmatch<-redcap.bsocial$read(batch_size = '200', fields = c("registration_soloffid","registration_id"))
-  idmatch<-data.frame(idmatch$data$registration_id,idmatch$data$registration_soloffid)
-  names(idmatch)<-c('id','soloffid')
-  if(idt %in% idmatch$id){id<-idt}else{id<-as.character(na.omit(idmatch$id[idmatch$soloffid==idt]))}
-  id<-as.character(id)
-  idonly<-redcap.bsocial$read(batch_size = '200', records = as.list(id))
-  bsg<-data.frame(id,idonly$data$registration_soloffid,idonly$data$registration_initials)
-  names(bsg)<-c('ID',"Soloffid","Initials")
-  print(bsg)
-}
-
