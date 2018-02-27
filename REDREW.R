@@ -188,7 +188,7 @@ bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace){
 ############################
 #Function to get all data of given event:
 
-bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="anyfile"){
+bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default"){
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if(ifrun) {
@@ -198,7 +198,7 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="anyfile"){
     funbsrc$redcap_event_name[which(funbsrc$redcap_event_name %in% eventname)]
     switch(whivarform,
     default=getvariable<-read.csv("/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/BSocial_InstrumentDesignations.csv"),
-    user=getvariable<-read.csv(readline(prompt = "Please paste the path and file name of the vari file")),
+    user=getvariable<-read.csv(readline(prompt = "Please paste the path of the vari file, inclduing the file name in .csv form: ")),
     anyfile=getvariable<-read.csv(file.choose())
     )
     return(getvariable)
@@ -230,11 +230,6 @@ bsrc.getform<-function(formname,replace,forcerun=FALSE) {
 ## Notes when exporting db  ##
 ## Red Cap                  ##
 ##############################
-
-opu$registration_initials <- paste(toupper(substr(opu$`First Name`,0,1)),toupper(substr(opu$`Last Name`,0,3)))
-opu$registration_initials[which(opu$registration_initials=="NA NA")]<-"NA"
-odz$registration_redcapid<-idmatch$redcapid[match(odz$ID,idmatch$soloffid)]
-odz$iftranx<-is.na( match(odz$ID,idmatch$soloffid))
 
 bsrc.getidmatchdb<-function(db) {
   idmatch.k<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
@@ -339,36 +334,6 @@ bsrc.process.race<-function(odk,Race) {
 ###################################
 ######  Admin Number Cal ##########
 ###################################
-bsrc.irb.numsum<-function() {
-  ID_SUPREME <- read_excel("Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
-  ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.getidmatchdb(ID_SUPREME)
-  tkj<-as.data.frame(tkj)
-  newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
-  names(newid)<-c("registration_redcapid")
-  jrk<-merge(tkj,newid,all = T)
-  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid"))
-  nui<-merge(jrk,nui,all = T)
-  if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
-        #Info user the conflict:
-        return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
-        #which direction:
-        direct.r<-readline(prompt = "Please type 'RC' for picking RedCap Status, or 'OG' for picking legacy status: ")
-        direct.r<-as.numeric(direct.r)
-        switch (direct.r,RC = nui$Status[which(!nui$Status==nui$registration_status)]<-nui$registration_status[which(!nui$Status==nui$registration_status)],
-                OG = nui$Status[which(!nui$Status==nui$registration_status)]->nui$registration_status[which(!nui$Status==nui$registration_status)])}
-  nui$Status[which(is.na(nui$Status))]<-nui$registration_status[which(is.na(nui$Status))]
-  nui$iftranx<-NULL
-  nui$StatusWord[nui$Status==88]<-"Ineligible Drop"
-  nui$StatusWord[nui$Status==7]<-"IRB Admin Drop"
-  nui$StatusWord[nui$Status==6]<-"Lost Contact/Drop"
-  nui$StatusWord[nui$Status==5]<-"Deceased"
-  nui$StatusWord[nui$Status==4]<-"Do Not Contact"
-  nui$StatusWord[nui$Status==3]<-"In Jail"
-  nui$StatusWord[nui$Status==2]<-"Missing"
-  nui$StatusWord[nui$Status==1]<-"Active"
-
-}
 
 
 
