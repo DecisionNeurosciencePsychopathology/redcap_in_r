@@ -1,23 +1,32 @@
+---
+Title: "Automator"
+Author: "Jiazhou Chen"
+Version: 1.0
+---
+
+#This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
+
+#This part of the script contains the main functions:
+  #0.5/1 Try to package it so call library(bsrc) can load all functions
+  #1/1 start up function: 
+jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
+  #1/1 REFRESH main function, now with single ID mode:
+    #Force update, force run, if output maxevent db, if upload
+  #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
+  #0/1 MetricWire Data Grab and progress update
+  #1/1 EMA and MRI status update 
+
 #########################
 ##  Project AUTOMATOR  ##  
 ##  Part I, Functions  ##
 #########################
 
-#This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
-#Also contain function to generate csv calendar event (good for google) for EMA participants
-#Version: 1.0
-#This part of the script contains the main functions:
-  #0/1 Try to package it so call library(bsrc) can load all functions
-  #1/1 start up function: 
-jiazhou.startup()
-  #1/1 REFRESH main function, now with single ID mode:
-    #Force update, force run, if output maxevent db, if upload
-  #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
-  #0/1 MetricWire Data Grab and progress update
-  #0/1 EMA and MRI status update [pending MRI status write to RedCap]
+library(REDCapR)
+library(data.table)
+library(lubridate)
 
 ######refresh######
-bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
+bsrc.refresh<-function (forcerun,token, forceupdate=T, output, upload, ID) {
   if (missing(ID)) {ID<-NA}
   if (missing(output)) {output<-FALSE
   print("No output by default")}
@@ -34,10 +43,12 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
     subreg$sincelastfu<-as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
     subreg$fudue<-round((as.numeric(as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
     regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("registration_consentdate",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
+    
     #find max fudate:
     funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
     maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
     names(maxfudate)<-c("registration_redcapid","fudemo_visitdate")
+    
     #find max fuevent:
     subevent<-subset(funbsrc,select = c("registration_redcapid","redcap_event_name","fudemo_visitdate"))
     maxevent<-subevent[match(interaction(maxfudate$registration_redcapid,maxfudate$fudemo_visitdate),interaction(subevent$registration_redcapid,subevent$fudemo_visitdate)),]
@@ -53,6 +64,8 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
     maxevent$redcap_event_name<-NULL
     maxevent$months<-NULL
     maxevent$fudemo_visitdate<-NULL
+      #Refine indicator so folks who got in early will not:
+      maxevent$diff[which(maxevent$daysincefu < 60)]<-0
     
     #find IPDE Date:
     funbsrc$ipde_date[which(funbsrc$ipde_date=="")]<-NA
@@ -65,6 +78,7 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
     ipdedate<-aggregate(ipdedateonly$ipde_date,by=list(ipdedateonly$registration_redcapid), FUN=max)
     names(ipdedate)<-c("registration_redcapid","ipde_date")
     maxevent<-merge(maxevent,ipdedate,all = T)
+    
     
     #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
     names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate")
@@ -100,7 +114,11 @@ bsrc.refresh<-function (forcerun,token, forceupdate, output, upload, ID) {
 }
 
 ####EMA/fMRI Status#####
-
+Variable: 
+bsrc.emamri<-function (forcerun,token,forcerun,token, forceupdate, output, upload)
+{
+  
+}
 
 ####Missing Assessment####
 
@@ -133,10 +151,7 @@ bsrc.backup<-function(forcerun,token, path,clean=T,expiration=30) {
 
 
 
-
-
-
-#MetricWire:
+####MetricWire:#####
 bsrc.metric2redcap <- function(forcerun,token) {
   if (missing(token)){token<-input.token}
   ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
@@ -155,6 +170,8 @@ bsrc.name2id <- function(ID,forcerun=FALSE){
   
 }
 
+
+
 ####################
 ###   Part II:   ###
 ###  Main Script ###
@@ -170,12 +187,14 @@ jiazhou.startup()
 #Refresh RedCap values
 result<-bsrc.refresh(forceupdate = T,token = input.token)
 if(result$success) {
-#MailR
+  #MailR
   #Send an confirmation of the process to myself
-}
-csvname<-paste("Redcap_Log",Sys.Date(),".csv",sep = "_")
-write.csv(as.data.frame(result$outcome_message,result$affected_ids,result$status_code), file = csvname)
 
+csvname<-paste("Redcap_Log",Sys.Date(),".csv",sep = "_")
+write.csv(as.data.frame(result$outcome_message,result$affected_ids,result$status_code), file = csvname)}
+
+#Backup
+bsrc.backup()
 
 #Grab metricwire function:
 bsrc.metric2redcap()
