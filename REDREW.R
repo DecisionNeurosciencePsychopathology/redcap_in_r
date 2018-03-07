@@ -1,10 +1,28 @@
 ---
 Title: "REDREW"
 Author: "Jiazhou Chen"
-Version: 1.0
+Version: 1.1
 ---
 
-#Version 1.0
+#Version 1.1 Changelog:
+  #reformed bsrc.getform() with following changes:
+    #aggressive argument to aggressively remove irrelavent data, by default on
+    #Mechnisim to protect function from error
+    #Error message if no form found
+    #intergration with bsrc.ema.redcapreform()
+    #New mechnisim to match variable names, migth sometimes result in errorous collection of variable names
+      #benefit is that it will now include all checkbox items correctly. This is more important. 
+      #Since removing irrelavent ones are not so difficult. 
+  #Refined bsrc.getevent() and bsrc.getdemo()
+    #bsrc.getevent() functional again 
+    #bsrc.getdemo() has new arguments and compatible with findduplicate 
+  #New bsrc.findduplicate() function to identify duplicated records in RedCap caused by ID transition
+  
+
+#[Task List]  
+#0/1 Missingness check arm specific 
+  
+#Version 1.0 [Completed]
 #1/1 Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
 #1/1 Pull Demo for given sinlge ID
 #1/1 Check if environment has up to date local redcap database
@@ -12,14 +30,13 @@ Version: 1.0
 #1/1 Get RedCap ID for Soloff ID [V useful]
 #1/1 Get MetircWire Identifier
 #1/1 Get IRB Report Numbers (Total)
-  #0/1 Get IRB Report Numbers, since last IRB Renewal
+  #0/1 Get IRB Report Numbers, since last IRB Renewal -> SEE ADMINISTRATOR project
 #1/1 Race/Gender/Status Processing 
 #1/1 Missingness check ID specific
-#0/1 Numbes for annual report
-#0.5/1 Attach demo info for given list of IDs
-#0/1 EMA end of study report generating
-#0/1 Clean up funbsrc, #- Within ID, find event that doesn't have a FUDate, remove the whole event
-#0/1 Missingness check arm specific 
+#0/0 Numbes for annual report -> See ADMINISTRATOR project
+#0.5/1 Attach demo info for given list of IDs [NO NEED]
+#0/0 EMA end of study report generating -> See ECOLOGIST project
+#0/0 Clean up funbsrc, #- Within ID, find event that doesn't have a FUDate, remove the whole event [No need]
 #- Event variable name: "redcap_event_name"
 #------------Over-arching goals------------
 #0/1 Shiny App to create interactive data presentation and retrival tool
@@ -105,10 +122,8 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
 }
 ##############################
 #checkdatebase
-bsrc.checkdatabase<-function(replace,forcerun, token, forceupdate) {
+bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   if(missing(token)){token<-input.token}
-  if(missing(forcerun)){forcerun=FALSE}
-  if(missing(forceupdate)){forceupdate=FALSE}
   if(!missing(replace)){funbsrc<-replace}
   if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
       jzc.connection.yesno<-0 
@@ -156,7 +171,7 @@ bsrc.getlabel <- function(field_name) {
   ###############################
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
-bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace){
+bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (ifrun==TRUE){
@@ -165,24 +180,40 @@ bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace){
       idmatch<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
       names(idmatch)<-c('id','soloffid','redcapid')
       if(any(idt %in% idmatch$soloffid | idt %in% idmatch$id)){
-        if(idt %in% idmatch$soloffid){rid<-as.character(idmatch$redcapid[which(idmatch$soloffid==idt)])}
-        else{rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)])}
+        ifelse(idt %in% idmatch$soloffid, rid<-as.character(idmatch$redcapid[which(idmatch$soloffid==idt)]), rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)]))
+        if(length(rid)==1){
         idonly<-funbsrc[which(funbsrc$registration_redcapid==rid & funbsrc$redcap_event_name=='enrollment_arm_1'),]
         #ID, Names, 
         curage<-as.period(interval(start = as.Date(idonly$registration_dob), end = Sys.Date()))$year
         bsg<-data.frame(idonly$registration_id,idonly$registration_soloffid,idonly$registration_initials,
                         idonly$registration_dob,idonly$registration_consentdate,curage)
         names(bsg)<-c('ID',"Soloffid","Initials","Date of Birth","Consent Date" ,"AgeToday")
-        
-        
-        
-        #output
+        if (output==T){
         print(as.character('======================'))
-        print(bsg)
+        print(bsg)}
+        }
+        else {print("Multiple RedCap Record Identified")
+              return(rid)}
       }
       else {print("NO ID FOUND, PLEASE DOUBLE CHECK")}
     }}
 }
+
+####Find duplicate RedCap IDs
+bsrc.findduplicate <- function() {
+    dpqid<-data.frame()
+    for (i in 1:length(unique(funbsrc$registration_soloffid)) ) {
+      tryCatch({
+    idq<-unique(funbsrc$registration_soloffid)[i]
+    invisible(capture.output(krz<-bsrc.getdemo(id=idq,output = F)))
+    if(length(krz)>1){print(idq)
+      print(krz)}
+     },error=function(x){})
+    }
+    print("DONE")
+}
+
+
 #######
 #Combined use of the following allow extraction of data within
 ############################
@@ -209,17 +240,27 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default"){
   
 #####################################
 #Functions to get all data from given forms: 
-bsrc.getform<-function(formname,replace,forcerun=FALSE) {
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
+####~!!!!HOLD ON~!!!!!THIS METHOD IS SIMPLE BUT DOES NOT GET THE CHECKBOX TYPE~~######
+bsrc.getform<-function(formname,replace,forcerun.e=F, forceupdate.e=F ,aggressive=T) {
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if (ifrun) {
   if (missing(formname)){
   print(as.character(unique(funstrc$strc.data.form_name)))
-  formname<-readline(prompt = "Please type in one form name that you wish to get, if multiple, use argument formname = c('',''): ")
+  formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,); no need for '': ")
   }
-  raw<-funbsrc[,c(1,2,which(names(funbsrc) %in% as.character(funstrc$strc.data.field_name[which(as.character(funstrc$strc.data.form_name) %in% formname)])))]
-  new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]
-  return(new_raw)
+  
+  if (as.character(formname) %in% as.character(funstrc$strc.data.form_name)) {
+   lvariname<-as.character(funstrc$strc.data.field_name[which(funstrc$strc.data.form_name %in% formname)])
+   raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
+    
+    
+    if(aggressive) {raw[raw==""]<-NA}
+    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]
+    return(new_raw)
+    }
+  else print(paste("NO FORM NAMED: ",formname, sep = ""))
+    
   }
 }
   
