@@ -26,15 +26,12 @@ library(data.table)
 library(lubridate)
 
 ######refresh######
-bsrc.refresh<-function (forcerun,token, forceupdate=T, output, upload, ID) {
+bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=T, ID) {
   if (missing(ID)) {ID<-NA}
-  if (missing(output)) {output<-FALSE
-  print("No output by default")}
   if (!exists("input.token")) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
-  if (missing(token)){token<-input.token}
-  if (missing(upload)) {upload<-TRUE
-  print("By default the refresh function will always upload to RedCap")}
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token, forceupdate = forceupdate)
+  if (missing(token.e)){token.e<-input.token}
+  print("By default the refresh function will always upload to RedCap")
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,forceupdate = forceupdate.e,token = token.e)
   if (ifrun){
     #get info from registration
     subreg<-funbsrc[funbsrc$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
@@ -124,9 +121,9 @@ bsrc.emamri<-function (forcerun,token,forcerun,token, forceupdate, output, uploa
 
 
 ####Back-up######
-bsrc.backup<-function(forcerun,token, path,clean=T,expiration=30) {
+bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expiration=30) {
   if (missing(token)){token<-input.token}
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
+  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token,forceupdate = forceupdate.e)
   if (missing(path)) {path<-"/Volumes/llmd/BPD Database/RedCap Database Back-Up"
     print("Default Location is L Drive/BPD Database")}
   if (ifrun) {
