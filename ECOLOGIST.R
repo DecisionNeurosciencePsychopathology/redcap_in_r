@@ -1,9 +1,15 @@
 ###
 title: "Ecologist"
 Author: "Jiazhou Chen"
-Version: 0.3
+Version: 0.4
 ###
-
+#Version 0.4 Changelog:
+  #Revision for bsrc.ema.patch() for more detials on MB
+  #Revisions on bsrc.ema.getevent(), bsrc.ema.main() and bsrc.ema.getfile() to intergrate bsrc.ema.patch()
+  #New feature added to bsrc.ema.main()
+    #inclusion of Mirco-burst data management
+  #New function: bsrc.ema.loopit()
+    #As the name suggest, loop all data within a certain folder
 
 #Verion 0.3 Changelog:
   #New function: bsrc.ema.getevent()
@@ -34,7 +40,7 @@ Version: 0.3
   #bsrc.ema.redcapupload upload such progress data and the data file
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
 
-#!!Not yet include micro burst calculation!!
+
 bsrc.ema.getfile<-function(filename){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
@@ -87,16 +93,19 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
   RedcapID<-as.character(lRedcapID[1])
   Initial<-linitial[1]
   
+  #Patch the data
+  emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw)
+  
   if (ifrun){
     #Read EMA Data:
     table.emadata<-data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
     table.emadata[,count:=seq_len(.N), by=Type]
+    table.emadata[table.emadata$Type=="MB",count:=seq_len(.N), by=date]
     
-    #santatize the datatable for multiple participants, use for loop to loop through muiltiple participants
     table.emadata<-na.omit(table.emadata)
-    table.emadata<-table.emadata[which(table.emadata$Type %in% c("DoD","BoD","EoD"))]
+    #table.emadata<-table.emadata[which(table.emadata$Type %in% c("DoD","BoD","EoD"))]
     
     #Aggregate Total:
     table.emadata$redcapID<-as.character(table.emadata$redcapID)
@@ -104,7 +113,8 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     emadata$Group.1<-NULL
     emadata<-reshape(emadata,idvar = "date",timevar = "Type",direction = "wide", v.names = c("count"))
     emadata<-emadata[order(emadata$date),]
-    names(emadata)<-c("redcapID","date","BoD","DoD","EoD")
+    names(emadata)<-c("redcapID","date","BoD","DoD","EoD","MB")
+    emadata$MB[which(is.na(emadata$MB))]<-0
     emadata<-na.locf(emadata)
     emadata$date<-as.Date(emadata$date)
     emadata[is.na(emadata)]<-0
@@ -128,12 +138,20 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     ematotal$BoD<-emaseq.one
     ematotal$EoD<-emaseq.one
     ematotal$DoD<-emaseq.six
+    
+    mbonly<-as.data.table(emadata.raw[which(emadata.raw$MBYES),c("Survey_Submitted_Date","MBCount")])
+    mbonly<-mbonly[, sum(MBCount), by = Survey_Submitted_Date]
+    names(mbonly)<-c("date","MB")
+    ematotal<-merge(ematotal,mbonly,all=T)
     ematotal$Total<-as.numeric(ematotal$BoD)+as.numeric(ematotal$DoD)+as.numeric(ematotal$EoD)
+    ematotal$MB[which(is.na(ematotal$MB))]<-0
     ematotal.melt<-melt(ematotal,id.var='date',variable.name="Type",value.name="expectation")
     
     #melt data
-    emadata.full<-na.locf(merge(ematotal.donly,emadata,all = T))
-    emadata.full.melt<-melt(emadata.full,id.var=c("redcapID","date"), measure.vars=c("BoD","DoD","EoD","Total"),variable.name="Type",value.name="actual")
+    emadata.full<-merge(ematotal.donly,emadata,all = T)
+    
+    emadata.full<-na.locf(emadata.full)
+    emadata.full.melt<-melt(emadata.full,id.var=c("redcapID","date"), measure.vars=c("BoD","DoD","EoD","Total","MB"),variable.name="Type",value.name="actual")
     emadata.full.melt$date<-as.Date(emadata.full.melt$date)
     
     #Merge
@@ -155,6 +173,10 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     
     
     if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
+    
+    #Safe guard the plot:
+    emamelt.merge->emamelt.merge.x
+    emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
     
     #Percentage Plot
     emaplot.percent<-ggplot(data = emamelt.merge, aes(x=date, y=porp, group=Type, shape=Type, color=Type)) +
@@ -182,11 +204,18 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     
     ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
     print("Completion (count) Plot Saved to Working Directory")
-    return(emamelt.merge)
+    return(emamelt.merge.x)
     }
 }
+
+
 #####################################################################
+
+
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
+  #safe gurad the function:
+  emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
+  
   emamelt.merge$check<-NA
   lengthofema<-21
   startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==unique(emamelt.merge$redcapID) & funbsrc$ema_setuptime!="")])
@@ -276,10 +305,18 @@ bsrc.ema.patch<-function(emadata.raw){
   emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
   dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick = "DoD")
   negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|"),names(dodonly))
+  negnum<-negnum[negnum >20]
+  dodonly$ifnegative<-rowSums(dodonly[,negnum] >= 2)>0
+  dodonly$ifintime<-dodonly$rp_time %in% c("Just happened","15 minutes","30 minutes","45 minutes")
   rownum<-as.numeric(rownames(dodonly[which(dodonly$ifintime & dodonly$ifnegative),]))
   
   emadata.raw$MBYES<-NA
+  emadata.raw$MBCount<-NA
   emadata.raw$MBYES[rownum]<-TRUE
+  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "Just happened")]<-4
+  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "15 minutes")]<-3
+  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "30 minutes")]<-2
+  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "45 minutes")]<-1
   
   return(emadata.raw)
   }
@@ -304,7 +341,22 @@ bsrc.ema.scaletonum<-function(emadata.raw){
 }
 
 ################################################################
+ema.loop.path<<-paste(getwd(),"/EMA-Completed",sep = "")
 
+bsrc.ema.loopit<-function(path, style="long") {
+  if(missing(path)){path=getwd()}
+  temp<-list.files(path<-path,pattern="*.csv")
+  for (i in 1:length(temp)){
+    print(paste("Now processing ",i," out of ",length(temp),sep = ""))
+    filename<-paste(path,temp[i],sep = "/")
+    emadata.raw<-bsrc.ema.getfile(filename = filename)
+    output<-bsrc.ema.main(emadata.raw = emadata.raw)
+    if (i==1){outcome<-output}
+    outcome<-merge(outcome,output,all=T)
+    output<-NULL
+  }
+  return(outcome)
+}
 
 
 
