@@ -1,7 +1,22 @@
 ###
 title: "Ecologist"
 Author: "Jiazhou Chen"
-Version: 0.2
+Version: 0.3
+###
+#Verion 0.3 Changelog:
+  #New function: bsrc.ema.getevent()
+    #Isolate certrain event in EMA file
+    #Argument to support additional variables 
+  #New function: bsrc.ema.scaletonum()
+    #Change scale to numeric scale
+  #New function: bsrc.ema.getfile()
+    #Pre-proc EMA data files
+    #Compatible with other functions
+  #New function: bsrc.ema.patch()
+    #patch DoD entries that supposed to trigger a MB
+  #Revised: all previous functions to use bsrc.ema.getfile() first 
+  #Decreased priority: bsrc.ema.reshape() to paused
+
 ###
 #Version 0.2 Changelog:
   #bsrc.ema.main() gets updated parameters to better function and minimize confusion, adds on new upload function to send data
@@ -18,38 +33,58 @@ Version: 0.2
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
 
 #!!Not yet include micro burst calculation!!
+bsrc.ema.getfile<-function(filename){
+  if (missing(filename)) {
+    print("No file specified, please choose the target file")  
+    filename<-file.choose()
+  }
+  tryCatch({
+  emadata.raw<- read.csv(filename, stringsAsFactors=FALSE)}, error=function(x){}) #find function
+  variname<-read.csv("variname.csv") #find variname
+  variname<-as.character(variname$variname)
+  names(emadata.raw)<-as.list(variname)
+  
+  #1st get RedCap ID [check funbsrc exists]:
+  mwmatch<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
+  names(mwmatch)<-c('registration_redcapid','funbsrc$ema_studyidentifier')
+  emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`funbsrc$ema_studyidentifier`)]
+  
 
-bsrc.ema.main<-function(filename,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri)
-  {if (missing(filename)) {
-  print("No file specified, please choose the target file")  
-  filename<-file.choose()
+  
+  #process the date:
+  d<-as.Date(emadata.raw$Survey_Submitted_Date,format = "%d/%m/%Y")
+  emadata.raw$Survey_Submitted_Date<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
+  
+  d<-as.Date(emadata.raw$Survey_Started_Date,format = "%d/%m/%Y")
+  emadata.raw$Survey_Started_Date<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
+  
+  d<-as.Date(emadata.raw$TriggerDate,format = "%d/%m/%Y")
+  emadata.raw$TriggerDate<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
+  
+  return(emadata.raw)
+}
+
+##############################################################
+
+
+bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri){
+  if (missing(emadata.raw)){
+    print("Using bsrc.ema.getfile() for data")
+    emadata.raw<-bsrc.ema.getfile()
   }
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token.e, forceupdate = forceupdate.e)
+  
+  lRedcapID<-unique(emadata.raw$RedcapID)
+  linitial<-unique(subreg$registration_initials[match(lRedcapID,subreg$registration_redcapid)])
+  
+  #MAKE SURE TO CHECK REDCAP
+  #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
+  #Currently take out nas, should only be one item:
+  RedcapID<-as.character(lRedcapID[1])
+  Initial<-linitial[1]
+  
   if (ifrun){
     #Read EMA Data:
-    emadata.raw<- read.csv(filename, stringsAsFactors=FALSE) #find function
-    variname<-read.csv("variname.csv") #find variname
-    variname<-as.character(variname$variname)
-    names(emadata.raw)<-as.list(variname)
-    
-    #1st get RedCap ID [check funbsrc exists]:
-    mwmatch<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
-    names(mwmatch)<-c('registration_redcapid','funbsrc$ema_studyidentifier')
-    emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`funbsrc$ema_studyidentifier`)]
-    lRedcapID<-unique(emadata.raw$RedcapID)
-    linitial<-unique(subreg$registration_initials[match(lRedcapID,subreg$registration_redcapid)])
-    
-    #MAKE SURE TO CHECK REDCAP
-    #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
-    #Currently take out nas, should only be one item:
-    RedcapID<-as.character(lRedcapID[1])
-    Initial<-linitial[1]
-    
-    #process the date:
-    d<-as.Date(emadata.raw$Survey_Submitted_Date,format = "%d/%m/%Y")
-    emadata.raw$Survey_Submitted_Date<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
-
-    
     table.emadata<-data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$TriggerName)
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
@@ -68,6 +103,7 @@ bsrc.ema.main<-function(filename,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=
     names(emadata)<-c("redcapID","date","BoD","DoD","EoD")
     emadata<-na.locf(emadata)
     emadata$date<-as.Date(emadata$date)
+    emadata[is.na(emadata)]<-0
     emadata$Total<-as.numeric(emadata$BoD)+as.numeric(emadata$DoD)+as.numeric(emadata$EoD)
     
     
@@ -116,8 +152,6 @@ bsrc.ema.main<-function(filename,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=
     
     if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
     
-    
-    ##################################GRAPH#############################################
     #Percentage Plot
     emaplot.percent<-ggplot(data = emamelt.merge, aes(x=date, y=porp, group=Type, shape=Type, color=Type)) +
       ggtitle(paste(Initial,"EMA Progress (Percentage)"))+
@@ -128,7 +162,7 @@ bsrc.ema.main<-function(filename,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=
       geom_point()+
       geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
     
-    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path)
+    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path, height = 8.3, width = 11.7)
     print("Percentage Plot Saved to Working Directory")
     
     #Completion Plot
@@ -142,67 +176,133 @@ bsrc.ema.main<-function(filename,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=
       geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=actual,label=actual))+
       geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
     
-    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path)
+    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
     print("Completion (count) Plot Saved to Working Directory")
     return(emamelt.merge)
     }
 }
-
-
-
-
+#####################################################################
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   emamelt.merge$check<-NA
   lengthofema<-21
   startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==unique(emamelt.merge$redcapID) & funbsrc$ema_setuptime!="")])
   enddate<-startdate+lengthofema
+  
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"7Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+14))]<-"14Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+21))]<-"21Days"
-  test1<-reshape(emamelt.merge[!is.na(emamelt.merge$check),],idvar = "check",timevar = "Type",direction = "wide", v.names = c("actual","per"),drop = c("date","porp","expectation","diff"))
-  test2<-reshape(test1,idvar = "redcapID",timevar = "check",direction = "wide", v.names = names(test1)[-c(1,2)])
+
   
-  test3<-test2
-  names(test3)[1]<-"registration_redcapid"
-  names(test3)[2:length(names(test3))]<-paste("emapg_",names(test3)[2:length(names(test3))],sep = "")
-  names(test3)<-tolower(gsub("[.]","_",names(test3)))
-  
-      if(Sys.Date()<enddate+1) {
-        test3$ema_completed___ip<-1
-        currentexp<-paste("test3$ema_completed___",curver,"<-0", sep = "")
-        eval(parse(text=currentexp))
-        test3$ema_completed___999<-0
-        
-      }
-      else {
+  if (length(which(is.na((emamelt.merge$check)))) != length(emamelt.merge$date)) {
+    test1<-reshape(emamelt.merge[!is.na(emamelt.merge$check),],idvar = "check",timevar = "Type",direction = "wide", v.names = c("actual","per"),drop = c("porp","expectation","diff"))
+    test1[which(test1$date>=Sys.Date()),grep("actual",names(test1))[1]:length(test1)]<-"NOT FINISH"
+    test2<-reshape(test1,idvar = "redcapID",timevar = "check",direction = "wide", v.names = names(test1)[-c(2,3)])
+    test3<-test2
+    names(test3)[1]<-"registration_redcapid"
+    names(test3)[2:length(names(test3))]<-paste("emapg_",names(test3)[2:length(names(test3))],sep = "")
+    names(test3)<-tolower(gsub("[.]","_",names(test3)))
+    if(Sys.Date()<enddate+1) {
+      test3$ema_completed___ip<-1
+      currentexp<-paste("test3$ema_completed___",curver,"<-0", sep = "")
+      eval(parse(text=currentexp))
+      test3$ema_completed___999<-0
+      test3$redcap_event_name<-"ema_arm_1"}
+    else {
       test3$ema_completed___ip<-0
       currentexp<-paste("test3$ema_completed___",curver,"<-1", sep = "")
       eval(parse(text=currentexp))
       test3$ema_completed___999<-0
       test3$ema_termdate<-enddate+1
-      }
-  test3$redcap_event_name<-"ema_arm_1"
-  
+      test3$redcap_event_name<-"ema_arm_1"
+      test3$prog_emastatus_di<-NA
+      }}
+  else {print(paste("Nothing to upload yet, come back after: ", startdate+7))}
   if (ifupload) {
-  result.test3<-redcap_write(test3,token = input.token,redcap_uri = input.uri)
-  if (result.test3$success) {print("DONE")}}
-  
-  if(Sys.Date()>enddate+1) {test2$finishdate<-enddate+1}
+    result.test3<-redcap_write(test3,token = input.token,redcap_uri = input.uri)
+    if (result.test3$success) {print("DONE")}}
   if (output) {
   return(test3)}
-}
+  }
 
+#####################################################################
 bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2){
   if (missing(filename.e)) {
   print("No file specified, please choose the target file")
   filename.c<-file.choose()}
   else {filename.e->filename.c}
-  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(filename = filename.c, forceupdate.e = forceupdate.e, ifupload = T),ifupload = T,curver = curver.e)
+  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T),ifupload = T,curver = curver.e)
 }
-
+#####################################################################
 bsrc.ema.redcapreshape<-function(){
   gsub("emaprog_","",names(LGER))
   melt.LGER<-cbind(melt.LGER,data.frame(t(as.data.frame(strsplit(melt.LGER$variable,split = "[_]")))))
   rownames(melt.LGER)<-NULL
   
 }
+#####################################################################
+bsrc.ema.getevent<-function(emadata.raw,pick,additional=NA) {
+  if (missing(emadata.raw)) {
+    print("Using bsrc.ema.getfile() for data")
+    emadata.raw<-bsrc.ema.getfile()
+    }
+  if (missing(pick)) {
+    pick <- readline(prompt = "Please type in BoD, DoD, EoD or MB: ")
+    }
+  test<-emadata.raw
+  test$Survey_Class<-test$TriggerName
+  test$Survey_Class[which(!test$Survey_Class %in% c("BoD","EoD","DoD"))]<-"MB"
+  
+  switch (pick,
+    "DoD" = {pick.w<-c("DoD","rp_")},
+    "EoD" = {pick.w<-c("EoD","eod_")},
+    "BoD" = {pick.w<-c("BoD","bod_")},
+    "MB" = {pick.w<-c("MB","mb_")})
+  
+  test1<-test[which(test$Survey_Class==pick.w[1]),grep(paste(pick.w[2],additional,'User_Id',sep = '|'),names(test))]
+  
+  return(test1)
+}
+
+#####################################################################
+bsrc.ema.patch<-function(emadata.raw){
+  if (missing(emadata.raw)){
+    print("Using bsrc.ema.getfile() for data")
+    emadata.raw<-bsrc.ema.getfile()}
+    
+  dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick = "DoD")
+  dodonly[dodonly == "CONDITION_SKIPPED"]<-NA
+  
+    
+    
+    
+    
+    
+    
+  }
+    
+#####################################################################
+bsrc.ema.scaletonum<-function(emadata.raw){
+  if (missing(emadata.raw)){
+    print("Using bsrc.ema.getfile() for data")
+    emadata.raw<-bsrc.ema.getfile()}
+
+  emadata.nodate<-emadata.raw[,-grep("Date",names(emadata.raw))]
+  emadata.nodate[emadata.nodate == "Very Slightly or Not at All"]<-1
+  emadata.nodate[emadata.nodate == "A Little"]<-2
+  emadata.nodate[emadata.nodate == "Moderately"]<-3
+  emadata.nodate[emadata.nodate == "Quite a Bit"]<-4
+  emadata.nodate[emadata.nodate == "A great deal"]<-5
+  emadata.nodate[emadata.nodate == "CONDITION_SKIPPED"]<-NA
+  emadata.nodate[emadata.nodate == ""]<-NA
+  emadata.nums<-cbind(emadata.nodate,emadata.raw[,grep("Date",names(emadata.raw))])
+  
+  return(emadata.nums)
+}
+
+################################################################
+
+
+
+
+
+
