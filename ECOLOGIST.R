@@ -3,6 +3,8 @@ title: "Ecologist"
 Author: "Jiazhou Chen"
 Version: 0.3
 ###
+
+
 #Verion 0.3 Changelog:
   #New function: bsrc.ema.getevent()
     #Isolate certrain event in EMA file
@@ -49,8 +51,10 @@ bsrc.ema.getfile<-function(filename){
   names(mwmatch)<-c('registration_redcapid','funbsrc$ema_studyidentifier')
   emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`funbsrc$ema_studyidentifier`)]
   
+  #Make things easier:
+  emadata.raw$Survey_Class<-emadata.raw$TriggerName
+  emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD"))]<-"MB"
 
-  
   #process the date:
   d<-as.Date(emadata.raw$Survey_Submitted_Date,format = "%d/%m/%Y")
   emadata.raw$Survey_Submitted_Date<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
@@ -85,7 +89,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
   
   if (ifrun){
     #Read EMA Data:
-    table.emadata<-data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$TriggerName)
+    table.emadata<-data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
     table.emadata[,count:=seq_len(.N), by=Type]
@@ -268,16 +272,16 @@ bsrc.ema.patch<-function(emadata.raw){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile()}
-    
-  dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick = "DoD")
-  dodonly[dodonly == "CONDITION_SKIPPED"]<-NA
   
-    
-    
-    
-    
-    
-    
+  emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
+  dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick = "DoD")
+  negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|"),names(dodonly))
+  rownum<-as.numeric(rownames(dodonly[which(dodonly$ifintime & dodonly$ifnegative),]))
+  
+  emadata.raw$MBYES<-NA
+  emadata.raw$MBYES[rownum]<-TRUE
+  
+  return(emadata.raw)
   }
     
 #####################################################################
