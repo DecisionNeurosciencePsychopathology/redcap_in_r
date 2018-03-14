@@ -1,8 +1,13 @@
 ###
 title: "Ecologist"
 Author: "Jiazhou Chen"
-Version: 0.4
+Version: 0.5
 ###
+#Version 0.5 Changelog:
+  #Revision for bsrc.ema.loopit(): Now takes out MB ones that are NA, and will update redcap accordingly at oneshot.
+  #Fixed error in bsrc.ema.getevent() where additional argument would not function porperly
+  #Fixed errors in bsrc.ema.getfile() & bsrc.ema.main() where file would not uplaod
+
 #Version 0.4 Changelog:
   #Revision for bsrc.ema.patch() for more detials on MB
   #Revisions on bsrc.ema.getevent(), bsrc.ema.main() and bsrc.ema.getfile() to intergrate bsrc.ema.patch()
@@ -41,7 +46,7 @@ Version: 0.4
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
 
 
-bsrc.ema.getfile<-function(filename){
+bsrc.ema.getfile<-function(filename,ifupload=T,uri.e=input.uri,token.e=input.token){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
     filename<-file.choose()
@@ -56,6 +61,7 @@ bsrc.ema.getfile<-function(filename){
   mwmatch<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
   names(mwmatch)<-c('registration_redcapid','funbsrc$ema_studyidentifier')
   emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`funbsrc$ema_studyidentifier`)]
+  RedcapID<-unique(emadata.raw$RedcapID)[1] #HOT FIX HERE! IF MULTIPLE SUBJECT STUDY IS LIVE,PLEASE FIX
   
   #Make things easier:
   emadata.raw$Survey_Class<-emadata.raw$TriggerName
@@ -71,13 +77,15 @@ bsrc.ema.getfile<-function(filename){
   d<-as.Date(emadata.raw$TriggerDate,format = "%d/%m/%Y")
   emadata.raw$TriggerDate<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
   
+  if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
+  
   return(emadata.raw)
 }
 
 ##############################################################
 
 
-bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri){
+bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile()
@@ -171,13 +179,11 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     emamelt.merge$porp<-round(emamelt.merge$actual / emamelt.merge$expectation *100,2)
     emamelt.merge$per<-paste(emamelt.merge$porp, "%")
     
-    
-    if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
-    
     #Safe guard the plot:
     emamelt.merge->emamelt.merge.x
     emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
-    
+   
+    if (graphic){ 
     #Percentage Plot
     emaplot.percent<-ggplot(data = emamelt.merge, aes(x=date, y=porp, group=Type, shape=Type, color=Type)) +
       ggtitle(paste(Initial,"EMA Progress (Percentage)"))+
@@ -204,14 +210,14 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     
     ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
     print("Completion (count) Plot Saved to Working Directory")
+      #End Graphic
+    }
     return(emamelt.merge.x)
     }
 }
 
 
 #####################################################################
-
-
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   #safe gurad the function:
   emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
@@ -258,12 +264,12 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.tok
   }
 
 #####################################################################
-bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2){
+bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2, graphic.e=T){
   if (missing(filename.e)) {
   print("No file specified, please choose the target file")
   filename.c<-file.choose()}
   else {filename.e->filename.c}
-  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T),ifupload = T,curver = curver.e)
+  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
 #####################################################################
 bsrc.ema.redcapreshape<-function(){
@@ -291,7 +297,7 @@ bsrc.ema.getevent<-function(emadata.raw,pick,additional=NA) {
     "BoD" = {pick.w<-c("BoD","bod_")},
     "MB" = {pick.w<-c("MB","mb_")})
   
-  test1<-test[which(test$Survey_Class==pick.w[1]),grep(paste(pick.w[2],additional,'User_Id',sep = '|'),names(test))]
+  test1<-test[which(test$Survey_Class==pick.w[1]),grep(paste(pick.w[2],additional,'User_Id',sep = '|',collapse = "|"),names(test))]
   
   return(test1)
 }
@@ -304,7 +310,7 @@ bsrc.ema.patch<-function(emadata.raw){
   
   emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
   dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick = "DoD")
-  negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|"),names(dodonly))
+  negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|",collapse = "|"),names(dodonly))
   negnum<-negnum[negnum >20]
   dodonly$ifnegative<-rowSums(dodonly[,negnum] >= 2)>0
   dodonly$ifintime<-dodonly$rp_time %in% c("Just happened","15 minutes","30 minutes","45 minutes")
@@ -341,24 +347,51 @@ bsrc.ema.scaletonum<-function(emadata.raw){
 }
 
 ################################################################
-ema.loop.path<<-paste(getwd(),"/EMA-Completed",sep = "")
 
-bsrc.ema.loopit<-function(path, style="long") {
+
+ema.loop.path<<-paste(mood,"/EMA Data",sep = "")
+
+bsrc.ema.loopit<-function(path, style="long", graphic=T,ifupload.e=T, curver.e=2,forceupdate=F,outputstyle="outcome") {
   if(missing(path)){path=getwd()}
   temp<-list.files(path<-path,pattern="*.csv")
+  print("This is to upload and update redcap")
   for (i in 1:length(temp)){
     print(paste("Now processing ",i," out of ",length(temp),sep = ""))
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename)
-    output<-bsrc.ema.main(emadata.raw = emadata.raw)
-    if (i==1){outcome<-output}
+    output<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
+    output.r<-bsrc.ema.oneshotupload(filename.e = filename,ifupload = F,curver.e = curver.e, graphic.e = graphic, forceupdate.e = forceupdate)
+    if (i==1){outcome<-output
+    outcome.r<-output.r}
     outcome<-merge(outcome,output,all=T)
     output<-NULL
+    outcome.r<-merge(outcome.r,output.r,all=T)
+    output.r<-NULL
   }
-  return(outcome)
+  outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
+  
+  switch(outputstyle, outcome={return(outcome)}, outcome.r={return(outcome.r)})
 }
+######################################
+#Unified
 
+#bsrc.ema.loopitupdate<-function(path.e, style="long", ifupload.e=T, curver.e=2, graphic=F,forceupdate=F) {
+  #if(missing(path.e)){path.e=getwd()}
+  #temp<-list.files(path<-path.e,pattern="*.csv")
+  #for (i in 1:length(temp)){
+    #print(paste("Now processing ",i," out of ",length(temp),sep = ""))
+    #filename<-paste(path.e,temp[i],sep = "/")
+    #output.r<-bsrc.ema.oneshotupload(filename.e = filename,ifupload = F,curver.e = curver.e, graphic.e = graphic, forceupdate.e = forceupdate)
+    #if (i==1){outcome.r<-output.r}
+    #outcome.r<-merge(outcome.r,output.r,all=T)
+   # output.r<-NULL
+  #}
+  #if(ifupload.e){
+   # result.outcome.r<-redcap_write(outcome.r,token = input.token,redcap_uri = input.uri)
+  # return(outcome.r)
+#}
 
-
-
+################################################################
+#For checking actual promts
+bsrc.ema.checkthepromts<-function(){}
 
