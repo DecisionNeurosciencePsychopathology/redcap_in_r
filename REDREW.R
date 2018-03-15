@@ -1,9 +1,21 @@
 ---
 Title: "REDREW"
 Author: "Jiazhou Chen"
-Version: 1.1
+Version: 1.2
 ---
-
+#version 1.2 Changelog:
+  #Introduction of universal function: redcap.eventmapping
+    #Very useful fucntion in longitudinal study.
+  #Refinement of bsrc.getform(): 
+    #Now using the new event mapping instead of relying on aggresive subsetting.
+    #Aggressive subsetting is automatically off to preserve data. It's still recommand to turn on for simplicity.
+  #New function: bsrc.getevent()
+    #Subset the database to only certain event and their according forms
+    #Aggressive subsetting is automatically off to preserve data. DO NOT recommand to turn on, only there for efficiency. 
+  
+#Version 1.1.1 Changelog:
+  #fixed an error in bsrc.redcapcon which result in subreg only taking 1:50 variables. Insterad now it's dynamic
+  
 #Version 1.1 Changelog:
   #reformed bsrc.getform() with following changes:
     #aggressive argument to aggressively remove irrelavent data, by default on
@@ -89,6 +101,48 @@ library(lubridate)
 ##jk, with all new ppl, it can't handle it anymore##
 ##            default batch size to 50            ##
 
+redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) 
+{
+  start_time <- Sys.time()
+  if (missing(redcap_uri)) 
+    stop("The required parameter `redcap_uri` was missing from the call to `redcap.eventmapping`.")
+  if (missing(token)) 
+    stop("The required parameter `token` was missing from the call to `redcap.eventmapping`.")
+  token <- sanitize_token(token)
+  post_body <- list(token = token, content = "formEventMapping", format = "csv", arms = arms)
+  result <- httr::POST(url = redcap_uri, body = post_body, 
+                       config = config_options)
+  status_code <- result$status
+  success <- (status_code == 200L)
+  raw_text <- httr::content(result, "text")
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  if (success) {
+    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
+        silent = TRUE)
+    if (exists("ds") & inherits(ds, "data.frame")) {
+      outcome_message <- paste0("The data dictionary describing ", 
+                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
+                                " fields was read from REDCap in ", 
+                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
+                                status_code, ".")
+      raw_text <- ""}
+    else {success <- FALSE
+      ds <- data.frame()
+      outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
+                                status_code, ".  The 'raw_text' returned was '", 
+                                raw_text, "'.")}
+  }
+  else {
+    ds <- data.frame()
+    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
+                              raw_text)}
+  if (message){ 
+    message(outcome_message)}
+  return(list(data = ds, success = success, status_code = status_code, 
+              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
+              raw_text = raw_text))
+}
+
 bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
@@ -104,8 +158,9 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   token<<-input.token
   #test connection:
   funbsrc<-redcap$read(batch_size = batch_size)
-  strc<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
+  strc<<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
   funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
+  funevent<<-redcap.eventmapping(redcap_uri = input.uri,token=input.token)$data
   names(strc)<-c('field_name','form_name','field_label')
   funbsrc<<-funbsrc$data
   subreg<-funbsrc$data[funbsrc$data$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
@@ -219,7 +274,7 @@ bsrc.findduplicate <- function() {
 ############################
 #Function to get all data of given event:
 
-bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default"){
+bsrc.getevent<-function(uri.e,token.e,eventname,replace,forcerun=FALSE, whivarform="default"){
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if(ifrun) {
@@ -228,11 +283,10 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default"){
       eventname<-readline(prompt = "Please type in the event name that you wish to extract (use argument eventname=c('','') for multiple): ")}
     funbsrc$redcap_event_name[which(funbsrc$redcap_event_name %in% eventname)]
     switch(whivarform,
-    default=getvariable<-read.csv("/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/BSocial_InstrumentDesignations.csv"),
-    user=getvariable<-read.csv(readline(prompt = "Please paste the path of the vari file, inclduing the file name in .csv form: ")),
-    anyfile=getvariable<-read.csv(file.choose())
+    default = ifelse(is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = uri.e,token = token.e),print("GOT IT")),
+    anyfile = funevent<-read.csv(file.choose())
     )
-    return(getvariable)
+    return(funevent)
     
   }
 }
@@ -241,7 +295,7 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default"){
 #####################################
 #Functions to get all data from given forms: 
 ####~!!!!HOLD ON~!!!!!THIS METHOD IS SIMPLE BUT DOES NOT GET THE CHECKBOX TYPE~~######
-bsrc.getform<-function(formname,replace,forcerun.e=F, forceupdate.e=F ,aggressive=T) {
+bsrc.getform<-function(formname,replace,forcerun.e=F, forceupdate.e=F ,aggressive=F) {
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if (ifrun) {
@@ -254,9 +308,12 @@ bsrc.getform<-function(formname,replace,forcerun.e=F, forceupdate.e=F ,aggressiv
    lvariname<-as.character(funstrc$strc.data.field_name[which(funstrc$strc.data.form_name %in% formname)])
    raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
     
-    
-    if(aggressive) {raw[raw==""]<-NA}
-    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]
+   eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+   raw<-raw[which(raw$redcap_event_name %in% eventname),]
+   raw[raw==""]<-NA
+    if(aggressive) {new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]}
+    else {new_raw<-raw
+    print("By default the aggressive subseting is off to preserve data, if too much, use aggressive=T argument.")}
     return(new_raw)
     }
   else print(paste("NO FORM NAMED: ",formname, sep = ""))
