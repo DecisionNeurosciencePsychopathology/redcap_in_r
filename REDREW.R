@@ -1,8 +1,13 @@
 ---
 Title: "REDREW"
 Author: "Jiazhou Chen"
-Version: 1.2
+Version: 1.3
 ---
+#Version 1.3 Changelog:
+  #bsrc.getform() and bsrc.getevent() have a better aggressive datasubsetting rule
+  #bsrc.getform() has new argument on how agressive it should be and if datamodification should happen.
+  #bsrc.conredcap() configured to subset subreg
+  
 #version 1.2 Changelog:
   #Introduction of universal function: redcap.eventmapping
     #Very useful fucntion in longitudinal study.
@@ -149,7 +154,8 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(batch_size)) {batch_size<-"50" 
   print("By default, the batch size is 50 unique records")}
   if (missing(output)) {output<-F
-  print("By default, the database will be assigned to `funbsrc` as a data frame and returns nothing if wish to assign db to something, use arguement 'output = T'")}
+  print(paste("By default, the database will be assigned to `funbsrc` as a" 
+        ,"data frame and returns nothing if wish to assign db to something, use arguement 'output = T'"))}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -163,8 +169,7 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   funevent<<-redcap.eventmapping(redcap_uri = input.uri,token=input.token)$data
   names(strc)<-c('field_name','form_name','field_label')
   funbsrc<<-funbsrc$data
-  subreg<-funbsrc$data[funbsrc$data$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
-  subreg<<-subreg[,1:50] #take only the regi part
+  subreg<<-subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T) #take only the regi part
   if (length(funbsrc$data$registration_redcapid)>0) {
     print("Success! Database Loaded")
     jzc.connection.yesno<<-1
@@ -235,7 +240,8 @@ bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
       idmatch<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
       names(idmatch)<-c('id','soloffid','redcapid')
       if(any(idt %in% idmatch$soloffid | idt %in% idmatch$id)){
-        ifelse(idt %in% idmatch$soloffid, rid<-as.character(idmatch$redcapid[which(idmatch$soloffid==idt)]), rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)]))
+        ifelse(idt %in% idmatch$soloffid, rid<-as.character(idmatch$redcapid[which(idmatch$soloffid==idt)]), 
+               rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)]))
         if(length(rid)==1){
         idonly<-funbsrc[which(funbsrc$registration_redcapid==rid & funbsrc$redcap_event_name=='enrollment_arm_1'),]
         #ID, Names, 
@@ -274,46 +280,68 @@ bsrc.findduplicate <- function() {
 ############################
 #Function to get all data of given event:
 
-bsrc.getevent<-function(uri.e,token.e,eventname,replace,forcerun=FALSE, whivarform="default"){
+bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",uri.e,token.e,subreg=F,mod=T,aggressivecog=1){
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if(ifrun) {
     if (missing(eventname)){
       print(as.character(unique(funbsrc$redcap_event_name)))
-      eventname<-readline(prompt = "Please type in the event name that you wish to extract (use argument eventname=c('','') for multiple): ")}
-    funbsrc$redcap_event_name[which(funbsrc$redcap_event_name %in% eventname)]
+      eventname<-readline(prompt = "Please type in the event name, for ALL FU, use 'allfu': ")
+    }
+    if (eventname=="allfu") {
+    eventname<-as.character(unique(funbsrc$redcap_event_name))[grep("months_follow",as.character(unique(funbsrc$redcap_event_name)))]
+    }
+    eventonly<-funbsrc[which(funbsrc$redcap_event_name %in% eventname),]
     switch(whivarform,
     default = ifelse(is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = uri.e,token = token.e),print("GOT IT")),
     anyfile = funevent<-read.csv(file.choose())
     )
-    return(funevent)
+    formname<-funevent$form[funevent$unique_event_name %in% eventname]
+    if (subreg) {formname<-formname[-grep(paste("ipde","scid",sep = "|"),formname)]}    
+    variablename<-names(bsrc.getform(formname = formname,forcerun.e = T))
+    eventonly.r<-eventonly[,grep(paste(variablename,collapse = "|"),names(eventonly))]
     
+    if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
+      eventonly.r[eventonly.r==""]<-NA
+      if (length(grep("___",names(eventonly.r))) > 0){
+        eventonly.r[,grep("___",names(eventonly.r))][eventonly.r[,grep("___",names(eventonly.r))] == "0"]<-NA}
+    }
+    eventonly.x<-eventonly.r[rowSums(is.na(eventonly.r[,3:length(names(eventonly.r))])) < (length(names(eventonly.r))- (2+aggressivecog)),]
+    
+    
+    
+    
+    
+    return(eventonly.x)
   }
 }
 
   
 #####################################
 #Functions to get all data from given forms: 
-####~!!!!HOLD ON~!!!!!THIS METHOD IS SIMPLE BUT DOES NOT GET THE CHECKBOX TYPE~~######
-bsrc.getform<-function(formname,replace,forcerun.e=F, forceupdate.e=F ,aggressive=F) {
+#Maybe add functions to select arms !!
+
+bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,uri.e,token.e,mod=T,aggressivecog=1) {
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if (ifrun) {
   if (missing(formname)){
+  print("Here's a list of forms: ")
   print(as.character(unique(funstrc$strc.data.form_name)))
-  formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,); no need for '': ")
+  formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,): ")
   }
-  
-  if (as.character(formname) %in% as.character(funstrc$strc.data.form_name)) {
+  if (any(as.character(formname) %in% as.character(funstrc$strc.data.form_name))) {
    lvariname<-as.character(funstrc$strc.data.field_name[which(funstrc$strc.data.form_name %in% formname)])
    raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
     
    eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
    raw<-raw[which(raw$redcap_event_name %in% eventname),]
-   raw[raw==""]<-NA
-    if(aggressive) {new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))-3),]}
-    else {new_raw<-raw
-    print("By default the aggressive subseting is off to preserve data, if too much, use aggressive=T argument.")}
+   if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
+      raw[raw==""]<-NA
+      if (length(grep("___",names(raw))) > 0){
+      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA}
+      }
+    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog)),]
     return(new_raw)
     }
   else print(paste("NO FORM NAMED: ",formname, sep = ""))
