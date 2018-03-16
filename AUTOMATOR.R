@@ -1,11 +1,14 @@
 ---
 Title: "Automator"
 Author: "Jiazhou Chen"
-Version: 1.1
+Version: 1.2
 ---
 
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
 
+#Version 1.2:
+  #bsrc.refresh() gains the update to fMRI status function
+  
 #Version 1.1:
   #bsrc.refresh() gains the update to EMA protocl and latest IPDE function
 
@@ -78,6 +81,25 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     names(ipdedate)<-c("registration_redcapid","ipde_date")
     maxevent<-merge(maxevent,ipdedate,all = T)
     
+    #rename variables:
+    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate")
+    
+    #For fMRI Status:
+    #Dates:
+    mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),forcerun.e = T) 
+    mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mriscreen_yesno","mricheck_scheudleddate","mricheck_scanneddate","mricheck_mricomplete___0118","mricheck_mricomplete___p16")) 
+    mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mriscreen_yesno) | !is.na(mripgonly.a$mricheck_scheudleddate)),]
+    mripgonly.c<-mripgonly.b
+    mripgonly.c$prog_fmristatus<-NA
+    mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==0)]<-"REFUSED/INELIGIBLE"
+    mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==1)]<-"Screened/MaybeEligible"
+    mripgonly.c$prog_fmristatus[which(mripgonly.c$mricheck_mricomplete___p16==1)]<-"'16 Pilot"
+    mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scheudleddate))]<-paste("Scheduled:",mripgonly.c$mricheck_scheudleddate[which(!is.na(mripgonly.c$mricheck_scheudleddate))])
+    mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scanneddate))]<-paste("Scanned:",mripgonly.c$mricheck_scanneddate[which(!is.na(mripgonly.c$mricheck_scanneddate))])
+    #Subset:
+    mripgonly.d<-subset(mripgonly.c,select = c("registration_redcapid","prog_fmristatus"))
+    #Merge:
+    maxevent<-merge(maxevent,mripgonly.d, all = T)
     
     #For EMA Status:
     #Due Date:
@@ -93,11 +115,11 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.s$prog_emadued[Sys.Date() >= emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() >= emaonly.s$ema_setuptime+21]+21
     
     emaonly.s$prog_emastatus<-paste("IP3d:",emaonly.s$ema_setuptime+3)
-    emaonly.s$prog_emastatus[Sys.Date() <= emaonly.s$ema_setuptime+22]<-paste("IP21d:",emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22)
-    emaonly.s$prog_emastatus[Sys.Date() <= emaonly.s$ema_setuptime+15]<-paste("IP14d:",emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15]+15)
-    emaonly.s$prog_emastatus[Sys.Date() <= emaonly.s$ema_setuptime+8]<-paste("IP7d:",emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8]+8)
-    emaonly.s$prog_emastatus[Sys.Date() >= emaonly.s$ema_setuptime+21]<-paste("DONE:",emaonly.s$ema_setuptime[Sys.Date() >= emaonly.s$ema_setuptime+21]+21)
-    emaonly.s$prog_emastatus[emaonly.s$ema_completed___2==1]<-paste("Completed:",emaonly.s$ema_setuptime[emaonly.s$ema_completed___2==1]+22)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("IP21d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]<-paste("IP14d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]+15)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("IP7d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
+    emaonly.s$prog_emastatus[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]+21)
+    emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
     emaonly.s$prog_emastatus_di<-emaonly.s$prog_emastatus
     emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___2==1]<-NA
     emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
@@ -107,12 +129,15 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.j$prog_emastatus<-"Screened&Ready"
     #Merge:
     emaonly.r<-merge(emaonly.x,emaonly.j,all=T)
+    #Merge with Main maxevent upload:
     maxevent<-merge(maxevent,emaonly.r,all = T)
     #####Work on early termination folks########
 
     
+   
+    
     #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
-    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_emastatus","prog_emastatus_di","prog_emadued")
+    #c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_emastatus","prog_emastatus_di","prog_emadued")
     
     idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
     names(idmatch)<-c('id','soloffid','redcapid')
@@ -147,11 +172,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
 }
 
 
-
-####fMRI Status#####
-#Pending
-
-####Missing Assessment####
+####Missing Assessment Given a Arm####
 #Pending
 
 ####Back-up######
@@ -176,29 +197,6 @@ bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expirati
     }
   print("DONE")
   }
-}
-
-      
-
-
-
-####MetricWire:#####
-bsrc.metric2redcap <- function(forcerun,token) {
-  if (missing(token)){token<-input.token}
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun,token = token)
-  llist<-list.files(path=)
-}
-
-
-#Find ID:
-
-bsrc.name2id <- function(ID,forcerun=FALSE){
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
-  if (ifrun==TRUE){
-    
-  }
-
-  
 }
 
 
