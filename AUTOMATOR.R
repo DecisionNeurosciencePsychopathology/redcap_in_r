@@ -1,11 +1,18 @@
 ---
 Title: "Automator"
 Author: "Jiazhou Chen"
-Version: 1.2
+Version: 1.31
 ---
 
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
 
+#Version 1.31:
+  #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed. 
+  #Remove the main script from AUTOMATOR so that it only contains functions
+  
+#Version 1.3:
+  #Just some updates to the good old bsrc.refresh()
+  
 #Version 1.2:
   #bsrc.refresh() gains the update to fMRI status function
   
@@ -14,7 +21,7 @@ Version: 1.2
 
 #Version 1:
   #1/1 start up function: 
-jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
+#jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
   #1/1 REFRESH main function, now with single ID mode:
     #Force update, force run, if output maxevent db, if upload
   #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
@@ -39,8 +46,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,forceupdate = forceupdate.e,token = token.e)
   if (ifrun){
     #get info from registration
-    subreg<-funbsrc[funbsrc$redcap_event_name=="enrollment_arm_1",] #take out only enrollment for efficiency
-    subreg<-subreg[,1:50] #take only the regi part
+    subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
     subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
     subreg$sincelastfu<-as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
     subreg$fudue<-round((as.numeric(as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
@@ -66,6 +72,8 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     maxevent$redcap_event_name<-NULL
     maxevent$months<-NULL
     maxevent$fudemo_visitdate<-NULL
+    #if 3 month is completed, skip 6 month.
+    maxevent$diff[which(maxevent$fudue==0.5 & maxevent$years==0.25)]<-0
       #Refine indicator so folks who got in early will not:
       maxevent$diff[which(maxevent$daysincefu < 60)]<-0
     
@@ -88,16 +96,17 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     #Dates:
     mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),forcerun.e = T) 
     mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mriscreen_yesno","mricheck_scheudleddate","mricheck_scanneddate","mricheck_mricomplete___0118","mricheck_mricomplete___p16")) 
-    mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mriscreen_yesno) | !is.na(mripgonly.a$mricheck_scheudleddate)),]
-    mripgonly.c<-mripgonly.b
+    #mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mriscreen_yesno) | !is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_mricomplete___p16)),]
+    mripgonly.c<-mripgonly.a
     mripgonly.c$prog_fmristatus<-NA
     mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==0)]<-"REFUSED/INELIGIBLE"
     mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==1)]<-"Screened/MaybeEligible"
-    mripgonly.c$prog_fmristatus[which(mripgonly.c$mricheck_mricomplete___p16==1)]<-"'16 Pilot"
+    mripgonly.c$prog_fmristatus[which(mripgonly.c$mricheck_mricomplete___p16==1)]<-"2016 Pilot"
     mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scheudleddate))]<-paste("Scheduled:",mripgonly.c$mricheck_scheudleddate[which(!is.na(mripgonly.c$mricheck_scheudleddate))])
     mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scanneddate))]<-paste("Scanned:",mripgonly.c$mricheck_scanneddate[which(!is.na(mripgonly.c$mricheck_scanneddate))])
     #Subset:
     mripgonly.d<-subset(mripgonly.c,select = c("registration_redcapid","prog_fmristatus"))
+    mripgonly.e<-na.omit(mripgonly.d)
     #Merge:
     maxevent<-merge(maxevent,mripgonly.d, all = T)
     
@@ -132,18 +141,10 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     #Merge with Main maxevent upload:
     maxevent<-merge(maxevent,emaonly.r,all = T)
     #####Work on early termination folks########
-
-    
-   
-    
     #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
     #c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_emastatus","prog_emastatus_di","prog_emadued")
-    
     idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
     names(idmatch)<-c('id','soloffid','redcapid')
-    
-    
-    
     if (!is.na(ID)){
     if(any(ID %in% idmatch$soloffid | ID %in% idmatch$id)){
       if(ID %in% idmatch$soloffid) {ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
@@ -171,7 +172,6 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
   }
 }
 
-
 ####Missing Assessment Given a Arm####
 #Pending
 
@@ -179,7 +179,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
 bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expiration=30) {
   if (missing(token)){token<-input.token}
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token,forceupdate = forceupdate.e)
-  if (missing(path)) {path<-"/Volumes/llmd/BPD Database/RedCap Database Back-Up"
+  if (missing(path)) {path<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/Redcap Database Backup"
     print("Default Location is L Drive/BPD Database")}
   if (ifrun) {
     csvname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.csv")
@@ -198,37 +198,5 @@ bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expirati
   print("DONE")
   }
 }
-
-
-
-####################
-###   Part II:   ###
-###  Main Script ###
-####################
-
-#Packages:
-library(REDCapR)
-library(lubridate)
-
-#Load configuration 
-jiazhou.startup()
-
-#Refresh RedCap values
-result<-bsrc.refresh(forceupdate = T,token = input.token)
-if(result$success) {
-  #MailR
-  #Send an confirmation of the process to myself
-
-csvname<-paste("Redcap_Log",Sys.Date(),".csv",sep = "_")
-write.csv(as.data.frame(result$outcome_message,result$affected_ids,result$status_code), file = csvname)}
-
-#Backup
-bsrc.backup()
-
-#Grab metricwire function:
-bsrc.metric2redcap()
-
-#produce excel function:
-bsrc.excelproduction()
 
 
