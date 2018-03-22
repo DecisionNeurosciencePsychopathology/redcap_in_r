@@ -1,11 +1,16 @@
 ###---
 Title: "Administrator"
 Author: "Jiazhou Chen"
-Version: 0.1
+Version: 0.4
 ###---
+#Version 0.4 Changelog:
+  #bsrc.admin.biweekly() now produce also follow-ups from current and next month
+
+#Version 0.3 Changelog:
+  #Refined function bsrc.admin.biweekly()
 
 #Version 0.2 Changelog:
-#New function: bsrc.admin.biweekly()
+  #New function: bsrc.admin.biweekly()
   #For B-Social biweekly meetings
 
 ####
@@ -14,102 +19,110 @@ Version: 0.1
 # Functionalize Follow-up histagram
 # Break down by group; use interaction() better
 # NEW, EMA, MRI
+library("ggplot2")
 
 #####
+save.image("~/Documents/UPMC/RStation/admin.RData")
 
 ###########################Bi-Weekly Meeting Sheet:
-bsrc.admin.biweekly<-function(type="Past 7 Days"){
+bsrc.admin.biweekly<-function(days=14,monthz=2){
   
-  #Find Max Follow-Up Dates:
+  #Find Max Follow-Up Dates: 
   funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
   maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
-  names(maxfudate)<-c("registration_redcapid","fudemo_visitdate")
+  names(maxfudate)<-c("registration_redcapid","Follow-up")
+  
+  #Get progress:
+  futurefolks<-subreg[,c("registration_redcapid","registration_consentmonth","prog_diff","prog_lastfollow","prog_endor_y")]
+
   
   #Get EMA Dates:
   emapg<-bsrc.getform(formname = "ema_progress_check")
   emapgonly<-subset(emapg,select = c("registration_redcapid","emapg_date_7days","emapg_date_14days","emapg_date_21days"))
   emapgonly$ema_maxdate<-apply(emapgonly[-grep("registration_redcapid",names(emapgonly))],1,max,na.rm=T)
   emapgonly.a<-subset(emapgonly,select = c("registration_redcapid","ema_maxdate"))
+  names(emapgonly.a)<-c("registration_redcapid","EMA")
+  
+  #Get MRI Dates:
+  mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"))
+  mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mricheck_scheudleddate","mricheck_scanneddate")) 
+  mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_scanneddate)),]
+  mripgonly.b$MRI<-apply(mripgonly.b[-grep("registration_redcapid",names(mripgonly.b))],1,max,na.rm=T)
+  mripgonly.c<-subset(mripgonly.b, select = c("registration_redcapid","MRI"))
+
   #Get Baseline:
   baseline<-na.omit(subset(bsrc.getform(formname = "bldemo"),select = c('registration_redcapid',"demo_visitdate")))
   baseline$demo_visitdate<-as.Date(baseline$demo_visitdate)
+  names(baseline)<-c("registration_redcapid","Baseline")
   
   #Get Consented Dates:
   consented<-subset(subreg,select = c("registration_redcapid","registration_consentdate"))
   consented$registration_consentdate[consented$registration_consentdate==""]<-NA
   consented<-na.omit(consented)
   consented$registration_consentdate<-as.Date(consented$registration_consentdate)
+  names(consented)<-c("registration_redcapid","Consented")
   
   #Add additional component here
   #Merged:
-  merged<-merge(merge(emapgonly.a,maxfudate,all=T),merge(baseline,consented,all=T),all=T)
-  merged$maxwhich<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {which(x==max(x,na.rm=T))}[1])]
-  merged$max<-apply(merged[-grep("registration_redcapid|maxwhich",names(merged))],1,max,na.rm=T)
+  merged.a<-merge(merge(emapgonly.a,maxfudate,all=T),merge(baseline,consented,all=T),all=T)
+  merged<-merge(merged.a,mripgonly.c,all=T)
+  merged$`Event`<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {which(x==max(x,na.rm=T))}[1])]
+  merged$`Event Date`<-apply(merged[-grep("registration_redcapid|Event",names(merged))],1,max,na.rm=T)
+  merged.simp<-merged
+  merged.simp<-subset(merged,select = c("registration_redcapid","Event","Event Date"))
+  #Add Status
+  merged.simp$`MRI Status`<-subreg$prog_fmristatus[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`EMA Status`<-subreg$prog_emastatus[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  #Add Initials & Age:
+  merged.simp$`Age`<-subreg$prog_cage[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`Initials`<-subreg$registration_initials[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`Group`<-subreg$registration_group[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`Latest IPDE Date`<-subreg$prog_latestipdedate[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
   
-  merged.recent<-merged[which(merged$max >= Sys.Date()-7),]
+  #Refine Status: 
+  ord<-c("Consented","Baseline","Follow-up","MRI","EMA")
+  merged.simp<-merged.simp[order(match(merged.simp$`Event`,ord),merged.simp$`Event Date`),]
+  merged.simp$Group<-mapvalues(merged.simp$Group,from = c("1","2","3","4","88"), to=c("HC","LL","HL","NON-ATT","UNCLEAR"))
+  colnames(merged.simp)[grep("registration_redcapid",names(merged.simp))]<-"RedCap ID"
+  merged.simp$Event[merged.simp$Event=="Follow-up"]<-paste(subreg$prog_lastfollow[match(merged.simp[merged.simp$Event=="Follow-up",]$`RedCap ID`,subreg$registration_redcapid)],"Years Follow-up")
+
+  #FU Month:
+  merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]]
+  merged.simp<-merged.simp[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","MRI Status","EMA Status")]
+
+  
+  #########Future Folks
+  tarmon<-c(month(Sys.Date()),month(Sys.Date())+1)
+  
+  which(subreg$prog_diff>0 & subreg$prog_diff< monthz+0.1)
+  
+  futureid<-futurefolks[which(futurefolks$registration_consentmonth %in% tarmon & subreg$prog_diff>0 & subreg$prog_diff< monthz+0.1),]$registration_redcapid
+  future<-merged.simp[which(merged.simp$`RedCap ID` %in% futureid),]
+  #future$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(future$`RedCap ID`,futurefolks$registration_redcapid)]]
+  future<-future[order(match(future$`Follow-up Month`,month.name)),]
+  future<-future[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","MRI Status","EMA Status")]
+  names(future)<-c("RedCap ID","Initials","Age","Group","Follow-up Month","Last Event","Last Event Date","Latest IPDE Date","MRI Status","EMA Status")
+  rownames(future)<-NULL
+  
+  ########Current Folks
+  merged.recent<-merged.simp[which(merged.simp$`Event Date` >= Sys.Date()-days),]
+  rownames(merged.recent)<-NULL
+
   
   
-  return(merged.recent)
-  
+  return(list(Past_Two_Weeks=merged.recent,Next_Two_Month = future))
+   
 }
-
-
-
-
-
-
-
-
-
-
-library("ggplot2")
-  
-  
-opu$registration_initials <- paste(toupper(substr(opu$`First Name`,0,1)),toupper(substr(opu$`Last Name`,0,3)))
-opu$registration_initials[which(opu$registration_initials=="NA NA")]<-"NA"
-odz$registration_redcapid<-idmatch$redcapid[match(odz$ID,idmatch$soloffid)]
-odz$iftranx<-is.na( match(odz$ID,idmatch$soloffid))
-
-bsrc.irb.numsum<-function() {
-  ID_SUPREME <- read_excel("Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
-  ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.getidmatchdb(ID_SUPREME)
-  tkj<-as.data.frame(tkj)
-  newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
-  names(newid)<-c("registration_redcapid")
-  jrk<-merge(tkj,newid,all = T)
-  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid"))
-  nui<-merge(jrk,nui,all = T)
-  if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
-    #Info user the conflict:
-    return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
-    #which direction:
-    direct.r<-readline(prompt = "Please type 'RC' for picking RedCap Status, or 'OG' for picking legacy status: ")
-    direct.r<-as.numeric(direct.r)
-    switch (direct.r,RC = nui$Status[which(!nui$Status==nui$registration_status)]<-nui$registration_status[which(!nui$Status==nui$registration_status)],
-            OG = nui$Status[which(!nui$Status==nui$registration_status)]->nui$registration_status[which(!nui$Status==nui$registration_status)])}
-  nui$Status[which(is.na(nui$Status))]<-nui$registration_status[which(is.na(nui$Status))]
-  nui$iftranx<-NULL
-  nui$StatusWord[nui$Status==88]<-"Ineligible Drop"
-  nui$StatusWord[nui$Status==7]<-"IRB Admin Drop"
-  nui$StatusWord[nui$Status==6]<-"Lost Contact/Drop"
-  nui$StatusWord[nui$Status==5]<-"Deceased"
-  nui$StatusWord[nui$Status==4]<-"Do Not Contact"
-  nui$StatusWord[nui$Status==3]<-"In Jail"
-  nui$StatusWord[nui$Status==2]<-"Missing"
-  nui$StatusWord[nui$Status==1]<-"Active"
-  
-}
-
-bsrc.datameeting<-function(protocol){
+###########################Data Meeting:
+bsrc.datameeting<-function(protocol="bsocial"){
   if(missing(protocol)) {
-  protocol=readline(prompt = "Please input the protocl: ")}
+    protocol=readline(prompt = "Please input the protocl: ")}
   switch (protocol,
-    bsocial = {enddate<-as.Date("2020-08-01") 
-    startdate<-as.Date("2017-07-30")},
-    ksocial = {enddate<-as.Date("2021-08-01") 
-    startdate<-as.Date("2017-08-01")
-    })
+          bsocial = {enddate<-as.Date("2020-08-01") 
+          startdate<-as.Date("2017-07-30")},
+          ksocial = {enddate<-as.Date("2021-08-01") 
+          startdate<-as.Date("2017-08-01")
+          })
   
   totaln<-200
   
@@ -138,18 +151,18 @@ bsrc.datameeting<-function(protocol){
     merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
     
     new.plot<- ggplot(merged.new.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
-    ggtitle(paste("New BPD Participant, current total:", length(newconsent$date)))+
-    theme(plot.title = element_text(hjust = 0.5))+
-    geom_line() +
-    geom_point(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),])+
-    scale_color_manual(values=c('red', 'gray')) +
-    xlab(paste("Current Difference: ",round(merged.new$Actual[length(merged.new$date)]-merged.new$Projection[length(merged.new$date)]))) + 
-    ylab("Number of Participants") +
-    scale_x_date(date_labels = "%B", date_breaks = "1 month") +
-    geom_label(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),], aes(label=count))+
-    geom_label(data = merged.new.melt[max(which(merged.new.melt$`Number Type` == "Projection")),], aes(label=round(count)))
+      ggtitle(paste("New BPD Participant, current total:", length(newconsent$date)))+
+      theme(plot.title = element_text(hjust = 0.5))+
+      geom_line() +
+      geom_point(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),])+
+      scale_color_manual(values=c('red', 'gray')) +
+      xlab(paste("Current Difference: ",round(merged.new$Actual[length(merged.new$date)]-merged.new$Projection[length(merged.new$date)]))) + 
+      ylab("Number of Participants") +
+      scale_x_date(date_labels = "%B", date_breaks = "1 month") +
+      geom_label(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),], aes(label=count))+
+      geom_label(data = merged.new.melt[max(which(merged.new.melt$`Number Type` == "Projection")),], aes(label=round(count)))
     
-   ###################
+    ###################
     #EMA
     funbsrc$ema_setuptime[funbsrc$ema_setuptime==""]<-NA
     emaconsent<-as.data.frame(funbsrc$ema_setuptime[which(!is.na(funbsrc$ema_setuptime))])
@@ -203,7 +216,52 @@ bsrc.datameeting<-function(protocol){
   }
   
 }
+##########################IRB NUMBER:
+bsrc.irb.numsum<-function() {
+  ID_SUPREME <- read_excel("Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
+  ID_SUPREME[,5:8]<-NULL
+  tkj<-bsrc.getidmatchdb(ID_SUPREME)
+  tkj<-as.data.frame(tkj)
+  newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
+  names(newid)<-c("registration_redcapid")
+  jrk<-merge(tkj,newid,all = T)
+  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid"))
+  nui<-merge(jrk,nui,all = T)
+  if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
+    #Info user the conflict:
+    return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
+    #which direction:
+    direct.r<-readline(prompt = "Please type 'RC' for picking RedCap Status, or 'OG' for picking legacy status: ")
+    direct.r<-as.numeric(direct.r)
+    switch (direct.r,RC = nui$Status[which(!nui$Status==nui$registration_status)]<-nui$registration_status[which(!nui$Status==nui$registration_status)],
+            OG = nui$Status[which(!nui$Status==nui$registration_status)]->nui$registration_status[which(!nui$Status==nui$registration_status)])}
+  nui$Status[which(is.na(nui$Status))]<-nui$registration_status[which(is.na(nui$Status))]
+  nui$iftranx<-NULL
+  nui$StatusWord[nui$Status==88]<-"Ineligible Drop"
+  nui$StatusWord[nui$Status==7]<-"IRB Admin Drop"
+  nui$StatusWord[nui$Status==6]<-"Lost Contact/Drop"
+  nui$StatusWord[nui$Status==5]<-"Deceased"
+  nui$StatusWord[nui$Status==4]<-"Do Not Contact"
+  nui$StatusWord[nui$Status==3]<-"In Jail"
+  nui$StatusWord[nui$Status==2]<-"Missing"
+  nui$StatusWord[nui$Status==1]<-"Active"
+  
+}
 
+
+
+
+
+
+
+if (FALSE) {
+opu$registration_initials <- paste(toupper(substr(opu$`First Name`,0,1)),toupper(substr(opu$`Last Name`,0,3)))
+opu$registration_initials[which(opu$registration_initials=="NA NA")]<-"NA"
+odz$registration_redcapid<-idmatch$redcapid[match(odz$ID,idmatch$soloffid)]
+odz$iftranx<-is.na( match(odz$ID,idmatch$soloffid))
+
+#######################
+#Follow-up has unfinished graphic function: 
 
 ###Follow-Up
 fuconsent<-as.data.frame(funbsrc$fudemo_visitdate[which(as.Date(funbsrc$fudemo_visitdate)>startdate)])
@@ -221,47 +279,15 @@ fuconsent$date<-as.Date(sort(fuconsent$date))
 fuconsent$Actual<-1:length(fuconsent$date)
 fuconsent<-data.frame(funbsrc$registration_redcapid[which(as.Date(funbsrc$fudemo_visitdate)>startdate)],funbsrc$fudemo_visitdate[which(as.Date(funbsrc$fudemo_visitdate)>startdate)])
 names(fuconsent)<-c('id',"date")
-View(fuconsent)
-unique(fuconsent$id)
-length(unique(fuconsent$id))
-length(fuconsent)
-length(fuconsent$date)
-duplicated(fuconsent$id)
-which(duplicated(fuconsent$id))
-fuconsent[which(duplicated(fuconsent$id)),]
-fuconsent[which(duplicated(fuconsent$id))-1,]
-fuconsent$date[which(duplicated(fuconsent$id))-1,] == fuconsent$date[which(duplicated(fuconsent$id)),]
-fuconsent[which(duplicated(fuconsent$id))-1,]
-fuconsent$date[which(duplicated(fuconsent$id))-1,]
-fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))]
-which(fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))])
-fuconsent$date[which(duplicated(fuconsent$id)),][which(fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))])]
-fuconsent[which(duplicated(fuconsent$id)),][which(fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))])]
-fuconsent[which(duplicated(fuconsent$id)),][which(fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))]),]
-fuconsent[which(duplicated(fuconsent$id))-1,][which(fuconsent$date[which(duplicated(fuconsent$id))-1] == fuconsent$date[which(duplicated(fuconsent$id))]),]
 fuconsent$inter<-interaction(fuconsent$id,fuconsent$date)
-unique(fuconsent$inter)
-length(unique(fuconsent$inter))
-length(unique(fuconsent$id))
-which(unique(fuconsent$inter))
-unique(fuconsent$id) %in% fuconsent$inter
-unique(fuconsent$inter) %in% fuconsent$inter
-fuconsent$inter %in% unique(fuconsent$inter)
-which(duplicated(fuconsent$inter))
-which(!duplicated(fuconsent$inter))
-fuconsent[which(!duplicated(fuconsent$inter)),]
+
 fuconsent<-fuconsent[which(!duplicated(fuconsent$inter)),]
 fuconsent$inter<-NULL
-fuconsent$Actual<-1:length(fuconsent$date)
-View(fuconsent)
-(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))
-month(fuconsent$date)
+
 fuconsent$month<-month(fuconsent$date)
-as.data.table(fuconsent)
-as.data.table(fuconsent)[,count:=seq_len(.N), by=month]
+
 test<-as.data.table(fuconsent)[,count:=seq_len(.N), by=month]
-test$count
-test[order(-rank(month)),]
+
 test<-test[order(-rank(month)),]
 qplot (test$month,geom="histogram")
 ggplot(data=test, aes(month)) +
@@ -314,6 +340,9 @@ funbsrc$demo_eduyears
 which(!is.na(funbsrc$demo_eduyears))
 
 
+
+#END OF NOT RUN CHUCK
+}
 
 
 
