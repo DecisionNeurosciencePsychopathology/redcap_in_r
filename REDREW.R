@@ -1,8 +1,12 @@
 ---
 Title: "REDREW"
 Author: "Jiazhou Chen"
-Version: 1.3
+Version: 1.4
 ---
+#Version 1.4 Changelog: 
+  #bsrc.getidmatchdb() now has a way more elegant way of getting redcap ID, read for upload in the future. 
+  #bsrc.getmwidentifier() is the function that help getting mwidentifier to a database 
+  
 #Version 1.3 Changelog:
   #bsrc.getform() and bsrc.getevent() have a better aggressive datasubsetting rule
   #bsrc.getform() has new argument on how agressive it should be and if datamodification should happen.
@@ -66,14 +70,11 @@ Version: 1.3
 #------------Notes-------------
 #might be useful:
 #string as code:
-eval(parse(text='test'))
+#eval(parse(text='test'))
 #find string to replace:
-gsub("^.*?test.single.","",k)
-gsub("_months_.*$","",maxevent$redcap_event_name)
+#gsub("^.*?test.single.","",k)
+#gsub("_months_.*$","",maxevent$redcap_event_name)
 
-##### Install Packages####
-install.packages('REDCapR')
-install.packages('shiny')
 
 ###RedCap connection#####
 
@@ -86,28 +87,11 @@ library(lubridate)
 #-------Make sure to remove below before publish----------------#
 
 #-------END-----#
-
-#example of how the data is structured:
-#bsocial.all<-redcap.bsocial$read(batch=batch_size = '200')
-#bsocial.enrollment<-bsocial.all$data[bsocial.all$data$redcap_event_name=="enrollment_arm_1",]
-
-
 #prompt user input
 #test<-as.character(readline(prompt = "Please Enter Assessment: "))
 
-#######customized functions#######
-#all function need to pre-define bsocial.all&redcap.bsocial 
-# jk, no more, run bsrc.conredcap to download a local copy
-##################################
-
-##1, connection function, download a copy of redcap database for manipulation,## 
-##so far so good with so many variable and 200 data, it's working good so far ##
-
-##jk, with all new ppl, it can't handle it anymore##
-##            default batch size to 50            ##
-
-redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) 
-{
+###############Get Event Mapping from RedCap:
+redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
   start_time <- Sys.time()
   if (missing(redcap_uri)) 
     stop("The required parameter `redcap_uri` was missing from the call to `redcap.eventmapping`.")
@@ -147,7 +131,7 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
               raw_text = raw_text))
 }
-
+###############Connect RedCap db for processing:
 bsrc.conredcap <- function(uri,token,batch_size,output) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
@@ -160,32 +144,37 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
   redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
+  funbsrc.x<-redcap$read(batch_size = batch_size)
+  if (funbsrc.x$success) {
+    print("Success! Database Loaded")
+    jzc.connection.yesno<<-1
+    jzc.connection.date<<-Sys.Date()
+    funbsrc<<-funbsrc.x$data} 
+  else {
+    print("Connection Failed, Please Try Again.") 
+    jzc.connection.yesno<<-0}
+  
+  if (!output){
   uri<<-input.uri
   token<<-input.token
   #test connection:
-  funbsrc<-redcap$read(batch_size = batch_size)
   strc<<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
   funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
   funevent<<-redcap.eventmapping(redcap_uri = input.uri,token=input.token)$data
   names(strc)<-c('field_name','form_name','field_label')
-  funbsrc<<-funbsrc$data
-  subreg<<-subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T) #take only the regi part
-  if (length(funbsrc$data$registration_redcapid)>0) {
-    print("Success! Database Loaded")
-    jzc.connection.yesno<<-1
-    jzc.connection.date<<-Sys.Date()} 
-  else {
-    print("Connection Failed, Please Try Again.") 
-    jzc.connection.yesno<<-0}
+  subreg<<-subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)} #take only the regi part
+  
   if (output==T){
     return(funbsrc)}
 }
-##############################
-#checkdatebase
+##############################Check Date Base
 bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   if(missing(token)){token<-input.token}
   if(!missing(replace)){funbsrc<-replace}
-  if (exists('jzc.connection.date')==FALSE | exists('jzc.connection.date')==FALSE){
+  if (length(jzc.connection.date)==0 | length(jzc.connection.yesno)==0){
+    jzc.connection.yesno<-0 
+    jzc.connection.date<-NA}
+  if (exists('jzc.connection.yesno')==FALSE | exists('jzc.connection.date')==FALSE){
       jzc.connection.yesno<-0 
       jzc.connection.date<-NA}
   if (forceupdate==TRUE) {
@@ -209,28 +198,10 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   
   return(ifrun)
 }
-
-
-
-##############################
-bsrc.findid.mass <- function (df, IDfieldname) {
-  if (class(df)=="data.frame"){success<-T} else{print("I AM YELLING AT YOU BC IT'S NOT A DATABASE!!!!!")}
-  if (missing(IDfieldname)){print("I ASSUMED YOUR ID FIELD NAME IS 'ID', OKAY?!")} {success<-T; IDfieldname<-"ID"}
-  if (success) {
-    
-  }
-  
-}
-
-
-##############################
-bsrc.getlabel <- function(field_name) {
-  
-}
-  
-  ###############################
+###############################
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
+#Need to be more useful
 bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
@@ -259,7 +230,6 @@ bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
       else {print("NO ID FOUND, PLEASE DOUBLE CHECK")}
     }}
 }
-
 ####Find duplicate RedCap IDs
 bsrc.findduplicate <- function() {
     dpqid<-data.frame()
@@ -270,17 +240,15 @@ bsrc.findduplicate <- function() {
     if(length(krz)>1){print(idq)
       print(krz)}
      },error=function(x){})
-    }
+    print(i)
+      }
     print("DONE")
 }
-
-
 #######
-#Combined use of the following allow extraction of data within
+#Combined use of the following allow extraction of data within EVENT and FORM
 ############################
 #Function to get all data of given event:
-
-bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",uri.e,token.e,subreg=F,mod=T,aggressivecog=1){
+bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",uri.e,token.e,subreg=F,mod=F,aggressivecog=1){
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if(ifrun) {
@@ -308,19 +276,11 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",u
     }
     eventonly.x<-eventonly.r[rowSums(is.na(eventonly.r[,3:length(names(eventonly.r))])) < (length(names(eventonly.r))- (2+aggressivecog)),]
     
-    
-    
-    
-    
     return(eventonly.x)
   }
 }
-
-  
 #####################################
 #Functions to get all data from given forms: 
-#Maybe add functions to select arms !!
-
 bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,uri.e,token.e,mod=T,aggressivecog=1) {
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
@@ -348,29 +308,32 @@ bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,uri.e,token
     
   }
 }
-  
-#############################
-
-
-##############################
-## Notes when exporting db  ##
-## Red Cap                  ##
-##############################
-
-bsrc.getidmatchdb<-function(db) {
+#########################
+### MATACH FUNCTIONS ####
+######################### Match RedCap ID to df
+bsrc.getidmatchdb<-function(db,idfield="ID") {
   idmatch.k<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
   names(idmatch.k)<-c('id','soloffid','redcapid')
-  if (("ID" %in% names(db))) {
-    db$registration_redcapid<-idmatch.k$redcapid[match(db$ID,idmatch.k$soloffid)]
-    db$iftranx<-is.na(match(db$ID,idmatch.k$soloffid))
+  
+  if ((idfield %in% names(db))) {
+    #GET ID FIELD
+    if (idfield!="ID"){db$ID<-db[,grep(idfield,names(db))]}
+      if(any(db$ID %in% idmatch.k$soloffid | db$ID %in% idmatch.k$id)){
+        db$registration_redcapid<-NA
+        db$registration_redcapid<-idmatch.k$redcapid[ifelse(db$ID %in% idmatch.k$soloffid,
+                                                            match(db$ID,idmatch.k$soloffid),
+                                                            match(db$ID,idmatch.k$id))]
+        db$iftranx<-is.na(match(db$ID,idmatch.k$soloffid))      
+        }
+      else stop("NO ID MATCH FOUND,CHECK SOURCE")
     }
   else stop("NO ID COLUMN FOUND IN SPECIFIED DATAFRAME")
   
+  if (idfield!="ID"){db$ID<-NULL}
   return(db)
 }
-
-
-bsrc.sanitize_onlyidentifier<-function(db,only=F) {
+########################## Match MericWire Identifier to df
+bsrc.getmwidentifier<-function(db,only=F) {
   if(missing(db)) stop("No DB")
   mwidonly<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
   names(mwidonly)<-c('redcapid','mwidentifier')
@@ -381,10 +344,13 @@ bsrc.sanitize_onlyidentifier<-function(db,only=F) {
   if (only) {db<-db[which(!is.na(db$mwidentifier)),]}
   return(db)
 }
+###############################
+####### IN DEVELOPMENT ########
+###############################
 
+if (FALSE){
 
 bsrc.process.race<-function(odk,Race) {
-  
   for (i in 1:length(odk$ID)) {
     if  (is.na(odk$Race[i])) {
       odk$registration_race___1[i]<-NA
@@ -456,17 +422,15 @@ bsrc.process.race<-function(odk,Race) {
     }
   }
 }
+}
 
-###################################
-######  Admin Number Cal ##########
-###################################
-
-
-
+###############################
+####### SHINY######### ########
+###############################
 #Following is for Shiny Web App, 
 #0/1 Single Participant Record Display
 
-
+if (FALSE) {
 #This chunk is for shiny web app
 library(shiny)
 
@@ -501,3 +465,6 @@ server <- function(input, output) {
 
 # Run the app ----
 shinyApp(ui = ui, server = server)
+}
+
+
