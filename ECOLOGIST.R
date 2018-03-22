@@ -3,6 +3,7 @@ title: "Ecologist"
 Author: "Jiazhou Chen"
 Version: 0.5
 ###
+
 #Version 0.5 Changelog:
   #Revision for bsrc.ema.loopit(): Now takes out MB ones that are NA, and will update redcap accordingly at oneshot.
   #Fixed error in bsrc.ema.getevent() where additional argument would not function porperly
@@ -45,8 +46,25 @@ Version: 0.5
   #bsrc.ema.redcapupload upload such progress data and the data file
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
 
+bsrc.ema3.getfile<-function() {
+}
 
-bsrc.ema.getfile<-function(filename,ifupload=T,uri.e=input.uri,token.e=input.token){
+
+bsrc.ema.localmatch<-function() {
+  ema3<-read.csv()
+}
+
+
+
+#ema3 is the raw data:
+
+ema3$ema_id[which(ema3$ema_id=="")]<-NA
+localmatch<-ema3[which(!is.na(ema3$ema_id)),grep(paste("User.Id","ema_id",sep = "|"),names(ema3))]
+
+
+
+############### EMA 2 Get file
+bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.token){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
     filename<-file.choose()
@@ -83,8 +101,10 @@ bsrc.ema.getfile<-function(filename,ifupload=T,uri.e=input.uri,token.e=input.tok
 }
 
 ##############################################################
+#Check
+subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
 
-
+############### EMA2 Main function:
 bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
@@ -215,9 +235,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     return(emamelt.merge.x)
     }
 }
-
-
-#####################################################################
+############### EMA 2 RedCap update function: 
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   #safe gurad the function:
   emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
@@ -262,8 +280,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.tok
   if (output) {
   return(test3)}
   }
-
-#####################################################################
+############### Intergrated main and redcapupload:
 bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2, graphic.e=T){
   if (missing(filename.e)) {
   print("No file specified, please choose the target file")
@@ -271,14 +288,14 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   else {filename.e->filename.c}
   bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
-#####################################################################
+############## Revert RedCap data back into long format [IN DEV]
 bsrc.ema.redcapreshape<-function(){
   gsub("emaprog_","",names(LGER))
   melt.LGER<-cbind(melt.LGER,data.frame(t(as.data.frame(strsplit(melt.LGER$variable,split = "[_]")))))
   rownames(melt.LGER)<-NULL
   
 }
-#####################################################################
+################ Get certrain part of EMA data
 bsrc.ema.getevent<-function(emadata.raw,pick,additional=NA) {
   if (missing(emadata.raw)) {
     print("Using bsrc.ema.getfile() for data")
@@ -302,7 +319,7 @@ bsrc.ema.getevent<-function(emadata.raw,pick,additional=NA) {
   return(test1)
 }
 
-#####################################################################
+################ Patch the data for emadata.raw and counts for 'em:
 bsrc.ema.patch<-function(emadata.raw){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
@@ -327,7 +344,7 @@ bsrc.ema.patch<-function(emadata.raw){
   return(emadata.raw)
   }
     
-#####################################################################
+############### Scale to Num
 bsrc.ema.scaletonum<-function(emadata.raw){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
@@ -346,10 +363,10 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   return(emadata.nums)
 }
 
-################################################################
-
-
-ema.loop.path<<-paste(mood,"/EMA Data",sep = "")
+########################################
+########### LOOOOOOOOOOOOOPS ###########
+########################################
+#Might not be useful with the introduction of EMA 3
 
 bsrc.ema.loopit<-function(path, style="long", graphic=T,ifupload.e=T, curver.e=2,forceupdate=F,outputstyle="outcome") {
   if(missing(path)){path=getwd()}
@@ -370,8 +387,9 @@ bsrc.ema.loopit<-function(path, style="long", graphic=T,ifupload.e=T, curver.e=2
   }
   outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
   
-  switch(outputstyle, outcome={return(outcome)}, outcome.r={return(outcome.r)})
+  switch(outputstyle, none={}, outcome={return(outcome)}, outcome.r={return(outcome.r)})
 }
+
 ######################################
 #Unified
 
@@ -391,7 +409,6 @@ bsrc.ema.loopit<-function(path, style="long", graphic=T,ifupload.e=T, curver.e=2
   # return(outcome.r)
 #}
 
-################################################################
-#For checking actual promts
-bsrc.ema.checkthepromts<-function(){}
+
+
 
