@@ -1,8 +1,12 @@
 ---
 Title: "REDREW"
 Author: "Jiazhou Chen"
-Version: 1.4
+Version: 1.5
 ---
+#Version 1.5 Changelog:
+  #Introduction of universal function: bsrc.checkbox() 
+    #Deal with checkbox items
+  
 #Version 1.4 Changelog: 
   #bsrc.getidmatchdb() now has a way more elegant way of getting redcap ID, read for upload in the future. 
   #bsrc.getmwidentifier() is the function that help getting mwidentifier to a database 
@@ -243,6 +247,24 @@ bsrc.findduplicate <- function() {
     print(i)
       }
     print("DONE")
+}
+################# Universal Function to deal with checkbox items:
+bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T) {
+  raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
+  options<-gsub(paste(variablename,"___",sep = ""),"",names(raceonly))
+  x$xudjfnx<-apply(raceonly, 1, function(x) {which(x==1)})
+  x$xudjfnx<-as.character(x$xudjfnx)
+  x$xudjfnx[which(x$xudjfnx=="integer(0)")]<-NA
+  x$knxmncua<-sapply(x$xudjfnx,function(x) {options[eval(parse(text= na.omit(x) ))]})
+  x$knxmncua[which(x$knxmncua=="character(0)")]<-NA  
+  names(x$knxmncua)<-NULL
+  x$xudjfnx<-as.character(lapply(x$xudjfnx, function(x) {paste(eval(parse(text=na.omit(x))),collapse = ",")}))
+  
+  if (returndf) {
+    colnames(x)[grep("knxmncua",names(x))]<-variablename
+    colnames(x)[grep("xudjfnx",names(x))]<-paste(variablename,"_string",sep = "")
+    return(x)}
+  else {return(list(Checkbox_text=x$xudjfnx,Checkbox_list=x$knxmncua))}
 }
 #######
 #Combined use of the following allow extraction of data within EVENT and FORM
