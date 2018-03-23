@@ -1,8 +1,13 @@
 ###---
 Title: "Administrator"
 Author: "Jiazhou Chen"
-Version: 0.4
+Version: 0.5
 ###---
+#Version 0.5:
+  #bsrc.admin.rppr() calculates number for rppr report.
+  #bsrc.emaonly() for ema number update
+  #bsrc.reg.group() to map group name to text
+
 #Version 0.4 Changelog:
   #bsrc.admin.biweekly() now produce also follow-ups from current and next month
 
@@ -113,6 +118,54 @@ bsrc.admin.biweekly<-function(days=14,monthz=2){
   return(list(Past_Two_Weeks=merged.recent,Next_Two_Month = future))
    
 }
+###########################RPPR Report:
+bsrc.admin.rppr<-function(){
+
+newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=88),]
+totaln<-length(newconsent$registration_redcapid)
+}
+
+#################
+bsrc.emaonly<-function(x) {
+  if (missing(x)){x<-funbsrc}
+  else (x->funbsrc)
+  
+  funbsrc$ema_setuptime[which(funbsrc$ema_setuptime=="")]<-NA
+  emaonly.f<-bsrc.getform(formname = "ema_session_checklist", forcerun.e = T)
+  emaonly.f<-emaonly.f[which(!is.na(emaonly.f$ema_setuptime)),]
+  emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2"))
+  emaonly.s$ema_setuptime<-as.Date(emaonly.s$ema_setuptime)
+  emaonly.s$prog_emadued<-emaonly.s$ema_setuptime+3
+  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptimeema.+22]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22
+  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+15]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15]+15
+  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8]+8
+  emaonly.s$prog_emadued[Sys.Date() >= emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() >= emaonly.s$ema_setuptime+21]+21
+  
+  emaonly.s$prog_emastatus<-paste("IP3d:",emaonly.s$ema_setuptime+3)
+  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("IP21d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
+  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]<-paste("IP14d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]+15)
+  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("IP7d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
+  emaonly.s$prog_emastatus[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]+21)
+  emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
+  emaonly.s$prog_emastatus_di<-emaonly.s$prog_emastatus
+  emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___2==1]<-NA
+  emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
+  #In Progress: 
+  emaonly.j<-bsrc.getform(formname = "ema_screening_form", forcerun.e = T)
+  emaonly.j<-subset(emaonly.j[!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1,],select = c("registration_redcapid"))
+  emaonly.j$prog_emastatus<-"Screened&Ready"
+  #Merge:
+  emaonly.r<-merge(emaonly.x,emaonly.j,all=T)
+  
+  return(emaonly.r)
+}
+
+bsrc.reg.group<-function(x){
+x$registration_group_txt<-mapvalues(x$registration_group, from = c(1:4,88), 
+          to = c("HC","LL ATT","HL ATT","Non-ATT BPD","NOTSURE"),warn_missing = F)
+}
+
+
 ###########################Data Meeting:
 bsrc.datameeting<-function(protocol="bsocial"){
   if(missing(protocol)) {
