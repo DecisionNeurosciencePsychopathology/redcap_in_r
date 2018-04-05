@@ -1,8 +1,11 @@
 ###---
-Title: "Administrator"
-Author: "Jiazhou Chen"
-Version: 0.5
+#Title: "Administrator"
+#Author: "Jiazhou Chen"
+#Version: 0.6
 ###---
+##Version 0.6
+  #Reworked bsrc.admin.biweekly()
+
 #Version 0.5:
   #bsrc.admin.rppr() calculates number for rppr report.
   #bsrc.emaonly() for ema number update
@@ -24,13 +27,12 @@ Version: 0.5
 # Functionalize Follow-up histagram
 # Break down by group; use interaction() better
 # NEW, EMA, MRI
-library("ggplot2")
 
 #####
 save.image("~/Documents/UPMC/RStation/admin.RData")
 
 ###########################Bi-Weekly Meeting Sheet:
-bsrc.admin.biweekly<-function(days=14,monthz=2){
+bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   
   #Find Max Follow-Up Dates: 
   funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
@@ -54,6 +56,9 @@ bsrc.admin.biweekly<-function(days=14,monthz=2){
   mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_scanneddate)),]
   mripgonly.b$MRI<-apply(mripgonly.b[-grep("registration_redcapid",names(mripgonly.b))],1,max,na.rm=T)
   mripgonly.c<-subset(mripgonly.b, select = c("registration_redcapid","MRI"))
+  mrisc<-mripgonly.c[which(mripgonly.c$MRI>Sys.Date()),]
+  colnames(mrisc)[2]<-"MRI Scheduled"
+  mripgonly.d<-mripgonly.c[-which(mripgonly.c$registration_redcapid %in% mrisc$registration_redcapid),]
 
   #Get Baseline:
   baseline<-na.omit(subset(bsrc.getform(formname = "bldemo"),select = c('registration_redcapid',"demo_visitdate")))
@@ -70,99 +75,128 @@ bsrc.admin.biweekly<-function(days=14,monthz=2){
   #Add additional component here
   #Merged:
   merged.a<-merge(merge(emapgonly.a,maxfudate,all=T),merge(baseline,consented,all=T),all=T)
-  merged<-merge(merged.a,mripgonly.c,all=T)
+  merged<-merge(merged.a,mripgonly.d,all=T)
+  if (any(!mrisc$registration_redcapid %in% merged$registration_redcapid)){
+    nmrisc<-mrisc[which(!mrisc$registration_redcapid %in% merged$registration_redcapid),]
+    merged<-merge(merged,nmrisc,all = T)}
   merged$`Event`<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {which(x==max(x,na.rm=T))}[1])]
   merged$`Event Date`<-apply(merged[-grep("registration_redcapid|Event",names(merged))],1,max,na.rm=T)
-  merged.simp<-merged
   merged.simp<-subset(merged,select = c("registration_redcapid","Event","Event Date"))
   #Add Status
-  merged.simp$`MRI Status`<-subreg$prog_fmristatus[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
-  merged.simp$`EMA Status`<-subreg$prog_emastatus[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`MRI Status`<-subreg$prog_fmristatus[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`EMA Status`<-subreg$prog_emastatus[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
   #Add Initials & Age:
-  merged.simp$`Age`<-subreg$prog_cage[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
-  merged.simp$`Initials`<-subreg$registration_initials[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
-  merged.simp$`Group`<-subreg$registration_group[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
-  merged.simp$`Latest IPDE Date`<-subreg$prog_latestipdedate[which(subreg$registration_redcapid %in% merged.simp$registration_redcapid)]
+  merged.simp$`Age`<-subreg$prog_cage[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`Initials`<-subreg$registration_initials[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`Group`<-subreg$registration_group[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`Latest IPDE Date`<-subreg$prog_latestipdedate[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
   
   #Refine Status: 
   ord<-c("Consented","Baseline","Follow-up","MRI","EMA")
   merged.simp<-merged.simp[order(match(merged.simp$`Event`,ord),merged.simp$`Event Date`),]
-  merged.simp$Group<-mapvalues(merged.simp$Group,from = c("1","2","3","4","88"), to=c("HC","LL","HL","NON-ATT","UNCLEAR"))
+  merged.simp$Group<-mapvalues(merged.simp$Group,from = c("1","2","3","4","88","89"), to=c("HC","LL","HL","NON-ATT","UNCLEAR","INELIGIBLE"),warn_missing = F)
   colnames(merged.simp)[grep("registration_redcapid",names(merged.simp))]<-"RedCap ID"
-  merged.simp$Event[merged.simp$Event=="Follow-up"]<-paste(subreg$prog_lastfollow[match(merged.simp[merged.simp$Event=="Follow-up",]$`RedCap ID`,subreg$registration_redcapid)],"Years Follow-up")
-
+  merged.simp$Event[which(merged.simp$Event=="Follow-up")]<-paste(subreg$prog_lastfollow[match(merged.simp[merged.simp$Event=="Follow-up",]$`RedCap ID`,subreg$registration_redcapid)],"Yrs Follow-up")
+  merged.simp$Event[which(merged.simp$Event=="0.5 Yrs Follow-up")]<-"6 Mons Follow-Up"
+  merged.simp$Event[which(merged.simp$Event=="0.25 Yrs Follow-up")]<-"3 Mons Follow-Up"
+  #merged.simp$Group[which(merged.simp$`RedCap ID` %in% subreg$registration_redcapid[which(subreg$registration_status=="88")])]<-"INELIGIBLE"
+  #merged.simp$Event[which(merged.simp$`RedCap ID` %in% subreg$registration_redcapid[which(subreg$registration_status=="88")])]<-"RULED OUT"
   #FU Month:
+  
+  if (month(Sys.Date())<6){
   merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]]
+  }
+  else {
+    merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]+6]
+  }
   merged.simp<-merged.simp[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","MRI Status","EMA Status")]
 
   
   #########Future Folks
-  tarmon<-c(month(Sys.Date()),month(Sys.Date())+1)
+  #curmon<-month(Sys.Date())
+  #getmon<-curmon+monthz-1
+  #getmon<-ifelse(curmon>=12,getmon-12,getmon)
+  #threemon<-ifelse(month(Sys.Date())<=3,15-month(Sys.Date()),month(Sys.Date())-3)
+  #getthreemon<-threemon+monthz-1
+  #getthreemon<-ifelse(threemon>=12,getthreemon-12,getthreemon)
+  #tarmon<-seq(curmon,getmon)
+  #tarmonthree<-seq(threemon,getthreemon)
   
-  which(subreg$prog_diff>0 & subreg$prog_diff< monthz+0.1)
+  ####
+  curdate<-Sys.Date()
+  plusmon<-Sys.Date()
+  month(plusmon)<-month(curdate)+monthz-1
+  tarmon<-month(seq.Date(from = curdate, to = plusmon, by="mon"))
+  tarmon[which(tarmon>6)]<-tarmon[which(tarmon>6)]-6
   
-  futureid<-futurefolks[which(futurefolks$registration_consentmonth %in% tarmon & subreg$prog_diff>0 & subreg$prog_diff< monthz+0.1),]$registration_redcapid
-  future<-merged.simp[which(merged.simp$`RedCap ID` %in% futureid),]
+  threemon<-Sys.Date()
+  plusthreemon<-Sys.Date()
+  month(threemon)<-month(Sys.Date())-3
+  month(plusthreemon)<-month(threemon)+monthz-1
+  tarmonthree<-month(seq.Date(from = threemon, to = plusthreemon, by="mon"))
+  tarmonthree[which(tarmonthree>6)]<-tarmon[which(tarmonthree>6)]-6
+  
+  futureid.x<-subreg$registration_redcapid[which(subreg$registration_consentmonth %in% tarmon & subreg$prog_diff>0 & subreg$registration_status!="89"& subreg$prog_diff< monthz+0.1)]
+  threemonid<-subreg$registration_redcapid[which(subreg$prog_endor_y==0.25 & subreg$prog_diff>0 & subreg$registration_status!="89" & subreg$registration_consentmonth %in% tarmonthree)]
+  futureid<-append(futureid.x,threemonid)
+
+  future<-merged.simp[match(futureid,merged.simp$`RedCap ID`),]
+  # Change Fu Month on 3 months folks
+  future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)]<-month.name[match(future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)],month.name)+3]
   #future$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(future$`RedCap ID`,futurefolks$registration_redcapid)]]
   future<-future[order(match(future$`Follow-up Month`,month.name)),]
-  future<-future[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","MRI Status","EMA Status")]
-  names(future)<-c("RedCap ID","Initials","Age","Group","Follow-up Month","Last Event","Last Event Date","Latest IPDE Date","MRI Status","EMA Status")
+  future$`Follow-up Due`<-paste(subreg$prog_endor_y[match(future$`RedCap ID`,subreg$registration_redcapid)],"Yrs Follow-up")
+  future$`Follow-up Due`[which(future$`Follow-up Due`=="0.5 Yrs Follow-up")]<-"6 Mons Follow-Up"
+  future$`Follow-up Due`[which(future$`Follow-up Due`=="0.25 Yrs Follow-up")]<-"3 Mons Follow-Up"
+  future$`Follow-up Due`[which(future$`Follow-up Due`=="0 Yrs Follow-up")]<-"Baseline"
+  future<-future[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Follow-up Due","Latest IPDE Date","MRI Status","EMA Status")]
+  names(future)<-c("RedCap ID","Initials","Age","Group","Follow-up Month","Last Event","Last Event Date","Follow-up Due","Latest IPDE Date","MRI Status","EMA Status")
   rownames(future)<-NULL
   
   ########Current Folks
   merged.recent<-merged.simp[which(merged.simp$`Event Date` >= Sys.Date()-days),]
   rownames(merged.recent)<-NULL
 
-  
+  #######
+  if (is.na(exportpath)){
   
   return(list(Past_Two_Weeks=merged.recent,Next_Two_Month = future))
-   
+  }
+  else {
+    write.csv(merged.recent, paste(exportpath,"/pasttwoweeks.csv",sep = ""))
+    write.csv(future,paste(exportpath,"/nexttwoweeks.csv",sep=""))
+  }
 }
 ###########################RPPR Report:
 bsrc.admin.rppr<-function(){
 
-newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=88),]
+newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
 totaln<-length(newconsent$registration_redcapid)
 }
 
 #################
-bsrc.emaonly<-function(x) {
+bsrc.emastats<-function(x) {
   if (missing(x)){x<-funbsrc}
   else (x->funbsrc)
   
-  funbsrc$ema_setuptime[which(funbsrc$ema_setuptime=="")]<-NA
-  emaonly.f<-bsrc.getform(formname = "ema_session_checklist", forcerun.e = T)
-  emaonly.f<-emaonly.f[which(!is.na(emaonly.f$ema_setuptime)),]
-  emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2"))
-  emaonly.s$ema_setuptime<-as.Date(emaonly.s$ema_setuptime)
-  emaonly.s$prog_emadued<-emaonly.s$ema_setuptime+3
-  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptimeema.+22]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22
-  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+15]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15]+15
-  emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8]+8
-  emaonly.s$prog_emadued[Sys.Date() >= emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() >= emaonly.s$ema_setuptime+21]+21
-  
-  emaonly.s$prog_emastatus<-paste("IP3d:",emaonly.s$ema_setuptime+3)
-  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("IP21d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
-  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]<-paste("IP14d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]+15)
-  emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("IP7d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
-  emaonly.s$prog_emastatus[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]+21)
-  emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
-  emaonly.s$prog_emastatus_di<-emaonly.s$prog_emastatus
-  emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___2==1]<-NA
-  emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
-  #In Progress: 
-  emaonly.j<-bsrc.getform(formname = "ema_screening_form", forcerun.e = T)
-  emaonly.j<-subset(emaonly.j[!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1,],select = c("registration_redcapid"))
-  emaonly.j$prog_emastatus<-"Screened&Ready"
-  #Merge:
-  emaonly.r<-merge(emaonly.x,emaonly.j,all=T)
+  funbsrc$ema_setuptime[funbsrc$ema_setuptime==""]<-NA
+  emaconsent<-as.data.frame(funbsrc$ema_setuptime[which(!is.na(funbsrc$ema_setuptime))])
+  names(emaconsent)<-c("date")
+  emaconsent$date<-as.Date(sort(emaconsent$date))
+  emaconsent$Actual<-1:length(emaconsent$date)
+  emaconsent$ip<-funbsrc$ema_completed___ip[which(!is.na(funbsrc$ema_setuptime))]
+  emaconsent$v2<-funbsrc$ema_completed___2[which(!is.na(funbsrc$ema_setuptime))]
+  emaconsent$v3<-funbsrc$ema_completed___3[which(!is.na(funbsrc$ema_setuptime))]
+  emaconsent$noappli<-funbsrc$ema_completed___999[which(!is.na(funbsrc$ema_setuptime))]
+  emaconsent.f<-emaconsent
+  emaconsent<-emaconsent[1:2]
   
   return(emaonly.r)
 }
 
 bsrc.reg.group<-function(x){
-x$registration_group_txt<-mapvalues(x$registration_group, from = c(1:4,88), 
-          to = c("HC","LL ATT","HL ATT","Non-ATT BPD","NOTSURE"),warn_missing = F)
+x$registration_group_txt<-mapvalues(x$registration_group, from = c(1:4,88,89), 
+          to = c("HC","LL ATT","HL ATT","NON-ATT","NOTSURE BPD","INELIGIBLE"),warn_missing = F)
 }
 
 
@@ -224,6 +258,7 @@ bsrc.datameeting<-function(protocol="bsocial"){
     emaconsent$Actual<-1:length(emaconsent$date)
     emaconsent$ip<-funbsrc$ema_completed___ip[which(!is.na(funbsrc$ema_setuptime))]
     emaconsent$v2<-funbsrc$ema_completed___2[which(!is.na(funbsrc$ema_setuptime))]
+    emaconsent$v3<-funbsrc$ema_completed___3[which(!is.na(funbsrc$ema_setuptime))]
     emaconsent$noappli<-funbsrc$ema_completed___999[which(!is.na(funbsrc$ema_setuptime))]
     emaconsent.f<-emaconsent
     emaconsent<-emaconsent[1:2]
@@ -255,7 +290,7 @@ bsrc.datameeting<-function(protocol="bsocial"){
     
     
     ema.plot<-ggplot(merged.ema.melt, aes(x=date, y=count, color=`Number Type`)) +
-      ggtitle(paste("EMA Participants, total:", length(emaconsent$date), ", in progress: ", length(emaconsent.f$date[emaconsent.f$ip==1]), ", completed: ", length(emaconsent.f$date[emaconsent.f$v2==1])))+
+      ggtitle(paste("EMA Participants, total:", length(emaconsent$date), ", in progress: ", length(emaconsent.f$date[emaconsent.f$ip==1]), ", completed: ", length(emaconsent.f$date[emaconsent.f$v2==1])+length(emaconsent.f$date[emaconsent.f$v3==1])))+
       theme(plot.title = element_text(hjust = 0.5))+
       geom_line() +
       geom_point()+
@@ -290,7 +325,7 @@ bsrc.irb.numsum<-function() {
             OG = nui$Status[which(!nui$Status==nui$registration_status)]->nui$registration_status[which(!nui$Status==nui$registration_status)])}
   nui$Status[which(is.na(nui$Status))]<-nui$registration_status[which(is.na(nui$Status))]
   nui$iftranx<-NULL
-  nui$StatusWord[nui$Status==88]<-"Ineligible Drop"
+  nui$StatusWord[nui$Status==89]<-"Ineligible Drop"
   nui$StatusWord[nui$Status==7]<-"IRB Admin Drop"
   nui$StatusWord[nui$Status==6]<-"Lost Contact/Drop"
   nui$StatusWord[nui$Status==5]<-"Deceased"
