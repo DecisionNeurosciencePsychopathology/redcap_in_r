@@ -1,8 +1,12 @@
----
-Title: "REDREW"
-Author: "Jiazhou Chen"
-Version: 1.5
----
+#---
+#Title: "REDREW"
+#Author: "Jiazhou Chen"
+#Version: 1.6
+#---
+#Version 1.6 Changelog:
+  #Universal function: bsrc.updatedb() 
+    #Deal with updating information in one df using info in another.
+  
 #Version 1.5 Changelog:
   #Introduction of universal function: bsrc.checkbox() 
     #Deal with checkbox items
@@ -58,17 +62,12 @@ Version: 1.5
   #0/1 Get IRB Report Numbers, since last IRB Renewal -> SEE ADMINISTRATOR project
 #1/1 Race/Gender/Status Processing 
 #1/1 Missingness check ID specific
-#0/0 Numbes for annual report -> See ADMINISTRATOR project
-#0.5/1 Attach demo info for given list of IDs [NO NEED]
-#0/0 EMA end of study report generating -> See ECOLOGIST project
-#0/0 Clean up funbsrc, #- Within ID, find event that doesn't have a FUDate, remove the whole event [No need]
-#- Event variable name: "redcap_event_name"
-#------------Over-arching goals------------
-#0/1 Shiny App to create interactive data presentation and retrival tool
 
-#------------Import of Legacy Data--------
-#0/1 Try to export data frame to RedCap
-#0/1 Match ID to ensure ID is not in RedCap
+#0.5/1 Attach demo info for given list of IDs [NO NEED]
+
+
+#- Event variable name: "redcap_event_name"
+
 #0.5/1 function to bridge current and pass db
 
 #------------Notes-------------
@@ -83,11 +82,6 @@ Version: 1.5
 ###RedCap connection#####
 
 #pull all data
-library(redcapAPI)
-library(REDCapR)
-library(RCurl)
-library(lubridate)
-
 #-------Make sure to remove below before publish----------------#
 
 #-------END-----#
@@ -175,31 +169,31 @@ bsrc.conredcap <- function(uri,token,batch_size,output) {
 bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   if(missing(token)){token<-input.token}
   if(!missing(replace)){funbsrc<-replace}
-  if (length(jzc.connection.date)==0 | length(jzc.connection.yesno)==0){
+  if (exists('jzc.connection.yesno')==FALSE | exists('jzc.connection.date')==FALSE){
     jzc.connection.yesno<-0 
     jzc.connection.date<-NA}
-  if (exists('jzc.connection.yesno')==FALSE | exists('jzc.connection.date')==FALSE){
-      jzc.connection.yesno<-0 
-      jzc.connection.date<-NA}
+  if (is.null(jzc.connection.date) | is.null(jzc.connection.yesno)){
+    jzc.connection.yesno<-0 
+    jzc.connection.date<-NA}
   if (forceupdate==TRUE) {
     print("FORCEUPDATE")
     bsrc.conredcap(token = token)
+    ifrun<-TRUE
   }
-    if (jzc.connection.yesno == 1) {
-      if (forcerun==TRUE | jzc.connection.date==Sys.Date()) {
+  else {ifelse (jzc.connection.yesno == 1, {
+      ifelse(forcerun==TRUE | jzc.connection.date==Sys.Date(), {
         print("Database is loaded or was loaded today")
-        ifrun<-TRUE}
-      else {print("Local database is out of date, redownload now")
+        ifrun<-TRUE}, {print("Local database is out of date, redownload now")
         ifrun<-FALSE
         bsrc.conredcap(token = token)
-        ifrun<-bsrc.checkdatabase()}
-        }
-    else {print("RedCap Connection is not loaded, Retry Now")
+        ifrun<-bsrc.checkdatabase()})
+        }, 
+      {print("RedCap Connection is not loaded, Retry Now")
       ifrun<-FALSE
       bsrc.conredcap(token = token)
       ifrun<-bsrc.checkdatabase()
-      }
-  
+      })
+  }
   return(ifrun)
 }
 ###############################
@@ -366,6 +360,16 @@ bsrc.getmwidentifier<-function(db,only=F) {
   if (only) {db<-db[which(!is.na(db$mwidentifier)),]}
   return(db)
 }
+########################## Update value from one database to another:
+bsrc.updatedb<-function(ndf,df,by="registration_redcapid") {
+  if (missing(df)) {df<-funbsrc}
+  if (missing(ndf)) stop("HEY! NO REPLACEMENT DATEFRAME")
+  excu<-paste("df[match(ndf$",by,"df$",by,"),match(names(ndf),names(df))]<-ndf",sep = "")
+  eval(parse(text = excu))
+  return(df)
+}
+
+
 ###############################
 ####### IN DEVELOPMENT ########
 ###############################
