@@ -1,11 +1,13 @@
----
-Title: "Automator"
-Author: "Jiazhou Chen"
-Version: 1.31
----
+#---
+#Title: "Automator"
+#Author: "Jiazhou Chen"
+#Version: 1.4
+#---
 
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
-
+#Version 1.4:
+  #Updated the bsrc.refresh() to update local copy of the database as well. 
+  
 #Version 1.31:
   #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed. 
   #Remove the main script from AUTOMATOR so that it only contains functions
@@ -33,10 +35,6 @@ Version: 1.31
 ##  Part I, Functions  ##
 #########################
 
-library(REDCapR)
-library(data.table)
-library(lubridate)
-
 ######refresh######
 bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=T, ID) {
   if (missing(ID)) {ID<-NA}
@@ -61,7 +59,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     subevent<-subset(funbsrc,select = c("registration_redcapid","redcap_event_name","fudemo_visitdate"))
     maxevent<-subevent[match(interaction(maxfudate$registration_redcapid,maxfudate$fudemo_visitdate),interaction(subevent$registration_redcapid,subevent$fudemo_visitdate)),]
     maxevent<-merge(regitemp,maxevent,all.x = T)
-    maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0]<-0.25
+    maxevent$registration_consentdate[which(maxevent$registration_consentdate=="")]<-NA
     maxevent$fudemo_visitdate[is.na(maxevent$fudemo_visitdate)]<-maxevent$registration_consentdate[is.na(maxevent$fudemo_visitdate)]
     maxevent$months<-as.numeric(gsub("_months_.*$","",maxevent$redcap_event_name))
     maxevent$months[is.na(maxevent$months)]<-0
@@ -72,10 +70,15 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     maxevent$redcap_event_name<-NULL
     maxevent$months<-NULL
     maxevent$fudemo_visitdate<-NULL
+    #Get 3 month
+    maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0 & maxevent$sincelastfu$month > 1]<-0.25
     #if 3 month is completed, skip 6 month.
+    maxevent$fudue[which(maxevent$fudue==0.5 & maxevent$years==0.25)]<-1
+    #RECALCULATE
+    maxevent$diff<-maxevent$fudue-maxevent$years
     maxevent$diff[which(maxevent$fudue==0.5 & maxevent$years==0.25)]<-0
-      #Refine indicator so folks who got in early will not:
-      maxevent$diff[which(maxevent$daysincefu < 60)]<-0
+    #Refine indicator so folks who got in early will not:
+    maxevent$diff[which(maxevent$daysincefu < 60)]<-0
     
     #find IPDE Date:
     funbsrc$ipde_date[which(funbsrc$ipde_date=="")]<-NA
@@ -118,21 +121,21 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2"))
     emaonly.s$ema_setuptime<-as.Date(emaonly.s$ema_setuptime)
     emaonly.s$prog_emadued<-emaonly.s$ema_setuptime+3
-    emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptimeema.+22]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22
+    emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+22]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+15]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15]+15
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8]+8
-    emaonly.s$prog_emadued[Sys.Date() >= emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() >= emaonly.s$ema_setuptime+21]+21
-    
-    emaonly.s$prog_emastatus<-paste("IP3d:",emaonly.s$ema_setuptime+3)
-    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("IP21d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
-    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]<-paste("IP14d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]+15)
-    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("IP7d:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
-    emaonly.s$prog_emastatus[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() >= emaonly.s$ema_setuptime+21)]+21)
+    emaonly.s$prog_emadued[Sys.Date() > emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() > emaonly.s$ema_setuptime+21]+21
+    #EMA IP:
+    emaonly.s$prog_emastatus<-paste("3days",emaonly.s$ema_setuptime+3)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("3wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]<-paste("2wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15)]+15)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("1wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
+    emaonly.s$prog_emastatus[which(Sys.Date() > emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() > emaonly.s$ema_setuptime+21)]+21)
     emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
     emaonly.s$prog_emastatus_di<-emaonly.s$prog_emastatus
     emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___2==1]<-NA
     emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
-    #In Progress: 
+    #Screened:
     emaonly.j<-bsrc.getform(formname = "ema_screening_form", forcerun.e = T)
     emaonly.j<-subset(emaonly.j[!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1,],select = c("registration_redcapid"))
     emaonly.j$prog_emastatus<-"Screened&Ready"
@@ -140,6 +143,16 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.r<-merge(emaonly.x,emaonly.j,all=T)
     #Merge with Main maxevent upload:
     maxevent<-merge(maxevent,emaonly.r,all = T)
+    maxevent$prog_endor<-as.character(maxevent$prog_endor)
+    maxevent$prog_latestipdedate<-as.character(maxevent$prog_latestipdedate)
+    maxevent$prog_emadued<-as.character(maxevent$prog_emadued)
+    
+    #Update back to local database so no need to reload:
+    print("Updating Local Database")
+    funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
+    funbsrc<<-funbsrc
+    subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
+    
     #####Work on early termination folks########
     #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
     #c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_emastatus","prog_emastatus_di","prog_emadued")
@@ -180,7 +193,7 @@ bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expirati
   if (missing(token)){token<-input.token}
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token,forceupdate = forceupdate.e)
   if (missing(path)) {path<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/Redcap Database Backup"
-    print("Default Location is L Drive/BPD Database")}
+    print("Default Location is BOXSYNC")}
   if (ifrun) {
     csvname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.csv")
     csv<-paste(path,csvname,sep = "/")
