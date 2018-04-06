@@ -1,8 +1,12 @@
 ###
 #Title: "Ecologist"
 #Author: "Jiazhou Chen"
-#Version: 0.5
+#Version: 0.9
 ###
+#Version 0.9 Changelog:
+  #bsrc.ema.mwredcapmatch() has new function to match duplicated records.
+      #____CONSIDER: keep track of 
+
 #Version 0.8 Changelog:
   #Temp change to bsrc.ema.main to adopt the new changes that happened in version 3.0
   #Temp changes to bsrc.ema.getfile() to adopt the new changes in version 3.0
@@ -56,21 +60,20 @@
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
 
 
-
+#EMA 3 Exclusive Functions:
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
   localmatch<-ema3[which(!is.na(ema3$ema_id) & !duplicated(ema3$ema_id)),grep(paste("User.Id","ema_id",sep = "|"),names(ema3))]
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   funema<<-bsrc.getform(formname = "ema_session_checklist")
-  funema$ema_studyidentifier[match(localmatch$registration_redcapid,funema$registration_redcapid)]
-  
+
   if (any(duplicated(localmatch$ema_studyidentifier))){
-    
-    print("ARGHHHHH!!!! THESE PAIR HAS MORE THAN ONE REDCAP IDs!!!")
-    
-    
+    print("HMM,Maybe it's right in another entry?")
+   
+     
   }
+  
   
   if (any(is.na(!match(funema$ema_studyidentifier[match(localmatch$registration_redcapid,funema$registration_redcapid)],
                        localmatch$ema_studyidentifier) == 1:length(localmatch$ema_studyidentifier)))) 
@@ -80,29 +83,33 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL) {
   print(disrupt)
     #
       for (i in 1:length(disrupt$ema_studyidentifier)) {
-        
-        if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
-          print("First try to grab it from RedCap.")
+          if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
+            if (length(which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)) > 1) {
+              actualid.try<-localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% localmatch$ema_studyidentifier[which(duplicated(localmatch$ema_studyidentifier))])][!localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% localmatch$ema_studyidentifier[which(duplicated(localmatch$ema_studyidentifier))])] %in% disrupt$registration_redcapid]
+              print("Try to grab from localmatch duplicates")
+              if (length(actualid.try)==1){
+              stepone<-TRUE
+              actualid.try->actualid
+              print("success!")}
+              }else {stepone<-FALSE}
+          if (!stepone){
+          print("Try to grab it from RedCap.")
           maybeid<-funema$registration_redcapid[match(disrupt$ema_studyidentifier[i],funema$ema_studyidentifier)]  
           idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for this person? y/n?   :"))
           if (idq=="y"){idq<-TRUE} else (idq<-FALSE)
-          if (idq) {maybeid->actualid} else {actualid<-readline(prompt = "What's their actual RedCap ID? : ")}
+          if (idq) {maybeid->actualid} else {actualid<-readline(prompt = "What's their actual RedCap ID? : ")}}
           localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)]<-actualid
           } else {actualid<-readline(prompt =paste("MetricWire Identifier Has No Match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))
          localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)]<-actualid}
       }
   }    
-  else {print("NO DISRUPT")}     
+  else {print("NO DISRUPT")}
+  localmatch<-localmatch[-which(duplicated(localmatch)),]
   return(localmatch)
     #
   }
 
-#ema3 is the raw data:
-
-
-
-
-############### EMA 2 Get file
+############### General Get File
 bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.token, curver="2"){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
@@ -147,12 +154,12 @@ bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.tok
   return(emadata.raw)
 }
 
-
 ##############################################################
 #Check
 #subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
 
 ############### EMA2 Main function:
+#####Currently hard fixed for EMA 3; new main function needed:
 bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
@@ -230,13 +237,6 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     emadata.full.melt<-melt(emadata.full,id.var=c("redcapID","date"), measure.vars=c("BoD","DoD","EoD","Total","MB"),variable.name="Type",value.name="actual")
     emadata.full.melt$date<-as.Date(emadata.full.melt$date)
     
-    #Merge
-    #emamerge<-merge(emadata,ematotal,all = T)
-    #emamerge<-emamerge[which(!emamerge$date==startdate),] #Take out startdate
-    #emamerge<-emamerge[which(!emamerge$date>enddate),]    #Take out after enddate
-    #emamerge<-na.locf(emamerge) #fill in NAs that are missing.
-    #emamerge.melt<-melt(emamerge,id.var=c("redcapID","date"),variable.name="Type",value.name="count",measure.vars=c("BoD","DoD","EoD")) 
-    
     #New Merge
     emamelt.merge<-merge(emadata.full.melt,ematotal.melt,all=T)
     emamelt.merge<-emamelt.merge[which(!emamelt.merge$date==startdate),] #Take out startdate
@@ -286,7 +286,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
 ############### EMA 2 RedCap update function: 
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   #safe gurad the function:
-  emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
+  emamelt.merge<-emamelt.merge[emamelt.merge$Type!=c("MB","SetUp"),]
   
   emamelt.merge$check<-NA
   lengthofema<-21
@@ -323,19 +323,11 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.tok
       }}
   else {print(paste("Nothing to upload yet, come back after: ", startdate+7))}
   if (ifupload) {
-    result.test3<-redcap_write(test3,token = input.token,redcap_uri = input.uri)
+    result.test3<-redcap_write(test3,token = token,redcap_uri = uri)
     if (result.test3$success) {print("DONE")}}
   if (output) {
   return(test3)}
   }
-############### Intergrated main and redcapupload:
-bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2, graphic.e=T){
-  if (missing(filename.e)) {
-  print("No file specified, please choose the target file")
-  filename.c<-file.choose()}
-  else {filename.e->filename.c}
-  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
-}
 ############## Revert RedCap data back into long format [IN DEV]
 bsrc.ema.redcapreshape<-function(){
   gsub("emaprog_","",names(LGER))
@@ -426,17 +418,15 @@ bsrc.ema.scaletonum<-function(emadata.raw){
 ########################################
 ########### LOOOOOOOOOOOOOPS ###########
 ########################################
-#Might not be useful with the introduction of EMA 3
-
-bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload.e=T, curver.e="2",forceupdate=F,outputstyle="outcome") {
+#Might not be useful with the introduction of EMA 3;
+#Whelp, shame on you, cuzzzzz it's totally still useful
+bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload.e=T, curver.e="2",forceupdate=F,outputstyle="outcome",ifupload = T,uri=input.uri,token=input.token) {
   if(curver.e=="2" & is.null(path)){path<-getwd()}
   if(curver.e=="3" & is.null(file)){file<-file.choose()}
   run2<-F
   run3<-F
   switch(curver.e, 
-         "2" = {run2 = TRUE},
-         "3" = {run3 = TRUE})
-  if (run2){
+         "2" = {
   temp<-list.files(path<-path,pattern="*.csv")
   print("This is to upload and update redcap")
   for (i in 1:length(temp)){
@@ -444,15 +434,22 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
     output<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
-    output.r<-bsrc.ema.oneshotupload(filename.e = filename,ifupload = F,curver.e = curver.e, graphic.e = graphic, forceupdate.e = forceupdate)
+    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F)
       if (i==1){outcome<-output
       outcome.r<-output.r}
     outcome<-merge(outcome,output,all=T)
     output<-NULL
     outcome.r<-merge(outcome.r,output.r,all=T)
     output.r<-NULL
-  }}
-  if (run3) {
+  }
+  #upload after combined;
+  if (ifupload) {
+    result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
+    if (result.outcome.r$success) 
+    {print("DONE")}
+  }
+  },
+  "3" = {
     emadata.raw<-bsrc.ema.getfile(filename = file, curver = "3")
     for (i in 1:length(unique(emadata.raw$RedcapID))) {
       print("##########################")
@@ -467,7 +464,7 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
         print("EMA MAIN NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
       tryCatch({
-        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T)}, error=function(x){
+        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F)}, error=function(x){
         fstatus<-T
         print("REDCAP UPLOAD NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
@@ -485,12 +482,32 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
       
       ouput<-NULL
       output.r<-NULL
-      }}
+      }
+    #upload after combined;
+    if (ifupload) {
+      result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
+      if (result.outcome.r$success) 
+      {print("DONE")}
+      }
+    })
   outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
   
   return(list(main=outcome,redcapupload=outcome.r))
 }
 
+
+##############Pretty much done/Old functions
+if (FALSE) {
+############### Intergrated main and redcapupload:
+  bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2, graphic.e=T){
+    if (missing(filename.e)) {
+      print("No file specified, please choose the target file")
+      filename.c<-file.choose()}
+    else {filename.e->filename.c}
+    bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
+  }
+###############  
+}
 ######################################
 #Unified
 
