@@ -1,11 +1,16 @@
 ###
 #Title: "Ecologist"
 #Author: "Jiazhou Chen"
-#Version: 0.9
+#Version: 1.0
 ###
+##To Do List: 
+  #Use certain mechinism to reduce duplicate processing
+
+#Version 1.0 Changelog: 
+  #Bug fix on loop and improve efficiency; stable version of ecologist, suitable for version 3.0a for EMA.
+
 #Version 0.9 Changelog:
   #bsrc.ema.mwredcapmatch() has new function to match duplicated records.
-      #____CONSIDER: keep track of 
 
 #Version 0.8 Changelog:
   #Temp change to bsrc.ema.main to adopt the new changes that happened in version 3.0
@@ -108,7 +113,6 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL) {
   return(localmatch)
     #
   }
-
 ############### General Get File
 bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.token, curver="2"){
   if (missing(filename)) {
@@ -130,6 +134,7 @@ bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.tok
   RedcapID<-unique(emadata.raw$RedcapID)
   emadata.raw$Survey_Class<-emadata.raw$TriggerName
   emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD"))]<-"MB"
+  emadata.raw$Survey_Class<-as.character(emadata.raw$Survey_Class)
   d<-as.Date(emadata.raw$Survey_Submitted_Date,format = "%d/%m/%Y")
   emadata.raw$Survey_Submitted_Date<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))
   d<-as.Date(emadata.raw$Survey_Started_Date,format = "%d/%m/%Y")
@@ -153,11 +158,9 @@ bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.tok
   if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
   return(emadata.raw)
 }
-
 ##############################################################
-#Check
+# Legacy time convertion
 #subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
-
 ############### EMA2 Main function:
 #####Currently hard fixed for EMA 3; new main function needed:
 bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T){
@@ -246,6 +249,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     emamelt.merge$diff<-emamelt.merge$actual - emamelt.merge$expectation
     emamelt.merge$porp<-round(emamelt.merge$actual / emamelt.merge$expectation *100,2)
     emamelt.merge$per<-paste(emamelt.merge$porp, "%")
+    emamelt.merge$Type<-as.character(emamelt.merge$Type)
     
     #Safe guard the plot:
     emamelt.merge->emamelt.merge.x
@@ -286,7 +290,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
 ############### EMA 2 RedCap update function: 
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   #safe gurad the function:
-  emamelt.merge<-emamelt.merge[emamelt.merge$Type!=c("MB","SetUp"),]
+  emamelt.merge<-emamelt.merge[which(!emamelt.merge$Type %in% c("MB","SetUp")),]
   
   emamelt.merge$check<-NA
   lengthofema<-21
@@ -415,12 +419,21 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   return(emadata.nums)
 }
 
+################Ver 2:
+############### Intergrated main and redcapupload:
+bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e="2", graphic.e=T){
+  if (missing(filename.e)) {
+    print("No file specified, please choose the target file")
+    filename.c<-file.choose()}
+  else {filename.e->filename.c}
+  bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
+}
 ########################################
 ########### LOOOOOOOOOOOOOPS ###########
 ########################################
 #Might not be useful with the introduction of EMA 3;
 #Whelp, shame on you, cuzzzzz it's totally still useful
-bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload.e=T, curver.e="2",forceupdate=F,outputstyle="outcome",ifupload = T,uri=input.uri,token=input.token) {
+bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload.e=T, curver.e="2",forceupdate=F,outputstyle="outcome",uri=input.uri,token=input.token) {
   if(curver.e=="2" & is.null(path)){path<-getwd()}
   if(curver.e=="3" & is.null(file)){file<-file.choose()}
   run2<-F
@@ -434,7 +447,7 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
     output<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
-    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F)
+    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F,curver = "2")
       if (i==1){outcome<-output
       outcome.r<-output.r}
     outcome<-merge(outcome,output,all=T)
@@ -443,7 +456,8 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
     output.r<-NULL
   }
   #upload after combined;
-  if (ifupload) {
+  if (ifupload.e) {
+    print("Starting to upload updates to RedCap...")
     result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
     if (result.outcome.r$success) 
     {print("DONE")}
@@ -464,7 +478,7 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
         print("EMA MAIN NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
       tryCatch({
-        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F)}, error=function(x){
+        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3")}, error=function(x){
         fstatus<-T
         print("REDCAP UPLOAD NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
@@ -482,51 +496,34 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
       
       ouput<-NULL
       output.r<-NULL
-      }
+    }
+    outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
     #upload after combined;
-    if (ifupload) {
+    if (ifupload.e) {
+      print("Starting to upload updates to RedCap...")
       result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
       if (result.outcome.r$success) 
       {print("DONE")}
       }
     })
-  outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
   
   return(list(main=outcome,redcapupload=outcome.r))
 }
-
-
-##############Pretty much done/Old functions
-if (FALSE) {
-############### Intergrated main and redcapupload:
-  bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=2, graphic.e=T){
-    if (missing(filename.e)) {
-      print("No file specified, please choose the target file")
-      filename.c<-file.choose()}
-    else {filename.e->filename.c}
-    bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
-  }
-###############  
+#############################
+bsrc.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
+  colnames(df)[grep(Typename,names(df))]<-"Type"
+  for (i in 1:length(unique(df$Type))) {
+    targettype=as.character(unique(df$Type)[i])
+    print(targettype)
+    df.x<-df[which(df$Type==targettype),]
+    x.j<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID)) +  
+      geom_jitter() + geom_abline(slope=1, intercept=0)+ggtitle(paste(targettype,"Jittered"))
+    ggsave(paste(targettype,"jittered.jpeg",sep = "_"),device = "jpeg",plot = x.j,dpi = 300,path = path, height = 8.3, width = 11.7)
+    x.g<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID))+
+      stat_smooth(method = "gam")+ggtitle(paste(targettype,"gam"))
+    ggsave(paste(targettype,"gam.jpeg",sep = "_"),device = "jpeg",plot = x.g,dpi = 300,path = path, height = 8.3, width = 11.7)
+    }
 }
-######################################
-#Unified
-
-#bsrc.ema.loopitupdate<-function(path.e, style="long", ifupload.e=T, curver.e=2, graphic=F,forceupdate=F) {
-  #if(missing(path.e)){path.e=getwd()}
-  #temp<-list.files(path<-path.e,pattern="*.csv")
-  #for (i in 1:length(temp)){
-    #print(paste("Now processing ",i," out of ",length(temp),sep = ""))
-    #filename<-paste(path.e,temp[i],sep = "/")
-    #output.r<-bsrc.ema.oneshotupload(filename.e = filename,ifupload = F,curver.e = curver.e, graphic.e = graphic, forceupdate.e = forceupdate)
-    #if (i==1){outcome.r<-output.r}
-    #outcome.r<-merge(outcome.r,output.r,all=T)
-   # output.r<-NULL
-  #}
-  #if(ifupload.e){
-   # result.outcome.r<-redcap_write(outcome.r,token = input.token,redcap_uri = input.uri)
-  # return(outcome.r)
-#}
-
-
-
-
+#####################
+########END##########
+#####################
