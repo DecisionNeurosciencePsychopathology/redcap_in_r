@@ -1,8 +1,16 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 1.6
+#Version: 1.7
 #---
+#[Task List]  
+#0/1 Missingness check arm specific 
+#0.5/1 Attach demo info for given list of IDs [NO NEED]
+#0.5/1 function to bridge current and pass db
+
+#Version 1.7 Changelog: 
+  #Full revision of bsrc.connredcap(), which now is unstable. 
+
 #Version 1.6 Changelog:
   #Universal function: bsrc.updatedb() 
     #Deal with updating information in one df using info in another.
@@ -47,10 +55,6 @@
     #bsrc.getdemo() has new arguments and compatible with findduplicate 
   #New bsrc.findduplicate() function to identify duplicated records in RedCap caused by ID transition
   
-
-#[Task List]  
-#0/1 Missingness check arm specific 
-  
 #Version 1.0 [Completed]
 #1/1 Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
 #1/1 Pull Demo for given sinlge ID
@@ -63,13 +67,6 @@
 #1/1 Race/Gender/Status Processing 
 #1/1 Missingness check ID specific
 
-#0.5/1 Attach demo info for given list of IDs [NO NEED]
-
-
-#- Event variable name: "redcap_event_name"
-
-#0.5/1 function to bridge current and pass db
-
 #------------Notes-------------
 #might be useful:
 #string as code:
@@ -78,15 +75,7 @@
 #gsub("^.*?test.single.","",k)
 #gsub("_months_.*$","",maxevent$redcap_event_name)
 
-
-###RedCap connection#####
-
-#pull all data
-#-------Make sure to remove below before publish----------------#
-
-#-------END-----#
-#prompt user input
-#test<-as.character(readline(prompt = "Please Enter Assessment: "))
+#- Event variable name: "redcap_event_name"
 
 ###############Get Event Mapping from RedCap:
 redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
@@ -130,40 +119,37 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               raw_text = raw_text))
 }
 ###############Connect RedCap db for processing:
-bsrc.conredcap <- function(uri,token,batch_size,output) {
+bsrc.conredcap <- function(uri,token,batch_size,output=F,notfullupdate=F) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
   if (missing(batch_size)) {batch_size<-"50" 
   print("By default, the batch size is 50 unique records")}
-  if (missing(output)) {output<-F
-  print(paste("By default, the database will be assigned to `funbsrc` as a" 
-        ,"data frame and returns nothing if wish to assign db to something, use arguement 'output = T'"))}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
+  if (!output){
+    uri<<-input.uri
+    token<<-input.token
+    #test connection:
+    funstrc<<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)$data
+    funevent<<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)$data
+  }
+  if (!notfullupdate){
   redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
   funbsrc.x<-redcap$read(batch_size = batch_size)
   if (funbsrc.x$success) {
     print("Success! Database Loaded")
     jzc.connection.yesno<<-1
     jzc.connection.date<<-Sys.Date()
-    funbsrc<<-funbsrc.x$data} 
+    funbsrc<<-funbsrc.x$data
+    subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
+    } #take only the regi part
   else {
     print("Connection Failed, Please Try Again.") 
     jzc.connection.yesno<<-0}
-  
-  if (!output){
-  uri<<-input.uri
-  token<<-input.token
-  #test connection:
-  strc<<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-  funstrc<<-data.frame(strc$data$field_name,strc$data$form_name,strc$data$field_label)
-  funevent<<-redcap.eventmapping(redcap_uri = input.uri,token=input.token)$data
-  names(strc)<-c('field_name','form_name','field_label')
-  subreg<<-subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)} #take only the regi part
-  
   if (output==T){
-    return(funbsrc)}
+  return(funbsrc)}
+  }
 }
 ##############################Check Date Base
 bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
@@ -264,7 +250,7 @@ bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T) {
 #Combined use of the following allow extraction of data within EVENT and FORM
 ############################
 #Function to get all data of given event:
-bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",uri.e,token.e,subreg=F,mod=F,aggressivecog=1){
+bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",nocalc=T,uri.e,token.e,subreg=F,mod=F,aggressivecog=1){
   ifrun<-bsrc.checkdatabase(forcerun = forcerun)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if(ifrun) {
@@ -277,7 +263,7 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",u
     }
     eventonly<-funbsrc[which(funbsrc$redcap_event_name %in% eventname),]
     switch(whivarform,
-    default = ifelse(is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = uri.e,token = token.e),print("GOT IT")),
+    default = ifelse(!exists("funevent") | is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = uri.e,token = token.e),print("GOT IT")),
     anyfile = funevent<-read.csv(file.choose())
     )
     formname<-funevent$form[funevent$unique_event_name %in% eventname]
@@ -290,34 +276,44 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",u
       if (length(grep("___",names(eventonly.r))) > 0){
         eventonly.r[,grep("___",names(eventonly.r))][eventonly.r[,grep("___",names(eventonly.r))] == "0"]<-NA}
     }
-    eventonly.x<-eventonly.r[rowSums(is.na(eventonly.r[,3:length(names(eventonly.r))])) < (length(names(eventonly.r))- (2+aggressivecog)),]
+    tempch<-funstrc[which(funstrc$form_name %in% formname),]
+    if (nocalc){print("By default, will not take calculated field into consideration.")
+      calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
+    eventonly.x<-eventonly.r[rowSums(is.na(eventonly.r[,3:length(names(eventonly.r))])) < (length(names(eventonly.r))- (2+aggressivecog+calmove)),]
     
     return(eventonly.x)
   }
 }
 #####################################
 #Functions to get all data from given forms: 
-bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,uri.e,token.e,mod=T,aggressivecog=1) {
+bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,redcap.uri= input.uri, token.e = input.token) {
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if (ifrun) {
   if (missing(formname)){
   print("Here's a list of forms: ")
-  print(as.character(unique(funstrc$strc.data.form_name)))
+  print(as.character(unique(as.character(funstrc$form_name))))
   formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,): ")
   }
-  if (any(as.character(formname) %in% as.character(funstrc$strc.data.form_name))) {
-   lvariname<-as.character(funstrc$strc.data.field_name[which(funstrc$strc.data.form_name %in% formname)])
+  if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
+    if (grabnewinfo) {print("Updating form names")
+      bsrc.conredcap(uri = input.uri,token = input.token,notfullupdate = T)} else {}
+   lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
    raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
-    
    eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
    raw<-raw[which(raw$redcap_event_name %in% eventname),]
+   tempch<-funstrc[which(funstrc$form_name %in% formname),]
+   if (nocalc){print("By default, will not take calculated field into consideration.")
+   calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
+   if (grabnewinfo) {print("Grab updated data from RedCap.")
+     renew<-redcap_read(redcap_uri = redcap.uri ,token = token.e, fields = names(raw), events = raw$redcap_event_name)
+     raw<-renew$data}
    if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
       raw[raw==""]<-NA
       if (length(grep("___",names(raw))) > 0){
-      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA}
-      }
-    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog)),]
+      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+      }}
+    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog+calmove)),]
     return(new_raw)
     }
   else print(paste("NO FORM NAMED: ",formname, sep = ""))
@@ -368,7 +364,15 @@ bsrc.updatedb<-function(ndf,df,by="registration_redcapid") {
   eval(parse(text = excu))
   return(df)
 }
-
+########################### Assign aID
+bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T) {
+  dfname<-as.character(substitute(df))
+  exculine<-paste("idtack<-data.frame(unique(",dfname,"$",idfieldname,"),1:length(unique(",dfname,"$",idfieldname,")))",sep = "")
+  eval(parse(text=exculine))
+  names(idtack)<-c(idfieldname,aidfieldname)
+  df<-merge(df,idtack,all = allinfo)
+  return(df)  
+}
 
 ###############################
 ####### IN DEVELOPMENT ########
