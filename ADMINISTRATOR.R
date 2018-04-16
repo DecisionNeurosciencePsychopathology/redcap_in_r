@@ -1,8 +1,11 @@
 ###---
 #Title: "Administrator"
 #Author: "Jiazhou Chen"
-#Version: 0.6
+#Version: 0.7
 ###---
+###Version 0.7:
+  #Added new function bsrc.emastats() for ema stats
+
 ##Version 0.6
   #Reworked bsrc.admin.biweekly()
 
@@ -29,7 +32,6 @@
 # NEW, EMA, MRI
 
 #####
-save.image("~/Documents/UPMC/RStation/admin.RData")
 
 ###########################Bi-Weekly Meeting Sheet:
 bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
@@ -90,6 +92,8 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   merged.simp$`Initials`<-subreg$registration_initials[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
   merged.simp$`Group`<-subreg$registration_group[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
   merged.simp$`Latest IPDE Date`<-subreg$prog_latestipdedate[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`IPDE Dx`<-subreg$prog_latestipdes_dx[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+  merged.simp$`IPDE Dx`<-mapvalues(merged.simp$`IPDE Dx`, from = c(1:3), to = c("Negative","Probable","Definite"),warn_missing = F)
   
   #Refine Status: 
   ord<-c("Consented","Baseline","Follow-up","MRI","EMA")
@@ -109,7 +113,7 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   else {
     merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]+6]
   }
-  merged.simp<-merged.simp[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","MRI Status","EMA Status")]
+  merged.simp<-merged.simp[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","IPDE Dx","MRI Status","EMA Status")]
 
   
   #########Future Folks
@@ -149,8 +153,8 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   future$`Follow-up Due`[which(future$`Follow-up Due`=="0.5 Yrs Follow-up")]<-"6 Mons Follow-Up"
   future$`Follow-up Due`[which(future$`Follow-up Due`=="0.25 Yrs Follow-up")]<-"3 Mons Follow-Up"
   future$`Follow-up Due`[which(future$`Follow-up Due`=="0 Yrs Follow-up")]<-"Baseline"
-  future<-future[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Follow-up Due","Latest IPDE Date","MRI Status","EMA Status")]
-  names(future)<-c("RedCap ID","Initials","Age","Group","Follow-up Month","Last Event","Last Event Date","Follow-up Due","Latest IPDE Date","MRI Status","EMA Status")
+  future<-future[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Follow-up Due","Latest IPDE Date","IPDE Dx","MRI Status","EMA Status")]
+  names(future)<-c("RedCap ID","Initials","Age","Group","Follow-up Month","Last Event","Last Event Date","Follow-up Due","Latest IPDE Date","IPDE Dx","MRI Status","EMA Status")
   rownames(future)<-NULL
   
   ########Current Folks
@@ -175,24 +179,37 @@ totaln<-length(newconsent$registration_redcapid)
 }
 
 #################
-bsrc.emastats<-function(x) {
-  if (missing(x)){x<-funbsrc}
-  else (x->funbsrc)
+bsrc.emastats<-function(x=NULL) {
+  #Get funema:
+  funema<<-bsrc.getform(formname = "ema_session_checklist")
+  emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
+  emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]
+  emastate$status[which(is.na(emastate$status))]<-"UNKNOWN"
+  emastate$status.w<-mapvalues(emastate$status,from = c("ema_completed___ip","ema_completed___2","ema_completed___3","ema_completed___999"), 
+                             to = c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3","UNKNOWN"), warn_missing = F)
+  emastate$`EMA Status`<-mapvalues(emastate$status,from = c("ema_completed___ip","ema_completed___2","ema_completed___3","ema_completed___999"), 
+                               to = c("IN PROGRESS","COMPELETED","COMPELETED","UNKNOWN"), warn_missing = F)
+  emastate$group<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
+  emastate$`GROUP`<-mapvalues(emastate$group,from = c("1","2","3","4","88","89"), 
+                              to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
   
-  funbsrc$ema_setuptime[funbsrc$ema_setuptime==""]<-NA
-  emaconsent<-as.data.frame(funbsrc$ema_setuptime[which(!is.na(funbsrc$ema_setuptime))])
-  names(emaconsent)<-c("date")
-  emaconsent$date<-as.Date(sort(emaconsent$date))
-  emaconsent$Actual<-1:length(emaconsent$date)
-  emaconsent$ip<-funbsrc$ema_completed___ip[which(!is.na(funbsrc$ema_setuptime))]
-  emaconsent$v2<-funbsrc$ema_completed___2[which(!is.na(funbsrc$ema_setuptime))]
-  emaconsent$v3<-funbsrc$ema_completed___3[which(!is.na(funbsrc$ema_setuptime))]
-  emaconsent$noappli<-funbsrc$ema_completed___999[which(!is.na(funbsrc$ema_setuptime))]
-  emaconsent.f<-emaconsent
-  emaconsent<-emaconsent[1:2]
+  if (length(which(emastate$status.k=="UNKNOWN"))>0){
+    print("REMARKABLE PT:")
+    for (i in 1:length(emastate$registration_redcapid[which(emastate$status.k=="UNKNOWN")])) {
+      print("####################")
+      idinv<-emastate$registration_redcapid[which(emastate$status.k=="UNKNOWN")][i]
+      print(paste("RedCap ID: ",idinv))
+      print(paste("NOTES: ",funema$ema_masnote[match(idinv,funema$registration_redcapid)]))
+    }
+  }
   
-  return(emaonly.r)
-}
+  emacount<-xtabs(~`EMA Status`+GROUP,emastate)
+  emacount<-addmargins(emacount)
+  
+  return(list(emastatus=emastate,emacount=emacount))
+  
+  }
+
 
 bsrc.reg.group<-function(x){
 x$registration_group_txt<-mapvalues(x$registration_group, from = c(1:4,88,89), 
@@ -337,11 +354,6 @@ bsrc.irb.numsum<-function() {
 }
 
 
-
-
-
-
-
 if (FALSE) {
 opu$registration_initials <- paste(toupper(substr(opu$`First Name`,0,1)),toupper(substr(opu$`Last Name`,0,3)))
 opu$registration_initials[which(opu$registration_initials=="NA NA")]<-"NA"
@@ -431,6 +443,4 @@ which(!is.na(funbsrc$demo_eduyears))
 
 #END OF NOT RUN CHUCK
 }
-
-
 
