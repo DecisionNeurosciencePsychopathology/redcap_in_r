@@ -83,17 +83,23 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     #find IPDE Date:
     funbsrc$ipde_date[which(funbsrc$ipde_date=="")]<-NA
     funbsrc$ipde_bpd_date[which(funbsrc$ipde_bpd_date=="")]<-NA
-    ipdedateonly<-data.frame(funbsrc$registration_redcapid,as.Date(funbsrc$ipde_date),as.Date(funbsrc$ipde_bpd_date))
-    names(ipdedateonly)<-c("registration_redcapid","ipde_date","ipde_bpd_date")
+    ipdedateonly<-data.frame(funbsrc$registration_redcapid,as.Date(funbsrc$ipde_date),funbsrc$ipde_cm_borderline,funbsrc$ipde_dxc_borderline,as.Date(funbsrc$ipde_bpd_date),funbsrc$ipde_bpd_cm_borderline,funbsrc$ipde_bpd_dxc_borderline)
+    names(ipdedateonly)<-c("registration_redcapid","ipde_date","ipde_cm","ipde_dxc","ipde_bpd_date","ipde_bpd_cm","ipde_bpd_dxc")
     ipdedateonly<-ipdedateonly[which(!is.na(ipdedateonly$ipde_date) | !is.na(ipdedateonly$ipde_bpd_date)),]
     ipdedateonly$ipde_date[is.na(ipdedateonly$ipde_date)]<-ipdedateonly$ipde_bpd_date[is.na(ipdedateonly$ipde_date)]
+    ipdedateonly$ipde_cm[is.na(ipdedateonly$ipde_cm)]<-ipdedateonly$ipde_bpd_cm[is.na(ipdedateonly$ipde_cm)]
+    ipdedateonly$ipde_dxc[is.na(ipdedateonly$ipde_dxc)]<-ipdedateonly$ipde_bpd_dxc[is.na(ipdedateonly$ipde_dxc)]
     ipdedateonly$ipde_bpd_date<-NULL
+    ipdedateonly$ipde_bpd_cm<-NULL
+    ipdedateonly$ipde_bpd_dxc<-NULL
     ipdedate<-aggregate(ipdedateonly$ipde_date,by=list(ipdedateonly$registration_redcapid), FUN=max)
     names(ipdedate)<-c("registration_redcapid","ipde_date")
+    ipdedate$ipde_cm <-ipdedateonly$ipde_cm [match(interaction(ipdedate$registration_redcapid,ipdedate$ipde_date),interaction(ipdedateonly$registration_redcapid,ipdedateonly$ipde_date))] 
+    ipdedate$ipde_dxc<-ipdedateonly$ipde_dxc[match(interaction(ipdedate$registration_redcapid,ipdedate$ipde_date),interaction(ipdedateonly$registration_redcapid,ipdedateonly$ipde_date))]
     maxevent<-merge(maxevent,ipdedate,all = T)
     
     #rename variables:
-    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate")
+    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_latestipdes_cm","prog_latestipdes_dx")
     
     #For fMRI Status:
     #Dates:
@@ -146,7 +152,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     maxevent$prog_endor<-as.character(maxevent$prog_endor)
     maxevent$prog_latestipdedate<-as.character(maxevent$prog_latestipdedate)
     maxevent$prog_emadued<-as.character(maxevent$prog_emadued)
-    
+  
     #Update back to local database so no need to reload:
     print("Updating Local Database")
     funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
@@ -187,7 +193,6 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
 
 ####Missing Assessment Given a Arm####
 #Pending
-
 ####Back-up######
 bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expiration=30) {
   if (missing(token)){token<-input.token}
@@ -211,5 +216,3 @@ bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expirati
   print("DONE")
   }
 }
-
-
