@@ -103,6 +103,31 @@ matchfx$type[which(matchfx$type=="")]<-matchfx$first[which(matchfx$type=="")]
 matchfx$dfname<-paste(matchfx$dfvari,matchfx$second,sep = ".")
 matchfx$newname<-paste(matchfx$first,matchfx$second,sep = ".")
 
+#Set for final df
+always<-c("Eprime.FrameNumber")
+getvar.ns.x<-c(getvar.ns,always)
+tdf.pre<-testdf[,c(na.omit(match(matchfx$dfname,names(testdf))),na.omit(match(getvar.ns.x,names(testdf))))]
+varylist<-names(tdf.pre)[names(tdf.pre) %in% matchfx$dfname]
+
+tdf.proc<-tdf.pre %>% 
+  gather(key = "temp", value = "value",varylist) %>%
+  separate(temp, into = c("dfvari", "second"), sep = "\\.")
+
+matchfx.xxc<-unique(subset(matchfx,select = c("dfvari","first","type")))
+tdf.prz<-merge(tdf.proc,matchfx.xxc,all.x=T)
+tdf.prz$dfvari<-NULL
+#Give filtering an argument
+if (TRUE){
+tdf.prz->tdf.prz.backup
+tdf.prz.f<-tdf.prz[which(!is.na(tdf.prz$value)),]
+tdf.prz.f->tdf.prz
+}
+tdf.prz$newname<-paste(tdf.prz$first,tdf.prz$second,sep = ".")
+tdf.finale<-reshape(tdf.prz,idvar = "Eprime.FrameNumber",timevar = "newname",direction = "wide", v.names = c("value"), drop = c("first","second"))
+
+#I think I did it;_;yay?
+tdf.finale
+
 
 
 #
