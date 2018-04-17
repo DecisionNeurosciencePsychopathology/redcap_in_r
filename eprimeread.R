@@ -34,7 +34,7 @@ onefilter.x<-onefilter[which(onefilter.x %in% twovar)]
 
 testdf2<-testdf[,c(onefilter.x,"Procedure","Eprime.FrameNumber")]
 
-# We are stuck here because we have no idea what/how to rename the variable so they don't suck
+# We are stuck here because we have no idea what/how to rename the variable so they don't ....
 for (i in 1:length(unique(testdf2$Procedure))){
   targ<-unique(testdf2$Procedure)[i]
   tardf<-testdf2[which(testdf2$Procedure==targ),]
@@ -46,7 +46,7 @@ for (i in 1:length(unique(testdf2$Procedure))){
 }
 
 
-#######Let's try to just reshape the data; let's not, cuz it sucks
+#######Let's try to just reshape the data; let's not, cuz it ....
 #for loop each:
   testdf->testdf.backup
 testdf.x<-testdf
