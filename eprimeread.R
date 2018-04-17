@@ -8,9 +8,16 @@ library(rprime)
 library(tidyr)
 library(stringdist)
 #Pick the location of the file 
-testpath<-file.choose()
-#Read the data
-test1<-rprime::read_eprime(testpath)
+
+bsrc.eprimeread<-function(fpath,getvar=NULL){
+if (missing(fpath)){
+  fpath<-file.choose()}
+
+if (is.null(getvar)){stop("No varible input")}
+if (is.list(getvar)){stop("Not a list, go away")}
+  
+#Read the data; most of the heavy part are done by someone else..,
+test1<-rprime::read_eprime(fpath)
 test2<-rprime::extract_chunks(test1) #chuck it
 tdata<-FrameList(test1) #tdata now is a list
 preview_levels(tdata) 
@@ -19,55 +26,6 @@ testdf<-to_data_frame(onlytwo)
 
 ###################ABOVE IS GOOD######
 ################
-getvar<-c("showstim.RESP","showstim.RT","showstim.ACC","Procedure")
-newvar<-strsplit(getvar,".",fixed = T)
-spiltvar<-newvar[which(sapply(newvar,function(x) {length(x)})>1)]
-nonspiltvar<-unlist(newvar[which(sapply(newvar,function(x) {length(x)})<=1)])
-onevar<-unique(sapply(spiltvar,'[[',1))
-twovar<-unique(sapply(spiltvar,'[[',2))
-
-#Get variable name:
-onefilter<-names(testdf)[grep(onevar,names(testdf))]
-onefilter.s<-strsplit(onefilter,".",fixed = T)
-onefilter.p<-sapply(onefilter.s,'[[',2)
-onefilter.x<-onefilter[which(onefilter.x %in% twovar)]
-
-testdf2<-testdf[,c(onefilter.x,"Procedure","Eprime.FrameNumber")]
-
-# We are stuck here because we have no idea what/how to rename the variable so they don't ....
-for (i in 1:length(unique(testdf2$Procedure))){
-  targ<-unique(testdf2$Procedure)[i]
-  tardf<-testdf2[which(testdf2$Procedure==targ),]
-  tardf <- tardf[,colSums(is.na(tardf))<nrow(tardf)]
-  
-    if (i==1) {enddf<-tardf}
-   
-  merge(tardf,enddf,all = T)
-}
-
-
-#######Let's try to just reshape the data; let's not, cuz it ....
-#for loop each:
-  testdf->testdf.backup
-testdf.x<-testdf
-for (i in 1:length(dfname.tu)) {
-  vartoga<-dfname.go[which(dfname.t==dfname.tu[i])]
-  toeval<-paste("testdf.x<-gather(testdf.x, Firstvar,", dfname.tu[i],", vartoga)")
-  eval(parse(text = toeval))
-}
-
-reshape(testdf.x,varying = dfname.go, timevar = "Firstorder",v.names = dfname.tu , times = dfname.ou, direction = "long")
-
-
-# That creates problems for getting it later, so nah
-testdf.y<-testdf.x %>% 
-  gather(key = "First", value = "value",dfname.go) %>%
-  separate(First, into = c("procname", "valuetype"), sep = "\\.")
-
-testdf.y$procname[agrep(paste(dfname.ou,collapse = "|"),testdf.y$procname)]
-
-
-
 #######Let's try setting up a reference df
 dfname.s<-strsplit(names(testdf),".",fixed = T)
 dfname.g<-dfname.s[which(sapply(dfname.s,function(x) {length(x)})>1)]
@@ -77,7 +35,6 @@ dfname.tu<-unique(sapply(dfname.g,'[[',2))
 dfname.o<-sapply(dfname.g,'[[',1)
 dfname.ou<-unique(sapply(dfname.g,'[[',1))
 
-getvar<-c("showstim.RESP","showstim.RT","showstim.ACC","mystery.ACC","Procedure","Cycle")
 getvar.s<-strsplit(getvar,".",fixed = T)
 getvar.ns<-unlist(getvar.s[which(sapply(getvar.s,function(x) {length(x)})<=1)])
 getvar.so<-getvar.s[which(sapply(getvar.s,function(x) {length(x)})>1)]
@@ -124,9 +81,10 @@ tdf.prz.f->tdf.prz
 }
 tdf.prz$newname<-paste(tdf.prz$first,tdf.prz$second,sep = ".")
 tdf.finale<-reshape(tdf.prz,idvar = "Eprime.FrameNumber",timevar = "newname",direction = "wide", v.names = c("value"), drop = c("first","second"))
-
+names(tdf.finale)<-sub("value\\.(.*?)", "\\1", names(tdf.finale))
 #I think I did it;_;yay?
-tdf.finale
+return(list(data=tdf.finale,varimatch=matchfx))
+}
 
 
 
@@ -134,6 +92,55 @@ tdf.finale
 ####agrep() is a good solution, to form a set of variables to get; 
 
 
+
+
+##########Bad
+getvar<-c("showstim.RESP","showstim.RT","showstim.ACC","Procedure")
+newvar<-strsplit(getvar,".",fixed = T)
+spiltvar<-newvar[which(sapply(newvar,function(x) {length(x)})>1)]
+nonspiltvar<-unlist(newvar[which(sapply(newvar,function(x) {length(x)})<=1)])
+onevar<-unique(sapply(spiltvar,'[[',1))
+twovar<-unique(sapply(spiltvar,'[[',2))
+
+#Get variable name:
+onefilter<-names(testdf)[grep(onevar,names(testdf))]
+onefilter.s<-strsplit(onefilter,".",fixed = T)
+onefilter.p<-sapply(onefilter.s,'[[',2)
+onefilter.x<-onefilter[which(onefilter.x %in% twovar)]
+
+testdf2<-testdf[,c(onefilter.x,"Procedure","Eprime.FrameNumber")]
+
+# We are stuck here because we have no idea what/how to rename the variable so they don't ....
+for (i in 1:length(unique(testdf2$Procedure))){
+  targ<-unique(testdf2$Procedure)[i]
+  tardf<-testdf2[which(testdf2$Procedure==targ),]
+  tardf <- tardf[,colSums(is.na(tardf))<nrow(tardf)]
+  
+  if (i==1) {enddf<-tardf}
+  
+  merge(tardf,enddf,all = T)
+}
+
+
+#######Let's try to just reshape the data; let's not, cuz it ....
+#for loop each:
+testdf->testdf.backup
+testdf.x<-testdf
+for (i in 1:length(dfname.tu)) {
+  vartoga<-dfname.go[which(dfname.t==dfname.tu[i])]
+  toeval<-paste("testdf.x<-gather(testdf.x, Firstvar,", dfname.tu[i],", vartoga)")
+  eval(parse(text = toeval))
+}
+
+reshape(testdf.x,varying = dfname.go, timevar = "Firstorder",v.names = dfname.tu , times = dfname.ou, direction = "long")
+
+
+# That creates problems for getting it later, so nah
+testdf.y<-testdf.x %>% 
+  gather(key = "First", value = "value",dfname.go) %>%
+  separate(First, into = c("procname", "valuetype"), sep = "\\.")
+
+testdf.y$procname[agrep(paste(dfname.ou,collapse = "|"),testdf.y$procname)]
 
 
 
