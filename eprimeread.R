@@ -9,7 +9,7 @@ library(tidyr)
 library(stringdist)
 #Pick the location of the file 
 
-bsrc.eprimeread<-function(fpath,getvar=NULL){
+dnpl.eprimeread<-function(fpath,getvar=NULL){
 if (missing(fpath)){
   fpath<-file.choose()}
 
