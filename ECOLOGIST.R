@@ -1,41 +1,32 @@
 ###
 #Title: "Ecologist"
 #Author: "Jiazhou Chen"
-#Version: 1.0
+#Version: 1.1
 ###
-##To Do List: 
-  #Use certain mechinism to reduce duplicate processing
+#Version 1.1: [MAJOR UPDATE]
+  #Separated graphing codes from main function so the rework on mainfunction can be done to more efficiently process version 3 data
+  #The new main function new returns basic info along with progress, with revision that it will filter out Jiazhou's data in J WOO's file
+  #The loop func is updated to take adventage of the new info df that the main function outputs and it will accumulate those info as well
+  #The loop func is saves the rawdata, processed progress data, info df, and redcap upload df all together in a .rdata file, saved to skinner
+  #The loop func now takes in the rdata file and read in completed IDs and will skip them. More efficient for version 3 processing
+  #Started creating mapping function to separate data, getting ready for analysis
+  #Updated other functions to work with the new revision of main function
+  
 
-#Version 1.0 Changelog: 
+#Version 1.0: [compatible with EMA version 2.1 and version 3.0a] 
   #Bug fix on loop and improve efficiency; stable version of ecologist, suitable for version 3.0a for EMA.
-
-#Version 0.9 Changelog:
   #bsrc.ema.mwredcapmatch() has new function to match duplicated records.
-
-#Version 0.8 Changelog:
-  #Temp change to bsrc.ema.main to adopt the new changes that happened in version 3.0
-  #Temp changes to bsrc.ema.getfile() to adopt the new changes in version 3.0
-
-#Version 0.7 changelog:
-  #bsrc.mwredcapmatch() deal with complication in mulisubject single file system
-
-#version 0.6 Changelog:
+  #bsrc.mwredcapmatch() deal with complication in mulisubject within single file 
   #bsrc.ema.getevent() & bsrc.ema.patch now updated to support upcoming EMA Version 3 
-
-#Version 0.5 Changelog:
   #Revision for bsrc.ema.loopit(): Now takes out MB ones that are NA, and will update redcap accordingly at oneshot.
   #Fixed error in bsrc.ema.getevent() where additional argument would not function porperly
   #Fixed errors in bsrc.ema.getfile() & bsrc.ema.main() where file would not uplaod
-
-#Version 0.4 Changelog:
   #Revision for bsrc.ema.patch() for more detials on MB
   #Revisions on bsrc.ema.getevent(), bsrc.ema.main() and bsrc.ema.getfile() to intergrate bsrc.ema.patch()
   #New feature added to bsrc.ema.main()
     #inclusion of Mirco-burst data management
   #New function: bsrc.ema.loopit()
     #As the name suggest, loop all data within a certain folder
-
-#Verion 0.3 Changelog:
   #New function: bsrc.ema.getevent()
     #Isolate certrain event in EMA file
     #Argument to support additional variables 
@@ -46,24 +37,11 @@
     #Compatible with other functions
   #New function: bsrc.ema.patch()
     #patch DoD entries that supposed to trigger a MB
-  #Revised: all previous functions to use bsrc.ema.getfile() first 
-  #Decreased priority: bsrc.ema.reshape() to paused
-
-###
-#Version 0.2 Changelog:
-  #bsrc.ema.main() gets updated parameters to better function and minimize confusion, adds on new upload function to send data
-    #to redcap
-  #bsrc.ema.redcapupload now fully function and redcap is updated to take in such data, auto updates redcap when pt is done
-  #bsrc.ema.oneshotupload intergrates both for ease 
-  #bsrc.ema.reshape function has no change
-
-###Version 0.1
-#Initial Version
-#Functions:
   #bsrc.ema.main() process data file from MetricWire and produce progress report including graphic information
   #bsrc.ema.redcapupload upload such progress data and the data file
   #bsrc.ema.redcapreshape will change the data format for better use in R [intergrated with bsrc.getform]
-
+# Legacy time convertion
+#subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
 
 #EMA 3 Exclusive Functions:
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL) {
@@ -153,17 +131,13 @@ bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.tok
     lRedcapID<-unique(emadata.raw$RedcapID)
     emadata.raw$Survey_Started_Date<-as.Date(emadata.raw$Survey_Started_Date)
     emadata.raw$Survey_Submitted_Date<-as.Date(emadata.raw$Survey_Submitted_Date)
-    emadata.raw$TriggerDate<-as.Date(emadata.raw$TriggerDate)
-  }
+    emadata.raw$TriggerDate<-as.Date(emadata.raw$TriggerDate)}
   if (ifupload) {redcap_upload_file_oneshot(file_name = filename,redcap_uri = uri.e,token = token.e,record = RedcapID, field = "emapg_fileupload", event = "ema_arm_1")}
   return(emadata.raw)
 }
-##############################################################
-# Legacy time convertion
-#subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
 ############### EMA2 Main function:
 #####Currently hard fixed for EMA 3; new main function needed:
-bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T){
+bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T, gprint=T){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile(curver = "2")
@@ -172,13 +146,20 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
   
   lRedcapID<-unique(emadata.raw$RedcapID)
   linitial<-unique(subreg$registration_initials[match(lRedcapID,subreg$registration_redcapid)])
-  
   #MAKE SURE TO CHECK REDCAP
   #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
   #Currently take out nas, should only be one item:
-  RedcapID<-as.character(lRedcapID[1])
-  Initial<-linitial[1]
+  RedcapID<-as.character(unique(lRedcapID))
+  Initial<-(unique(linitial))
+  if ("J WOO" %in% linitial) {
+    RedcapID<-as.character(unique(lRedcapID))[1]
+    Initial<-(unique(linitial))[1]
+    
+  }
   
+  if (length(RedcapID)>1){stop("ema.main() can only process only 1 ID data at a time, please filter")}
+  
+  mwuserid<-as.character(unique(emadata.raw$User_Id[which(emadata.raw$RedcapID==RedcapID)]))
   #Patch the data
   emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")
   
@@ -212,7 +193,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==unique(table.emadata$redcapID) & funbsrc$ema_setuptime!="")])
     enddate<-startdate+lengthofema
     
-    
+    info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid)
     
     emaseqdate<-seq.Date(from=startdate,to=enddate,by="days")
     emaseq.one<-seq(from=0,to=lengthofema,length.out = length(emaseqdate))
@@ -250,52 +231,55 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     emamelt.merge$porp<-round(emamelt.merge$actual / emamelt.merge$expectation *100,2)
     emamelt.merge$per<-paste(emamelt.merge$porp, "%")
     emamelt.merge$Type<-as.character(emamelt.merge$Type)
-    
-    #Safe guard the plot:
-    emamelt.merge->emamelt.merge.x
-    emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
-   
+
     if (graphic){ 
-    #Percentage Plot
-    emaplot.percent<-ggplot(data = emamelt.merge, aes(x=date, y=porp, group=Type, shape=Type, color=Type)) +
-      ggtitle(paste(Initial,"EMA Progress (Percentage)"))+
-      theme(plot.title = element_text(hjust = 0.5))+
-      geom_line()+
-      ylab("Percentage")+
-      scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
-      geom_point()+
-      geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
     
-    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path, height = 8.3, width = 11.7)
-    print("Percentage Plot Saved to Working Directory")
-    
-    #Completion Plot
-    emaplot.count<-ggplot(data = emamelt.merge, aes(x=date, y=actual, color=Type, group=Type, shape=Type)) +
-      ggtitle(paste(Initial,"EMA Progress (Count)"))+
-      theme(plot.title = element_text(hjust = 0.5))+
-      geom_line()+
-      ylab("Percentage")+
-      scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
-      geom_point()+
-      geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=actual,label=actual))+
-      geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
-    
-    ggsave(paste(Initial,"_",Sys.Date(),"_EMAPro_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
-    print("Completion (count) Plot Saved to Working Directory")
+      bsrc.ema.progress.graph(emamelt.merge = emamelt.merge, path = path, startdate = startdate, enddate = enddate, output = gprint, Initial = Initial)
       #End Graphic
     }
-    return(emamelt.merge.x)
+    return(list(data=emamelt.merge,info=info))
     }
 }
+#########Graphing function:
+bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL) {
+  #Safe guard the plot:
+  emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
+  
+  #Percentage Plot
+  emaplot.percent<-ggplot(data = emamelt.merge, aes(x=date, y=porp, group=Type, shape=Type, color=Type)) +
+    ggtitle(paste(Initial,"EMA Progress (Percentage)"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_line()+
+    ylab("Percentage")+
+    scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
+    geom_point()+
+    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
+  if (output){
+  ggsave(paste(Initial,"_EMAProg_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path, height = 8.3, width = 11.7)
+  print("Percentage Plot Saved to Working Directory")}
+  
+  #Completion Plot
+  emaplot.count<-ggplot(data = emamelt.merge, aes(x=date, y=actual, color=Type, group=Type, shape=Type)) +
+    ggtitle(paste(Initial,"EMA Progress (Count)"))+
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_line()+
+    ylab("Percentage")+
+    scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
+    geom_point()+
+    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=actual,label=actual))+
+    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
+  if (output){ 
+  ggsave(paste(Initial,"_EMAProg_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
+  print("Completion (count) Plot Saved to Working Directory")}
+  
+  if(codeout){return(list(percentgraph=emaplot.percent,countgraph=emaplot.count))}
+}
 ############### EMA 2 RedCap update function: 
-bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
+bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,uri=input.uri,token=input.token, output=T,ifupload=T,curver="2"){
   #safe gurad the function:
   emamelt.merge<-emamelt.merge[which(!emamelt.merge$Type %in% c("MB","SetUp")),]
   
   emamelt.merge$check<-NA
-  lengthofema<-21
-  startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==unique(emamelt.merge$redcapID) & funbsrc$ema_setuptime!="")])
-  enddate<-startdate+lengthofema
   
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"7Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+14))]<-"14Days"
@@ -332,13 +316,6 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,uri=input.uri,token=input.tok
   if (output) {
   return(test3)}
   }
-############## Revert RedCap data back into long format [IN DEV]
-bsrc.ema.redcapreshape<-function(){
-  gsub("emaprog_","",names(LGER))
-  melt.LGER<-cbind(melt.LGER,data.frame(t(as.data.frame(strsplit(melt.LGER$variable,split = "[_]")))))
-  rownames(melt.LGER)<-NULL
-  
-}
 ################ Get certrain part of EMA data
 bsrc.ema.getevent<-function(emadata.raw,pick.input,additional=NA, vers="3") {
   if (missing(emadata.raw)) {
@@ -369,7 +346,6 @@ bsrc.ema.getevent<-function(emadata.raw,pick.input,additional=NA, vers="3") {
   
   return(test1)
 }
-
 ################ Patch the data for emadata.raw and counts for 'em:
 bsrc.ema.patch<-function(emadata.raw,vers="3"){
   if (missing(emadata.raw)){
@@ -399,7 +375,6 @@ bsrc.ema.patch<-function(emadata.raw,vers="3"){
   
   return(emadata.raw)
   }
-    
 ############### Scale to Num
 bsrc.ema.scaletonum<-function(emadata.raw){
   if (missing(emadata.raw)){
@@ -418,7 +393,6 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   
   return(emadata.nums)
 }
-
 ################Ver 2:
 ############### Intergrated main and redcapupload:
 bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e="2", graphic.e=T){
@@ -428,43 +402,79 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   else {filename.e->filename.c}
   bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
-########################################
-########### LOOOOOOOOOOOOOPS ###########
-########################################
-#Might not be useful with the introduction of EMA 3;
-#Whelp, shame on you, cuzzzzz it's totally still useful
-bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload.e=T, curver.e="2",forceupdate=F,outputstyle="outcome",uri=input.uri,token=input.token) {
+################ Loop:
+bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T,updatedata=T,ifupload.e=T, curver.e="2",forceupdate=F,uri=input.uri,token=input.token) {
   if(curver.e=="2" & is.null(path)){path<-getwd()}
   if(curver.e=="3" & is.null(file)){file<-file.choose()}
   run2<-F
   run3<-F
+  skip<-F
+  outcome.r.temp<-NULL
+  outcome.temp<-NULL
+  writetofile<-FALSE
+  if (file.exists(rdpath)) {
+    skip<-TRUE
+    fulldata.ema<-NULL
+    outcome<-NULL
+    outcome.r<-NULL
+    emadata.raw.combo<-NULL
+    info.combo<-NULL 
+    allobjects<-as.character(list(load(rdpath,verbose=T)))
+    outcome<-fulldata.ema$pdata
+    outcome.r<-fulldata.ema$rdata
+    emadata.raw.combo<-fulldata.ema$raw
+    info.combo<-fulldata.ema$info
+  }
   switch(curver.e, 
          "2" = {
   temp<-list.files(path<-path,pattern="*.csv")
   print("This is to upload and update redcap")
   for (i in 1:length(temp)){
-    print(paste("Now processing ",i," out of ",length(temp),sep = ""))
+    print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
-    output<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
-    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F,curver = "2")
-      if (i==1){outcome<-output
-      outcome.r<-output.r}
-    outcome<-merge(outcome,output,all=T)
+    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
+    if (!as.character (output.c$info$RedcapID) %in% as.character(info.combo$RedcapID)){
+    output<-output.c$data
+    startdate<-output.c$info$startdate
+    enddate<-output.c$info$enddate
+    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F,curver = "2",startdate = startdate,enddate = enddate)
+    info<-output.c$info
+      if (i==1 & !skip)
+      {outcome<-output
+      outcome.r<-output.r
+      emadata.raw.combo<-emadata.raw
+      info.combo<-info
+      }
+      if (i==1) {
+      outcome.r.temp<-output.r
+      outcome.temp<-output}
+    outcome.r.temp<-merge(outcome.r.temp,output.r,all=T)
+    outcome.temp<-merge(outcome.temp,output,all=T)
+    if (output.r$ema_completed___2==1) {
+      writetofile<-TRUE
+      outcome<-merge(outcome,output,all=T)
+      outcome.r<-merge(outcome.r,output.r,all=T)
+      emadata.raw.combo<-merge(emadata.raw.combo,emadata.raw,all=T)
+      info.combo<-merge(info.combo,info,all=T)}
     output<-NULL
-    outcome.r<-merge(outcome.r,output.r,all=T)
     output.r<-NULL
-  }
-  #upload after combined;
-  if (ifupload.e) {
-    print("Starting to upload updates to RedCap...")
-    result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
-    if (result.outcome.r$success) 
-    {print("DONE")}
-  }
+    output<-NULL
+    output.r<-NULL
+    emadata.raw<-NULL
+    info<-NULL
+    }else{print("------SKIPPED; DATA ALREADY IN emadata.all.rdata--------")}
+  }#END of LOOP
   },
   "3" = {
+    emadata.raw<-NULL
     emadata.raw<-bsrc.ema.getfile(filename = file, curver = "3")
+    if (any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
+      completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
+      
+      emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
+      print(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
+      }
     for (i in 1:length(unique(emadata.raw$RedcapID))) {
       print("##########################")
       print(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
@@ -472,45 +482,72 @@ bsrc.ema.loopit<-function(path=NULL, file=NULL, style="long", graphic=T,ifupload
       currda<-emadata.raw[which(emadata.raw$RedcapID==curredcap),]
       rownames(currda)<-NULL
       fstatus<-F
+      output<-NULL
+      output.r<-NULL
       tryCatch({
-        output<-bsrc.ema.main(emadata.raw = currda, graphic = graphic)}, error=function(x){
+        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic)
+        output<-output.c$data
+        startdate<-output.c$info$startdate
+        enddate<-output.c$info$enddate
+        }, error=function(x){
         fstatus<-T
         print("EMA MAIN NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
       tryCatch({
-        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3")}, error=function(x){
+        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate)
+        }, error=function(x){
         fstatus<-T
         print("REDCAP UPLOAD NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])}) 
       
-      if (i==1){outcome<-output
-      outcome.r<-output.r}
+      if (i==1 & !is.null(output) & !is.null(output.r)){outcome.temp<-output
+                outcome.r.temp<-output.r}
+      
         if (!is.null(output)) {
         print("MERGING MAIN")
-        outcome<-merge(outcome,output,all=T)
+        outcome.temp<-merge(outcome.temp,output,all=T)
         }
         if (!is.null(output.r)) {
         print("MERGING REDCAP")
-        outcome.r<-merge(outcome.r,output.r,all=T)
+        outcome.r.temp<-merge(outcome.r.temp,output.r,all=T)
         }
-      
-      ouput<-NULL
-      output.r<-NULL
-    }
-    outcome<-outcome[which(!outcome$porp %in% c("NaN")),]
-    #upload after combined;
-    if (ifupload.e) {
-      print("Starting to upload updates to RedCap...")
-      result.outcome.r<-redcap_write(outcome.r,token = token,redcap_uri = uri)
-      if (result.outcome.r$success) 
-      {print("DONE")}
-      }
+      if (!is.null(output.r)) {  
+      if (output.r$ema_completed___3==1) {
+        writetofile<-TRUE
+        print("**COMPLETED**Adding this person to ema database")
+        info<-output.c$info
+        outcome<-merge(outcome,output,all=T)
+        outcome.r<-merge(outcome.r,output.r,all=T)
+        emadata.raw.combo<-merge(emadata.raw.combo,currda,all=T)
+        info.combo<-merge(info.combo,info,all=T)
+        currda<-NULL
+        info<-NULL}}
+    
+    } #End of Loop
     })
-  
-  return(list(main=outcome,redcapupload=outcome.r))
+  outcome<-outcome[which(!outcome$porp %in% c("NaN",NA)),]
+  outcome.temp<-outcome.temp[which(!outcome.temp$porp %in% c("NaN",NA)),]
+  if (updatedata & writetofile){
+    print("Saving back to file...")
+    fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo)
+    save(list = allobjects,file = rdpath)
+    }
+  if (ifupload.e) {
+    if (length(outcome.r.temp$registration_redcapid)>1){
+    print("Starting to upload updates to RedCap...")
+    result.outcome.r<-redcap_write(outcome.r.temp,token = token,redcap_uri = uri)
+    if (result.outcome.r$success) {print("DONE")} else {print("SOMETHING WENT WRONG")}
+  }else{print("Nothing to upload...closing down...")}}
+  return(list(main=outcome.temp,redcapupload=outcome.r.temp))
 }
+################################
+dnpl.ema.updatevariref<-function(filename=NULL,rdpath=ema.data.rdpath,)
+
+########################
+###  ANALYSIS/GRAPH  ###
+########################
 #############################
-bsrc.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
+dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
   colnames(df)[grep(Typename,names(df))]<-"Type"
   for (i in 1:length(unique(df$Type))) {
     targettype=as.character(unique(df$Type)[i])
