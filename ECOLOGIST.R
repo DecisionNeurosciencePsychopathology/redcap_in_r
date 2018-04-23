@@ -1,9 +1,13 @@
 ###
 #Title: "Ecologist"
 #Author: "Jiazhou Chen"
-#Version: 1.1
+#Version: 1.2
 ###
-#Version 1.1: [MAJOR UPDATE]
+#Version 1.2:
+  #Updated bsrc.ema.redcapupate() to update the status of people who hasn't gotten to the 7 days point
+  #New function dnpl.ema.procdb() : Process the object so that it's easier to access certain data
+  #New function dnpl.ema.spiltraw(): Process the raw data
+#Version 1.1: [MAJOR UPDATE] [Pipeline completed]
   #Separated graphing codes from main function so the rework on mainfunction can be done to more efficiently process version 3 data
   #The new main function new returns basic info along with progress, with revision that it will filter out Jiazhou's data in J WOO's file
   #The loop func is updated to take adventage of the new info df that the main function outputs and it will accumulate those info as well
@@ -12,8 +16,7 @@
   #Started creating mapping function to separate data, getting ready for analysis
   #Updated other functions to work with the new revision of main function
   
-
-#Version 1.0: [compatible with EMA version 2.1 and version 3.0a] 
+#Version 1.0: [compatible with EMA version 2.1 and version 3.0a]
   #Bug fix on loop and improve efficiency; stable version of ecologist, suitable for version 3.0a for EMA.
   #bsrc.ema.mwredcapmatch() has new function to match duplicated records.
   #bsrc.mwredcapmatch() deal with complication in mulisubject within single file 
@@ -137,7 +140,7 @@ bsrc.ema.getfile<-function(filename,ifupload=F,uri.e=input.uri,token.e=input.tok
 }
 ############### EMA2 Main function:
 #####Currently hard fixed for EMA 3; new main function needed:
-bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T, gprint=T){
+bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token.e=input.token,ifupload=F,uri.e=input.uri,graphic=T, gprint=T,...){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile(curver = "2")
@@ -145,18 +148,22 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
   ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token.e, forceupdate = forceupdate.e)
   
   lRedcapID<-unique(emadata.raw$RedcapID)
+  ldevice<-unique(emadata.raw$DeviceOS)
   linitial<-unique(subreg$registration_initials[match(lRedcapID,subreg$registration_redcapid)])
   #MAKE SURE TO CHECK REDCAP
   #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
   #Currently take out nas, should only be one item:
   RedcapID<-as.character(unique(lRedcapID))
-  Initial<-(unique(linitial))
+  Initial<-as.character(unique(linitial))
+  DeviceOS<-as.character(unique(emadata.raw$DeviceOS))
   if ("J WOO" %in% linitial) {
     RedcapID<-as.character(unique(lRedcapID))[1]
     Initial<-(unique(linitial))[1]
-    
+    DeviceOS<-as.character(unique(emadata.raw$DeviceOS))[1]
   }
-  
+  if (length(DeviceOS)>1) {
+  DeviceOS<-paste(DeviceOS,collapse = "/")
+  }
   if (length(RedcapID)>1){stop("ema.main() can only process only 1 ID data at a time, please filter")}
   
   mwuserid<-as.character(unique(emadata.raw$User_Id[which(emadata.raw$RedcapID==RedcapID)]))
@@ -190,10 +197,15 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     
     #Generate Expectation Grid:
     lengthofema<-21
-    startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==unique(table.emadata$redcapID) & funbsrc$ema_setuptime!="")])
-    enddate<-startdate+lengthofema
+    startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==RedcapID & funbsrc$ema_setuptime!="")])
+    terminationdate<-as.Date(funbsrc$ema_termdate[which(funbsrc$registration_redcapid==RedcapID & funbsrc$ema_termdate!="")])
+    enddate.com<-startdate+lengthofema
+    if ((terminationdate-1)==enddate.com){enddate<-enddate.com}
+    if ((terminationdate-1) < enddate.com){enddate<-terminationdate}
+    if ((terminationdate-1) > enddate.com){print("THIS PERSON HAS DATA WAY PASS 21 DAYS SINCE START DATE")
+      enddate<-terminationdate}
     
-    info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid)
+    info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid,DeviceOS)
     
     emaseqdate<-seq.Date(from=startdate,to=enddate,by="days")
     emaseq.one<-seq(from=0,to=lengthofema,length.out = length(emaseqdate))
@@ -241,7 +253,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,forcerun.e=F,forceupdate.e=F,token
     }
 }
 #########Graphing function:
-bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL) {
+bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
   #Safe guard the plot:
   emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
   
@@ -299,8 +311,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       currentexp<-paste("test3$ema_completed___",curver,"<-0", sep = "")
       eval(parse(text=currentexp))
       test3$ema_completed___999<-0
-      test3$redcap_event_name<-"ema_arm_1"}
-    else {
+      test3$redcap_event_name<-"ema_arm_1"}else {
       test3$ema_completed___ip<-0
       currentexp<-paste("test3$ema_completed___",curver,"<-1", sep = "")
       eval(parse(text=currentexp))
@@ -309,7 +320,12 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       test3$redcap_event_name<-"ema_arm_1"
       test3$prog_emastatus_di<-NA
       }}
-  else {print(paste("Nothing to upload yet, come back after: ", startdate+7))}
+  else {print(paste("Nothing to upload yet, come back after: ", startdate+7))
+    test3<-data.frame(unique(emamelt.merge$redcapID),"1")
+    names(test3)<-c("registration_redcapid","ema_completed___ip")
+    test3$redcap_event_name<-"ema_arm_1"
+    test3$ema_completed___3<-"0"
+    }
   if (ifupload) {
     result.test3<-redcap_write(test3,token = token,redcap_uri = uri)
     if (result.test3$success) {print("DONE")}}
@@ -393,8 +409,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   
   return(emadata.nums)
 }
-################Ver 2:
-############### Intergrated main and redcapupload:
+################Ver 2: Intergrated main and redcapupload (Single; Legacy)
 bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e="2", graphic.e=T){
   if (missing(filename.e)) {
     print("No file specified, please choose the target file")
@@ -403,9 +418,11 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
 ################ Loop:
-bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T,updatedata=T,ifupload.e=T, curver.e="2",forceupdate=F,uri=input.uri,token=input.token) {
+bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, gpath=NULL,file=NULL, graphic=T,updatedata=T,ifupload.e=T, curver.e="2",forceupdate=F,uri=input.uri,token=input.token,...) {
   if(curver.e=="2" & is.null(path)){path<-getwd()}
   if(curver.e=="3" & is.null(file)){file<-file.choose()}
+  if(is.null(gpath)){print("By default, saving plots to box sync")
+    gpath<-"/Users/jiazhouchen/Box Sync/skinner/data/EMA Data/Plots"}
   run2<-F
   run3<-F
   skip<-F
@@ -419,7 +436,7 @@ bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T
     outcome.r<-NULL
     emadata.raw.combo<-NULL
     info.combo<-NULL 
-    allobjects<-as.character(list(load(rdpath,verbose=T)))
+    allobjects<-list(load(rdpath,verbose=T))
     outcome<-fulldata.ema$pdata
     outcome.r<-fulldata.ema$rdata
     emadata.raw.combo<-fulldata.ema$raw
@@ -433,7 +450,7 @@ bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T
     print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
-    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic)
+    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic, path = gpath)
     if (!as.character (output.c$info$RedcapID) %in% as.character(info.combo$RedcapID)){
     output<-output.c$data
     startdate<-output.c$info$startdate
@@ -485,7 +502,7 @@ bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T
       output<-NULL
       output.r<-NULL
       tryCatch({
-        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic)
+        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath)
         output<-output.c$data
         startdate<-output.c$info$startdate
         enddate<-output.c$info$enddate
@@ -530,7 +547,7 @@ bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T
   if (updatedata & writetofile){
     print("Saving back to file...")
     fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo)
-    save(list = allobjects,file = rdpath)
+    save(list = allobjects[[1]],file = rdpath)
     }
   if (ifupload.e) {
     if (length(outcome.r.temp$registration_redcapid)>1){
@@ -541,8 +558,52 @@ bsrc.ema.loopit<-function(rdpath=ema.data.rdpath,path=NULL, file=NULL, graphic=T
   return(list(main=outcome.temp,redcapupload=outcome.r.temp))
 }
 ################################
-dnpl.ema.updatevariref<-function(filename=NULL,rdpath=ema.data.rdpath,)
-
+dnpl.ema.updatevariref<-function(filename=NULL){
+  if (is.null(filename)){
+    print("Please choose a file...")
+    filename<-file.choose()
+    }
+  vari<-read.csv(filename)
+  vari.valuevariname<-as.character(vari$variableName[which(vari$type != "INFORMATION")])
+  metadata<-list(metadata=vari,valuevariname=vari.valuevariname,updated.date=Sys.Date())
+}
+#############################
+dnpl.ema.procdb<-function(rdpath=ema.data.rdpath,fulldata.ema=NULL,metadata.ema=NULL,...) {
+  if (is.null(fulldata.ema) & is.null(metadata.ema)) {allitems<-list(load(rdpath,verbose = T))}
+  #Indicate status
+  fulldata.ema$info$status<-"UNKNOWN"
+  fulldata.ema$info$duration<-info$enddate-info$startdate
+  fulldata.ema$info$status[fulldata.ema$info$duration==21]<-"COMPLETED"
+  fulldata.ema$info$status[fulldata.ema$info$duration>21]<-"EXCESSIVE"
+  fulldata.ema$info$status[fulldata.ema$info$duration>21]<-"EARLY-TERMINATION"
+  
+  fulldata.ema<-dnpl.ema.spiltraw(fulldata.ema = fulldata.ema,metadata.ema = metadata.ema)
+  
+  save(list = allitems[[1]],file = rdpath)
+}
+############################
+dnpl.ema.spiltraw<-function(fulldata.ema=fulldata.ema,metadata.ema=metadata.ema,getmore.u=NULL,base.n=NULL) {
+  if (is.null(base.n)){
+    base.n<-c("User_Id","Survey_Submitted_Date","Survey_Submitted_Time","TriggerName")
+    print(paste("by default, each form will include these variables: ",paste(base.n,collapse = " ;")))}
+  genvariname<-c(base.n,getmore.u)
+  rawdata<-fulldata.ema$raw
+  
+  for (i in 1:length(names(metadata.ema))) {
+    formname<-names(metadata.ema)[i]
+    print(paste("Processing '",formname,"'.....",sep = ""))
+    str<-paste("formvariname<-metadata.ema$",formname,"$valuevariname",sep = "")
+    eval(parse(text = str))
+    proc.a<-rawdata[,c(genvariname,formvariname)]
+    proc.b<-bsrc.ema.scaletonum(proc.a)
+    limitlength<-(unique(apply(proc.b, 1, function(x) {length(x)}))[1])-(length(genvariname))
+    proc.c<-proc.b[which(apply(proc.b, 1, function(x) {length(which(is.na(x)))})<limitlength),]
+    str.e<-paste("fulldata.ema$procdata$",formname,"<-proc.c",sep = "")
+    eval(parse(text = str.e))
+    print("done")}
+  
+  return(fulldata.ema)
+}
 ########################
 ###  ANALYSIS/GRAPH  ###
 ########################
