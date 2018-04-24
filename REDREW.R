@@ -1,12 +1,14 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 1.7
+#Version: 1.8
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
 #0.5/1 Attach demo info for given list of IDs [NO NEED]
 #0.5/1 function to bridge current and pass db
+#Version 1.8 Changelog:
+  #Fix fatal error in bsrc.getform() where if grabnewinfo argument is used, no checkbox items will be included.
 
 #Version 1.7 Changelog: 
   #Full revision of bsrc.connredcap(), which now is unstable. 
@@ -39,7 +41,7 @@
     #Aggressive subsetting is automatically off to preserve data. DO NOT recommand to turn on, only there for efficiency. 
   
 #Version 1.1.1 Changelog:
-  #fixed an error in bsrc.redcapcon which result in subreg only taking 1:50 variables. Insterad now it's dynamic
+  #fixed an error in bsrc.redcapcon() which result in subreg only taking 1:50 variables. Insterad now it's dynamic
   
 #Version 1.1 Changelog:
   #reformed bsrc.getform() with following changes:
@@ -62,8 +64,6 @@
 #1/1 Get all data of given form
 #1/1 Get RedCap ID for Soloff ID [V useful]
 #1/1 Get MetircWire Identifier
-#1/1 Get IRB Report Numbers (Total)
-  #0/1 Get IRB Report Numbers, since last IRB Renewal -> SEE ADMINISTRATOR project
 #1/1 Race/Gender/Status Processing 
 #1/1 Missingness check ID specific
 
@@ -142,13 +142,13 @@ bsrc.conredcap <- function(uri,token,batch_size,output=F,notfullupdate=F) {
     jzc.connection.yesno<<-1
     jzc.connection.date<<-Sys.Date()
     funbsrc<<-funbsrc.x$data
-    subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
     } #take only the regi part
   else {
     print("Connection Failed, Please Try Again.") 
     jzc.connection.yesno<<-0}
-  if (output==T){
-  return(funbsrc)}
+  if (!output) {subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)}
+  if (output){
+  return(list(data=funbsrc,metadata=funstrc,eventmapping=funevent))}
   }
 }
 ##############################Check Date Base
@@ -287,7 +287,7 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",n
 #####################################
 #Functions to get all data from given forms: 
 bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,redcap.uri= input.uri, token.e = input.token) {
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)
+  if (grabnewinfo) {ifrun<-TRUE} else {ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)}
   if (missing(replace)){replace=F} else {replace->funbsrc} 
   if (ifrun) {
   if (missing(formname)){
@@ -297,7 +297,8 @@ bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,mod=T,aggre
   }
   if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
     if (grabnewinfo) {print("Updating form names")
-      bsrc.conredcap(uri = input.uri,token = input.token,notfullupdate = T)} else {}
+      bsrc.conredcap(uri = input.uri,token = input.token,notfullupdate = T)
+      } else {}
    lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
    raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
    eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
@@ -306,7 +307,11 @@ bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,mod=T,aggre
    if (nocalc){print("By default, will not take calculated field into consideration.")
    calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
    if (grabnewinfo) {print("Grab updated data from RedCap.")
-     renew<-redcap_read(redcap_uri = redcap.uri ,token = token.e, fields = names(raw), events = raw$redcap_event_name)
+     kzname<-names(raw)
+     exname<-names(raw)[grep("___",names(raw))]
+     exname.p<-unique(sapply(strsplit(exname,split = "___"),"[[",1))
+     fxname<-c(kzname,exname.p)
+     renew<-redcap_read(redcap_uri = redcap.uri ,token = token.e, fields = fxname, events = raw$redcap_event_name)
      raw<-renew$data}
    if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
       raw[raw==""]<-NA
@@ -360,7 +365,7 @@ bsrc.getmwidentifier<-function(db,only=F) {
 bsrc.updatedb<-function(ndf,df,by="registration_redcapid") {
   if (missing(df)) {df<-funbsrc}
   if (missing(ndf)) stop("HEY! NO REPLACEMENT DATEFRAME")
-  excu<-paste("df[match(ndf$",by,"df$",by,"),match(names(ndf),names(df))]<-ndf",sep = "")
+  excu<-paste("df[match(ndf$",by,",","df$",by,"),match(names(ndf),names(df))]<-ndf",sep = "")
   eval(parse(text = excu))
   return(df)
 }
@@ -496,5 +501,4 @@ server <- function(input, output) {
 # Run the app ----
 shinyApp(ui = ui, server = server)
 }
-
 
