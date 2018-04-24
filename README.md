@@ -8,6 +8,23 @@ This a project that use R to deal with RedCap data. Although now it might have e
 
 Find changelogs and function description on the top of each script.
 
+**Required Packages:**
+```
+library("data.table")
+library("lubridate")
+library("ggplot2")
+library("zoo")
+library("plyr")
+library("ggrepel")
+library("redcapAPI")
+library("RCurl")
+library("data.table")
+library("REDCapR")
+library(pracma)
+library(rprime)
+library(tidyr)
+library(stringdist)
+```
 # README for EMA DATA FILE: 
 In Box Sync/Skinner/Data/EMA Data, there is a file: "emadata.all.rdata"
 Within it there are: 
