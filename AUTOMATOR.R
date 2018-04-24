@@ -1,13 +1,14 @@
 #---
 #Title: "Automator"
 #Author: "Jiazhou Chen"
-#Version: 1.4
+#Version: 1.5
 #---
-
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
-#Version 1.4:
-  #Updated the bsrc.refresh() to update local copy of the database as well. 
-  
+#Version 1.5:
+  #Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
+#Version 1.4
+  #Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
+  #Updated the bsrc.backup() to use new mech to grab date since creataion of files
 #Version 1.31:
   #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed. 
   #Remove the main script from AUTOMATOR so that it only contains functions
@@ -124,13 +125,14 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     funbsrc$ema_setuptime[which(funbsrc$ema_setuptime=="")]<-NA
     emaonly<-bsrc.getform(formname = "ema_session_checklist", forcerun.e = T)
     emaonly<-emaonly[which(!is.na(emaonly$ema_setuptime)),]
-    emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2"))
+    emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2","ema_completed___3","ema_completed___999","ema_termdate"))
     emaonly.s$ema_setuptime<-as.Date(emaonly.s$ema_setuptime)
     emaonly.s$prog_emadued<-emaonly.s$ema_setuptime+3
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+22]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22]+22
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+15]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15]+15
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8]+8
     emaonly.s$prog_emadued[Sys.Date() > emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() > emaonly.s$ema_setuptime+21]+21
+    emaonly.s$prog_emadued[which(Sys.Date() >= emaonly.s$ema_termdate & emaonly.s$ema_completed___999==1)]<-emaonly.s$ema_termdate[which(Sys.Date() >= emaonly.s$ema_termdate & emaonly.s$ema_completed___999==1)]
     #EMA IP:
     emaonly.s$prog_emastatus<-paste("3days",emaonly.s$ema_setuptime+3)
     emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]<-paste("3wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22)]+22)
@@ -138,8 +140,11 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]<-paste("1wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8)]+8)
     emaonly.s$prog_emastatus[which(Sys.Date() > emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() > emaonly.s$ema_setuptime+21)]+21)
     emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
+    emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___3==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___3==1)]+21)
+    emaonly.s$prog_emastatus[which(Sys.Date() >= emaonly.s$ema_termdate & emaonly.s$ema_completed___999==1)]<-"EMA:999"
     emaonly.s$prog_emastatus_di<-emaonly.s$prog_emastatus
     emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___2==1]<-NA
+    emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___3==1]<-NA
     emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
     #Screened:
     emaonly.j<-bsrc.getform(formname = "ema_screening_form", forcerun.e = T)
@@ -152,16 +157,17 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     maxevent$prog_endor<-as.character(maxevent$prog_endor)
     maxevent$prog_latestipdedate<-as.character(maxevent$prog_latestipdedate)
     maxevent$prog_emadued<-as.character(maxevent$prog_emadued)
-  
+    
+    #Take out terminated folks
+    terminatedsublist<-subreg$registration_redcapid[which(!is.na(subreg$terminate_yesno))]
+    maxevent<-maxevent[which(!maxevent$registration_redcapid %in% terminatedsublist),]
+    
     #Update back to local database so no need to reload:
     print("Updating Local Database")
     funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
     funbsrc<<-funbsrc
     subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
     
-    #####Work on early termination folks########
-    #Get the names of progress report [remember to organize the dataframe in RedCap order; NOPE BAD IDEA HARD CODE IT]
-    #c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_emastatus","prog_emastatus_di","prog_emadued")
     idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
     names(idmatch)<-c('id','soloffid','redcapid')
     if (!is.na(ID)){
@@ -180,7 +186,8 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     if (output) {return(maxevent) 
       print("Here you go, you asked for it.")
     }
-       
+
+    
     if (upload) {
     result.maxevent<-redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
     return(result.maxevent)
@@ -206,11 +213,12 @@ bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expirati
     print("Success")
     
     lfile<-list.files(path=path,pattern="*.csv")
-    yur<-as.numeric(Sys.Date()-as.Date(as.character(as.data.table(strsplit(lfile,split = "_"))[2])))
+    yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
     delfile<-lfile[which(yur>expiration)]  
     if (clean & length(delfile)>0) {
       print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
       print("Removing old files")
+      delfile<-paste(path,delfile,sep="/")
       file.remove(delfile)
     }
   print("DONE")
