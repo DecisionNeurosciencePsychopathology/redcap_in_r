@@ -1,12 +1,16 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 1.8
+#Version: 1.9
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
 #0.5/1 Attach demo info for given list of IDs [NO NEED]
 #0.5/1 function to bridge current and pass db
+#Version 1.9 Changelog:
+  #Revision of gerform and checkbox function
+  #addition of two reg functions (revised)
+
 #Version 1.8 Changelog:
   #Fix fatal error in bsrc.getform() where if grabnewinfo argument is used, no checkbox items will be included.
 
@@ -229,24 +233,56 @@ bsrc.findduplicate <- function() {
     print("DONE")
 }
 ################# Universal Function to deal with checkbox items:
-bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T) {
+bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collapse=",",...) {
   raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
   options<-gsub(paste(variablename,"___",sep = ""),"",names(raceonly))
   x$xudjfnx<-apply(raceonly, 1, function(x) {which(x==1)})
-  x$xudjfnx<-as.character(x$xudjfnx)
-  x$xudjfnx[which(x$xudjfnx=="integer(0)")]<-NA
-  x$knxmncua<-sapply(x$xudjfnx,function(x) {options[eval(parse(text= na.omit(x) ))]})
-  x$knxmncua[which(x$knxmncua=="character(0)")]<-NA  
-  names(x$knxmncua)<-NULL
-  x$xudjfnx<-as.character(lapply(x$xudjfnx, function(x) {paste(eval(parse(text=na.omit(x))),collapse = ",")}))
+  names(x$xudjfnx)<-NULL
+  x$xudjfnx<-sapply(x$xudjfnx,function(x) {
+  names(x)<-NULL
+  x} )
+  x$knxmncua<-sapply(x$xudjfnx, function(x) {paste(na.omit(x),collapse = collapse)})
+  x$vximnucj<-sapply(x$xudjfnx,function(x) {length(x)>1})
   
   if (returndf) {
-    colnames(x)[grep("knxmncua",names(x))]<-variablename
-    colnames(x)[grep("xudjfnx",names(x))]<-paste(variablename,"_string",sep = "")
+    colnames(x)[grep("xudjfnx",names(x))]<-variablename
+    colnames(x)[grep("knxmncua",names(x))]<-paste(variablename,"_string",sep = "")
+    colnames(x)[grep("vximnucj",names(x))]<-paste(variablename,"_ifmultiple",sep = "")
     return(x)}
-  else {return(list(Checkbox_text=x$xudjfnx,Checkbox_list=x$knxmncua))}
+  else {return(list(Checkbox_text=x$knxmncua,Checkbox_list=x$xudjfnx,Checkbox_ifmultiple=x$vximnucj))}
 }
 #######
+bsrc.reg.group<-function(x,protocol,reverse=F){
+  switch(protocol, 
+         "bsocial"={
+           f.from = c(1:4,88,89) 
+           f.to = c("HC","LL ATT","HL ATT","NON-ATT","NOTSURE BPD","INELIGIBLE")},
+         "ksocial"={
+           f.from = c(1:7,88,89) 
+           f.to = c("HC","DEP","DO NOT USE","IDE","ATT","LL ATT","HL ATT","NOT SURE","INELIGIBLE")
+         })
+  if (reverse) {
+    f.from->from.x
+    f.to->to.x
+    f.from<-to.x
+    f.to<-from.x
+  }
+  xt<-mapvalues(x, from = f.from, to = f.to, warn_missing = F)
+  return(xt)
+}
+##############################
+bsrc.reg.race<-function(x,reverse=F){
+  f.from = c(1:5,999) 
+  f.to = c("American Indian/ALNative","Asian","African American","HINative/Pacific Islander","White","NO INFO")
+  if (reverse) {
+    f.from->from.x
+    f.to->to.x
+    f.from<-to.x
+    f.to<-from.x
+  }
+  xt<-mapvalues(x, from = f.from, to = f.to, warn_missing = F)
+  return(xt)
+}
 #Combined use of the following allow extraction of data within EVENT and FORM
 ############################
 #Function to get all data of given event:
