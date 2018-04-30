@@ -1,12 +1,12 @@
 # REDCAP IN R
 This a project that use R to deal with RedCap data. Although now it might have extended beyond that...
 - REDREW: main functions
- 	- New Version 2.0: Refresh data organization method to be similar as EMA; Now automator refresh in background every 3 hours
+	- New Version 2.0: Refresh data organization method to be similar as EMA; Now automator refresh in background every 3 hours
 - AUTOMATOR: automator refresh and back-up functions
 - ECOLOGIST: ema data processing and organizing functions 
- 	- New Version 1.1: 
-  		- Introduce new data organization method using RData file. Pretty clean and nice to use.
- 		 - Now will preprocess data into separate data frame within list structure.
+	- New Version 1.1: 
+		- Introduce new data organization method using RData file. Pretty clean and nice to use.
+		- Now will preprocess data into separate data frame within list structure.
 - ADMINISTRATOR: functions that helps speed up administrative tasks
 - RETRO: replicating matlab functions that process behavioral data in R
 
