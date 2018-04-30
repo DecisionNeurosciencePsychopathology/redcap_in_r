@@ -1,53 +1,28 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 1.9
+#Version: 2.0
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
 #0.5/1 Attach demo info for given list of IDs [NO NEED]
 #0.5/1 function to bridge current and pass db
-#Version 1.9 Changelog:
-  #Revision of gerform and checkbox function
-  #addition of two reg functions (revised)
-
-#Version 1.8 Changelog:
-  #Fix fatal error in bsrc.getform() where if grabnewinfo argument is used, no checkbox items will be included.
-
-#Version 1.7 Changelog: 
-  #Full revision of bsrc.connredcap(), which now is unstable. 
-
-#Version 1.6 Changelog:
+#Version 2.0 Changelog: [Major Revision]
+  #New data orgnization method to the funbsrc for more effective update method and make cross project data migration possible
+  #BRAND NEW MECHANISM FOR IMPORTING DATA; NOW COULD BE USED TO AUTOMATE DATA IMPORT FROM THE BACKGROUD YOOOOOOO
   #Universal function: bsrc.updatedb() 
     #Deal with updating information in one df using info in another.
-  
-#Version 1.5 Changelog:
   #Introduction of universal function: bsrc.checkbox() 
     #Deal with checkbox items
-  
-#Version 1.4 Changelog: 
   #bsrc.getidmatchdb() now has a way more elegant way of getting redcap ID, read for upload in the future. 
   #bsrc.getmwidentifier() is the function that help getting mwidentifier to a database 
-  
-#Version 1.3 Changelog:
   #bsrc.getform() and bsrc.getevent() have a better aggressive datasubsetting rule
-  #bsrc.getform() has new argument on how agressive it should be and if datamodification should happen.
-  #bsrc.conredcap() configured to subset subreg
-  
-#version 1.2 Changelog:
-  #Introduction of universal function: redcap.eventmapping
+  #bsrc.getform() has new argument on how agressive it should be and if data modification should happen.
+  #Introduction of universal function: redcap.eventmapping()
     #Very useful fucntion in longitudinal study.
-  #Refinement of bsrc.getform(): 
-    #Now using the new event mapping instead of relying on aggresive subsetting.
-    #Aggressive subsetting is automatically off to preserve data. It's still recommand to turn on for simplicity.
   #New function: bsrc.getevent()
     #Subset the database to only certain event and their according forms
     #Aggressive subsetting is automatically off to preserve data. DO NOT recommand to turn on, only there for efficiency. 
-  
-#Version 1.1.1 Changelog:
-  #fixed an error in bsrc.redcapcon() which result in subreg only taking 1:50 variables. Insterad now it's dynamic
-  
-#Version 1.1 Changelog:
   #reformed bsrc.getform() with following changes:
     #aggressive argument to aggressively remove irrelavent data, by default on
     #Mechnisim to protect function from error
@@ -58,7 +33,6 @@
       #Since removing irrelavent ones are not so difficult. 
   #Refined bsrc.getevent() and bsrc.getdemo()
     #bsrc.getevent() functional again 
-    #bsrc.getdemo() has new arguments and compatible with findduplicate 
   #New bsrc.findduplicate() function to identify duplicated records in RedCap caused by ID transition
   
 #Version 1.0 [Completed]
@@ -123,7 +97,7 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               raw_text = raw_text))
 }
 ###############Connect RedCap db for processing:
-bsrc.conredcap <- function(uri,token,batch_size,output=F,notfullupdate=F) {
+bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}
   if (missing(batch_size)) {batch_size<-"50" 
@@ -139,23 +113,170 @@ bsrc.conredcap <- function(uri,token,batch_size,output=F,notfullupdate=F) {
     funevent<<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)$data
   }
   if (!notfullupdate){
-  redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
-  funbsrc.x<-redcap$read(batch_size = batch_size)
-  if (funbsrc.x$success) {
-    print("Success! Database Loaded")
-    jzc.connection.yesno<<-1
-    jzc.connection.date<<-Sys.Date()
-    funbsrc<<-funbsrc.x$data
+    redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
+    funbsrc.x<-redcap$read(batch_size = batch_size)
+    if (funbsrc.x$success) {
+      print("Success! Database Loaded")
+      jzc.connection.yesno<<-1
+      jzc.connection.date<<-Sys.Date()
+      funbsrc<<-funbsrc.x$data
     } #take only the regi part
-  else {
-    print("Connection Failed, Please Try Again.") 
-    jzc.connection.yesno<<-0}
-  if (!output) {subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)}
-  if (output){
-  return(list(data=funbsrc,metadata=funstrc,eventmapping=funevent))}
+    else {
+      print("Connection Failed, Please Try Again.") 
+      jzc.connection.yesno<<-0}
+    if (!output) {subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)}
+    if (output){
+      return(list(data=funbsrc,metadata=funstrc,eventmapping=funevent))}
   }
 }
+##########################Switcher
+bsrc.switcher<-function(preset=protocol.s,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL){
+  #This is used to switch protocols [hard coding lab protocls]
+  if (any(preset %in% c("bsocial","ksocial"))) {
+    switch(preset, "bsocial"={
+      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.b,rdpath=rdpaths$bsocial)
+    },
+    "ksocial"={
+      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.k,rdpath=rdpaths$ksocial)
+    })
+  } else if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
+    print("constructing new one...")
+    protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)
+  } else {print("Not enough info")}
+  return(protocol)
+}
+#########################Release to global function
+bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
+  if (!skipcheck){
+  if(is.list(protocol)) {print("Grab the list with protocol info.")
+    protocol.n<-protocol$name
+    rdpath<-protocol$rdpath
+    lsattach<-grep(rdpath,search())
+    if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
+      for (i in 1:length(lsattach)){
+        lsattach.s<-grep(rdpath,search())[1]
+        detach(pos = lsattach.s)
+      }}}else {stop("ERROR in globalrelease, protocol object is not a list.")}
+  if(file.exists(rdpath)){
+    attach(rdpath)
+  }else {print("File don't exist...loading")
+    bsrc.checkdatabase2(protocol = protocol, glob.release = T)}
+}
+  curdb<-eval(parse(text=protocol.n))
+  updated.time<-curdb$update.time
+  funbsrc<<-curdb$data
+  funevent<<-curdb$eventmap
+  funstrc<<-curdb$metadata
+  jzc.connection.date<<-curdb$update.date
+}
+#########################New Ver in DEV
+bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,...) {
+  if (missing(protocol)) {stop("no protocol specified")}
+  if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
+  if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
+    print(protocol[ protocol != protocol$token ])
+    protocol.n<-protocol$name
+    input.uri<-protocol$redcap_uri
+    input.token<-protocol$token
+    rdpath<-protocol$rdpath
+  }
+  if (file.exists(rdpath)) {
+  allobjects<-list(load(rdpath,verbose=T))
+  allobjects<-allobjects[[1]]
+  pathsplit<-strsplit(rdpath,split = "/")[[1]]
+  topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
+  file.copy(from = rdpath, to = topath, overwrite = T)
+  }else{"Starting new file..."
+    allobjects<-c(protocol.n)}
+  anyfailed<-FALSE
+  funstrc.x<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
+    if (funstrc.x$success){
+      funstrc<-funstrc.x$data
+    }else{anyfailed<-TRUE
+      print("Metadata not loaded")}
+  funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
+  if (funevent.x$success){
+    funevent<-funevent.x$data
+  }else{anyfailed<-TRUE
+  print("Event mapping not loaded")}
+  if (fullupdate){
+  redcap.local<-redcap_project$new(redcap_uri=input.uri, token=input.token)
+  funbsrc.x<-redcap.local$read(batch_size = batch_size)
+    if (funbsrc.x$success){
+      funbsrc<-funbsrc.x$data
+    }else{anyfailed<-TRUE
+    print("Main database not loaded")}
+  }
+  if (!anyfailed){
+  success<-"TRUE"
+  update.date<-Sys.Date()
+  update.time<-Sys.time()
+  }else{
+    print("something went wrong, better go check it out.")
+    print("will still update successfully loaded parts.")
+  }
+  assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
+  if (updaterd){
+    save(list = allobjects,file = rdpath)
+  }
+  
+  if (output){
+  str<-paste("return(",protocol.n,")",sep = "")
+  eval(parse(text = str))
+    }
+  }
 ##############################Check Date Base
+bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = T,...) {
+  reload<-FALSE
+  ifrun<-TRUE
+  if(is.list(protocol)) {print("Grab the list with protocol info.")
+  protocol.n<-protocol$name
+  input.uri<-protocol$redcap_uri
+  input.token<-protocol$token
+  rdpath<-protocol$rdpath
+  lsattach<-grep(rdpath,search())
+  if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
+  for (i in 1:length(lsattach)){
+    lsattach.s<-grep(rdpath,search())[1]
+    detach(pos = lsattach.s)
+  }}
+  if (exists(protocol.n)) {
+    strtoeval<-paste("rm(",protocol.n,")",sep = "")
+    eval(parse(text = strtoeval))
+  }
+  print("by default, the object will be passed on to conredcap function")
+  } else {stop("ERROR, protocol object is not a list.")}
+  if(file.exists(rdpath)){
+    attach(rdpath)
+    curdb<-eval(parse(text=protocol.n))
+    updated.time<-curdb$update.time
+  if(!forceskip){  
+    if (curdb$success) {
+      if (difftime(Sys.time(),updated.time,units = "hours") > 3) {
+        print("Whelp...it's been awhile since the db was updated, let's reupdate it...")
+        reload<-TRUE
+      }
+    }else {print("Something went wrong when loading rdata file...")
+      ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
+      if (!as.logical(ifso)){reload<-T}
+      }
+  
+  }else{print("FORCE SKIP RDATA CHECKS")}
+    }else{print("No such file...reloading")
+    reload<-T}
+  
+  if (reload | forceupdate) {
+    bsrc.conredcap2(protocol = protocol,... = ...)
+    bsrc.checkdatabase2(protocol = protocol,forceupdate = F)
+  }else {ifrun<-TRUE}
+  
+  if (glob.release) {
+    bsrc.globalrelease(skipcheck = T)
+  }
+  detach()
+  return(ifrun)
+}
+###############################
 bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   if(missing(token)){token<-input.token}
   if(!missing(replace)){funbsrc<-replace}
@@ -171,18 +292,18 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
     ifrun<-TRUE
   }
   else {ifelse (jzc.connection.yesno == 1, {
-      ifelse(forcerun==TRUE | jzc.connection.date==Sys.Date(), {
-        print("Database is loaded or was loaded today")
-        ifrun<-TRUE}, {print("Local database is out of date, redownload now")
+    ifelse(forcerun==TRUE | jzc.connection.date==Sys.Date(), {
+      print("Database is loaded or was loaded today")
+      ifrun<-TRUE}, {print("Local database is out of date, redownload now")
         ifrun<-FALSE
         bsrc.conredcap(token = token)
         ifrun<-bsrc.checkdatabase()})
-        }, 
-      {print("RedCap Connection is not loaded, Retry Now")
-      ifrun<-FALSE
-      bsrc.conredcap(token = token)
-      ifrun<-bsrc.checkdatabase()
-      })
+  }, 
+  {print("RedCap Connection is not loaded, Retry Now")
+    ifrun<-FALSE
+    bsrc.conredcap(token = token)
+    ifrun<-bsrc.checkdatabase()
+  })
   }
   return(ifrun)
 }
@@ -417,8 +538,7 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
 
 ###############################
 ####### IN DEVELOPMENT ########
-###############################
-
+###############################fd
 if (FALSE){
 
 bsrc.process.race<-function(odk,Race) {
@@ -494,13 +614,10 @@ bsrc.process.race<-function(odk,Race) {
   }
 }
 }
-
 ###############################
 ####### SHINY######### ########
 ###############################
 #Following is for Shiny Web App, 
-#0/1 Single Participant Record Display
-
 if (FALSE) {
 #This chunk is for shiny web app
 library(shiny)
@@ -537,4 +654,3 @@ server <- function(input, output) {
 # Run the app ----
 shinyApp(ui = ui, server = server)
 }
-
