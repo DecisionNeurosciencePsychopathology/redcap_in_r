@@ -1,4 +1,4 @@
-# REDCAP IN R
+# REDCAP IN R REPOSITORY
 This a project that use R to deal with RedCap data. Although now it might have extended beyond that...
 - REDREW: main functions
 	- New Major Revision (Ver 2.0):  
