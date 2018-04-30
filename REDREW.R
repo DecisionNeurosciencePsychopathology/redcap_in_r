@@ -7,6 +7,10 @@
 #0/1 Missingness check arm specific 
 #0.5/1 Attach demo info for given list of IDs [NO NEED]
 #0.5/1 function to bridge current and pass db
+#Version 2.1 Changelog: 
+  #Some new functions to help backward compatibility and efficiency
+  #Started to update functions to incooperate changes in Version 2.0 (getdemo,findduplicate,getform)
+
 #Version 2.0 Changelog: [Major Revision]
   #New data orgnization method to the funbsrc for more effective update method and make cross project data migration possible
   #BRAND NEW MECHANISM FOR IMPORTING DATA; NOW COULD BE USED TO AUTOMATE DATA IMPORT FROM THE BACKGROUD YOOOOOOO
@@ -96,6 +100,149 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
               raw_text = raw_text))
 }
+##########################Switcher
+bsrc.switcher<-function(preset=protocol.s,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F){
+  #This is used to switch protocols [hard coding lab protocls]
+  if (any(preset %in% c("bsocial","ksocial"))) {
+    switch(preset, "bsocial"={
+      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.b,rdpath=rdpaths$bsocial)
+    },
+    "ksocial"={
+      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.k,rdpath=rdpaths$ksocial)
+    })
+  } else if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
+    print("constructing new one...")
+    protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)
+  } else {print("Not enough info")}
+  if (protocol.cur){
+    protocol.cur<<-protocol
+  } else {return(protocol)}
+}
+#########################Release to global function
+bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
+  if (file.exists(protocol$rdpath)){
+    if (!skipcheck){curdb<-bsrc.checkngrab(protocol=protocol)}
+  }else {print("File don't exist...loading")
+    bsrc.checkdatabase2(protocol = protocol, glob.release = T)}
+  updated.time<-curdb$update.time
+  funbsrc<<-curdb$data
+  funevent<<-curdb$eventmap
+  funstrc<<-curdb$metadata
+  jzc.connection.date<<-curdb$update.date
+}
+#########################Check & Attach
+bsrc.checkngrab<-function(protocol=protocol.cur){
+  if(is.list(protocol)) {protocol.n<-protocol$name
+    rdpath<-protocol$rdpath
+    lsattach<-grep(rdpath,search())
+    if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
+      for (i in 1:length(lsattach)){
+        lsattach.s<-grep(rdpath,search())[1]
+        detach(pos = lsattach.s)
+      }}
+    if (exists(protocol.n)) {
+      strtoeval<-paste("rm(",protocol.n,")",sep = "")
+      eval(parse(text = strtoeval))
+    }
+  } else {stop("ERROR, protocol object is not a list.")}
+  if(file.exists(rdpath)){
+    attach(rdpath)
+    print("Loading RDATA file....")
+    curdb.x<-eval(parse(text=protocol.n))
+    detach()
+  return(curdb.x)} else {"No such file...."}
+}
+#########################New Ver in DEV
+bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,...) {
+  if (missing(protocol)) {stop("no protocol specified")}
+  if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
+  if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
+    print(protocol[ protocol != protocol$token ])
+    protocol.n<-protocol$name
+    input.uri<-protocol$redcap_uri
+    input.token<-protocol$token
+    rdpath<-protocol$rdpath
+  }
+  if (file.exists(rdpath)) {
+  allobjects<-list(load(rdpath,verbose=T))
+  allobjects<-allobjects[[1]]
+  pathsplit<-strsplit(rdpath,split = "/")[[1]]
+  topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
+  file.copy(from = rdpath, to = topath, overwrite = T)
+  }else{"Starting new file..."
+    allobjects<-c(protocol.n)
+    fullupdate<-TRUE}
+  anyfailed<-FALSE
+  funstrc.x<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
+    if (funstrc.x$success){
+      funstrc<-funstrc.x$data
+    }else{anyfailed<-TRUE
+      print("Metadata not loaded")}
+  funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
+  if (funevent.x$success){
+    funevent<-funevent.x$data
+  }else{anyfailed<-TRUE
+  print("Event mapping not loaded")}
+  if (fullupdate){
+  redcap.local<-redcap_project$new(redcap_uri=input.uri, token=input.token)
+  funbsrc.x<-redcap.local$read(batch_size = batch_size)
+    if (funbsrc.x$success){
+      funbsrc<-funbsrc.x$data
+    }else{anyfailed<-TRUE
+    print("Main database not loaded")}
+  }
+  if (!anyfailed){
+  success<-"TRUE"
+  update.date<-Sys.Date()
+  update.time<-Sys.time()
+  }else{
+    print("something went wrong, better go check it out.")
+    print("will still update successfully loaded parts.")
+  }
+  
+  if (!fullupdate) {notfulldb<-list(eventmap=funevent,metadata=funstrc)}
+  if (output){
+  if (fullupdate){str<-paste("return(",protocol.n,")",sep = "")
+  eval(parse(text = str))} else if (!fullupdate){return(notfulldb)}
+  }
+  if (updaterd){
+    if (!fullupdate) {curdb<-bsrc.checkngrab(protocol = protocol)
+    funbsrc<-curdb$data}
+    assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
+    save(list = allobjects,file = rdpath)}
+  }
+##############################Check Date Base
+bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,...) {
+  reload<-FALSE
+  ifrun<-TRUE
+  if(file.exists(rdpath)){
+    curdb<-invisible(bsrc.checkngrab(protocol=protocol))
+    updated.time<-curdb$update.time
+  if(!forceskip){  
+    if (curdb$success) {
+      if (difftime(Sys.time(),updated.time,units = "hours") > 3) {
+        print("Whelp...it's been awhile since the db was updated, let's reupdate it...")
+        reload<-TRUE
+      }
+    }else {print("Something went wrong when loading rdata file...")
+      ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
+      if (!as.logical(ifso)){reload<-T}
+      }
+  
+  }else{print("FORCE SKIP RDATA CHECKS")}
+    }else{print("No such file...reloading")
+    reload<-T}
+  
+  if (reload | forceupdate) {
+    bsrc.conredcap2(protocol = protocol,... = ...)
+    bsrc.checkdatabase2(protocol = protocol,forceupdate = F)
+  }else {ifrun<-TRUE}
+  
+  if (glob.release) {
+    bsrc.globalrelease(skipcheck = T)
+  }
+  return(ifrun)
+}
 ###############Connect RedCap db for processing:
 bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
   if (missing(uri)) {uri<-'DNPL'
@@ -128,153 +275,6 @@ bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
     if (output){
       return(list(data=funbsrc,metadata=funstrc,eventmapping=funevent))}
   }
-}
-##########################Switcher
-bsrc.switcher<-function(preset=protocol.s,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL){
-  #This is used to switch protocols [hard coding lab protocls]
-  if (any(preset %in% c("bsocial","ksocial"))) {
-    switch(preset, "bsocial"={
-      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.b,rdpath=rdpaths$bsocial)
-    },
-    "ksocial"={
-      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.k,rdpath=rdpaths$ksocial)
-    })
-  } else if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
-    print("constructing new one...")
-    protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)
-  } else {print("Not enough info")}
-  return(protocol)
-}
-#########################Release to global function
-bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
-  if (!skipcheck){
-  if(is.list(protocol)) {print("Grab the list with protocol info.")
-    protocol.n<-protocol$name
-    rdpath<-protocol$rdpath
-    lsattach<-grep(rdpath,search())
-    if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
-      for (i in 1:length(lsattach)){
-        lsattach.s<-grep(rdpath,search())[1]
-        detach(pos = lsattach.s)
-      }}}else {stop("ERROR in globalrelease, protocol object is not a list.")}
-  if(file.exists(rdpath)){
-    attach(rdpath)
-  }else {print("File don't exist...loading")
-    bsrc.checkdatabase2(protocol = protocol, glob.release = T)}
-}
-  curdb<-eval(parse(text=protocol.n))
-  updated.time<-curdb$update.time
-  funbsrc<<-curdb$data
-  funevent<<-curdb$eventmap
-  funstrc<<-curdb$metadata
-  jzc.connection.date<<-curdb$update.date
-}
-#########################New Ver in DEV
-bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,...) {
-  if (missing(protocol)) {stop("no protocol specified")}
-  if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
-  if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
-    print(protocol[ protocol != protocol$token ])
-    protocol.n<-protocol$name
-    input.uri<-protocol$redcap_uri
-    input.token<-protocol$token
-    rdpath<-protocol$rdpath
-  }
-  if (file.exists(rdpath)) {
-  allobjects<-list(load(rdpath,verbose=T))
-  allobjects<-allobjects[[1]]
-  pathsplit<-strsplit(rdpath,split = "/")[[1]]
-  topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
-  file.copy(from = rdpath, to = topath, overwrite = T)
-  }else{"Starting new file..."
-    allobjects<-c(protocol.n)}
-  anyfailed<-FALSE
-  funstrc.x<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-    if (funstrc.x$success){
-      funstrc<-funstrc.x$data
-    }else{anyfailed<-TRUE
-      print("Metadata not loaded")}
-  funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
-  if (funevent.x$success){
-    funevent<-funevent.x$data
-  }else{anyfailed<-TRUE
-  print("Event mapping not loaded")}
-  if (fullupdate){
-  redcap.local<-redcap_project$new(redcap_uri=input.uri, token=input.token)
-  funbsrc.x<-redcap.local$read(batch_size = batch_size)
-    if (funbsrc.x$success){
-      funbsrc<-funbsrc.x$data
-    }else{anyfailed<-TRUE
-    print("Main database not loaded")}
-  }
-  if (!anyfailed){
-  success<-"TRUE"
-  update.date<-Sys.Date()
-  update.time<-Sys.time()
-  }else{
-    print("something went wrong, better go check it out.")
-    print("will still update successfully loaded parts.")
-  }
-  assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
-  if (updaterd){
-    save(list = allobjects,file = rdpath)
-  }
-  
-  if (output){
-  str<-paste("return(",protocol.n,")",sep = "")
-  eval(parse(text = str))
-    }
-  }
-##############################Check Date Base
-bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = T,...) {
-  reload<-FALSE
-  ifrun<-TRUE
-  if(is.list(protocol)) {print("Grab the list with protocol info.")
-  protocol.n<-protocol$name
-  input.uri<-protocol$redcap_uri
-  input.token<-protocol$token
-  rdpath<-protocol$rdpath
-  lsattach<-grep(rdpath,search())
-  if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
-  for (i in 1:length(lsattach)){
-    lsattach.s<-grep(rdpath,search())[1]
-    detach(pos = lsattach.s)
-  }}
-  if (exists(protocol.n)) {
-    strtoeval<-paste("rm(",protocol.n,")",sep = "")
-    eval(parse(text = strtoeval))
-  }
-  print("by default, the object will be passed on to conredcap function")
-  } else {stop("ERROR, protocol object is not a list.")}
-  if(file.exists(rdpath)){
-    attach(rdpath)
-    curdb<-eval(parse(text=protocol.n))
-    updated.time<-curdb$update.time
-  if(!forceskip){  
-    if (curdb$success) {
-      if (difftime(Sys.time(),updated.time,units = "hours") > 3) {
-        print("Whelp...it's been awhile since the db was updated, let's reupdate it...")
-        reload<-TRUE
-      }
-    }else {print("Something went wrong when loading rdata file...")
-      ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
-      if (!as.logical(ifso)){reload<-T}
-      }
-  
-  }else{print("FORCE SKIP RDATA CHECKS")}
-    }else{print("No such file...reloading")
-    reload<-T}
-  
-  if (reload | forceupdate) {
-    bsrc.conredcap2(protocol = protocol,... = ...)
-    bsrc.checkdatabase2(protocol = protocol,forceupdate = F)
-  }else {ifrun<-TRUE}
-  
-  if (glob.release) {
-    bsrc.globalrelease(skipcheck = T)
-  }
-  detach()
-  return(ifrun)
 }
 ###############################
 bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
@@ -311,10 +311,11 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
-bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
-  if (missing(replace)){replace=F} else {replace->funbsrc} 
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
-  if (ifrun==TRUE){
+bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...){
+  ifrun<-bsrc.checkdatabase2(protocol = protocol)
+  if (ifrun){
+    curdb<-bsrc.checkngrab(protocol = protocol)
+    funbsrc<-curdb$data
     if (flavor == 'single'){
       if(missing(id)){idt<-readline(prompt = "Please enter the participant's 6 digits or 4 digits ID: ")}else{idt<-id}
       idmatch<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
@@ -340,8 +341,14 @@ bsrc.getdemo <- function(id,flavor="single",forcerun=FALSE,replace,output=T){
     }}
 }
 ####Find duplicate RedCap IDs
-bsrc.findduplicate <- function() {
-    dpqid<-data.frame()
+
+bsrc.findduplicate <- function(protocol = protocol.cur) {
+  ifrun<-bsrc.checkdatabase2(protocol = protocol)
+  if (ifrun){
+    curdb<-bsrc.checkngrab(protocol = protocol)
+    funbsrc<-curdb$data    
+  
+  dpqid<-data.frame()
     for (i in 1:length(unique(funbsrc$registration_soloffid)) ) {
       tryCatch({
     idq<-unique(funbsrc$registration_soloffid)[i]
@@ -352,7 +359,7 @@ bsrc.findduplicate <- function() {
     print(i)
       }
     print("DONE")
-}
+}}
 ################# Universal Function to deal with checkbox items:
 bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collapse=",",...) {
   raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
@@ -442,34 +449,42 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",n
   }
 }
 #####################################
-#Functions to get all data from given forms: 
-bsrc.getform<-function(formname,replace,forcerun.e=F,forceupdate.e=F,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,redcap.uri= input.uri, token.e = input.token) {
-  if (grabnewinfo) {ifrun<-TRUE} else {ifrun<-bsrc.checkdatabase(forcerun = forcerun.e, forceupdate = forceupdate.e)}
-  if (missing(replace)){replace=F} else {replace->funbsrc} 
+#Functions to get all data from given forms: (Ver. 2.0 Ready)
+bsrc.getform<-function(protocol = protocol.cur,formname,forceskip=F,forceupdate=F,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F) {
+  if (grabnewinfo) {
+  curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F)
+  ifrun<-TRUE
+  }else if (!grabnewinfo) {ifrun<-bsrc.checkdatabase2(protocol = protocol,forceskip = forceskip, forceupdate = forceupdate)
+    curdb<-bsrc.checkngrab(protocol = protocol)
+    funbsrc<-curdb$data}
+  
   if (ifrun) {
+  funstrc<-curdb$metadata
+  funevent<-curdb$eventmap
   if (missing(formname)){
   print("Here's a list of forms: ")
   print(as.character(unique(as.character(funstrc$form_name))))
   formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,): ")
   }
   if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
-    if (grabnewinfo) {print("Updating form names")
-      bsrc.conredcap(uri = input.uri,token = input.token,notfullupdate = T)
-      } else {}
-   lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
-   raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
-   eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
-   raw<-raw[which(raw$redcap_event_name %in% eventname),]
+   if (grabnewinfo) {print("Grab updated data from RedCap.")
+     protocol$redcap_uri->input.uri
+     protocol$token->input.token
+     lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
+     eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+     renew<-redcap_read(redcap_uri = input.uri ,token = input.token, fields = lvariname, events = eventname)
+     if (renew$success){
+       raw<-renew$data
+     }else {stop("Update failed...;_; Try again?")}
+   }else {
+     lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
+     raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
+     eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+     raw<-raw[which(raw$redcap_event_name %in% eventname),]
+   }
    tempch<-funstrc[which(funstrc$form_name %in% formname),]
    if (nocalc){print("By default, will not take calculated field into consideration.")
-   calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
-   if (grabnewinfo) {print("Grab updated data from RedCap.")
-     kzname<-names(raw)
-     exname<-names(raw)[grep("___",names(raw))]
-     exname.p<-unique(sapply(strsplit(exname,split = "___"),"[[",1))
-     fxname<-c(kzname,exname.p)
-     renew<-redcap_read(redcap_uri = redcap.uri ,token = token.e, fields = fxname, events = raw$redcap_event_name)
-     raw<-renew$data}
+     calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
    if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
       raw[raw==""]<-NA
       if (length(grep("___",names(raw))) > 0){
@@ -506,6 +521,7 @@ bsrc.getidmatchdb<-function(db,idfield="ID") {
   if (idfield!="ID"){db$ID<-NULL}
   return(db)
 }
+
 ########################## Match MericWire Identifier to df
 bsrc.getmwidentifier<-function(db,only=F) {
   if(missing(db)) stop("No DB")
@@ -535,6 +551,7 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
   df<-merge(df,idtack,all = allinfo)
   return(df)  
 }
+
 
 ###############################
 ####### IN DEVELOPMENT ########
