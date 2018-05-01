@@ -1,7 +1,7 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 2.0
+#Version: 2.1
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
@@ -9,7 +9,8 @@
 #0.5/1 function to bridge current and pass db
 #Version 2.1 Changelog: 
   #Some new functions to help backward compatibility and efficiency
-  #Started to update functions to incooperate changes in Version 2.0 (getdemo,findduplicate,getform)
+  #New version of the bsrc.attachngrab() deals with the new data organization method
+  #Updated functions to incooperate changes in Version 2.0 
 
 #Version 2.0 Changelog: [Major Revision]
   #New data orgnization method to the funbsrc for more effective update method and make cross project data migration possible
@@ -131,26 +132,31 @@ bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
   jzc.connection.date<<-curdb$update.date
 }
 #########################Check & Attach
-bsrc.checkngrab<-function(protocol=protocol.cur){
+bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
+  if (is.null(rdpath)) {
   if(is.list(protocol)) {protocol.n<-protocol$name
     rdpath<-protocol$rdpath
-    lsattach<-grep(rdpath,search())
-    if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
-      for (i in 1:length(lsattach)){
-        lsattach.s<-grep(rdpath,search())[1]
-        detach(pos = lsattach.s)
-      }}
-    if (exists(protocol.n)) {
-      strtoeval<-paste("rm(",protocol.n,")",sep = "")
-      eval(parse(text = strtoeval))
-    }
   } else {stop("ERROR, protocol object is not a list.")}
+  } else {print("when rdpath argument available, will always use that")}
+  
+  lsattach<-grep(rdpath,search())
+  if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
+    for (i in 1:length(lsattach)){
+      lsattach.s<-grep(rdpath,search())[1]
+      detach(pos = lsattach.s)
+    }}
   if(file.exists(rdpath)){
-    attach(rdpath)
     print("Loading RDATA file....")
-    curdb.x<-eval(parse(text=protocol.n))
+    envir.load<-attach(rdpath,warn.conflicts = F)
     detach()
-  return(curdb.x)} else {"No such file...."}
+    objectnames<-objects(envir = envir.load)
+    list.load<-as.list(envir.load)
+    
+    switch (returnas,
+      "envir" = {return(envir.load)},
+      "list"  = {return(list.load)}
+    )
+    } else {"No such file...."}
 }
 #########################New Ver in DEV
 bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,...) {
@@ -164,8 +170,6 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     rdpath<-protocol$rdpath
   }
   if (file.exists(rdpath)) {
-  allobjects<-list(load(rdpath,verbose=T))
-  allobjects<-allobjects[[1]]
   pathsplit<-strsplit(rdpath,split = "/")[[1]]
   topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
   file.copy(from = rdpath, to = topath, overwrite = T)
@@ -199,29 +203,39 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     print("something went wrong, better go check it out.")
     print("will still update successfully loaded parts.")
   }
-  
-  if (!fullupdate) {notfulldb<-list(eventmap=funevent,metadata=funstrc)}
-  if (output){
-  if (fullupdate){str<-paste("return(",protocol.n,")",sep = "")
-  eval(parse(text = str))} else if (!fullupdate){return(notfulldb)}
+  if (!fullupdate) {
+    notfulldb<-list(eventmap=funevent,metadata=funstrc)
+    if (updaterd){
+      list.load<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
+      curdb<-list.load[[1]]
+      funbsrc<-curdb$data
+      assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
+    }
+    if (output) {return(notfulldb)}
   }
-  if (updaterd){
-    if (!fullupdate) {curdb<-bsrc.checkngrab(protocol = protocol)
-    funbsrc<-curdb$data}
+  
+  if (fullupdate){
     assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
-    save(list = allobjects,file = rdpath)}
+    if (output){
+      str<-paste("return(",protocol.n,")",sep = "")
+      eval(parse(text = str))
+    }
+    if (updaterd){
+      save(list = protocol.n,file = rdpath)}
+    }
   }
 ##############################Check Date Base
-bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,...) {
+bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
   reload<-FALSE
   ifrun<-TRUE
   if(file.exists(rdpath)){
-    curdb<-invisible(bsrc.checkngrab(protocol=protocol))
+    list.load<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
+    curdb<-list.load[[1]]
     updated.time<-curdb$update.time
   if(!forceskip){  
     if (curdb$success) {
-      if (difftime(Sys.time(),updated.time,units = "hours") > 3) {
-        print("Whelp...it's been awhile since the db was updated, let's reupdate it...")
+      if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
+        print(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
         reload<-TRUE
       }
     }else {print("Something went wrong when loading rdata file...")
@@ -241,7 +255,8 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
   if (glob.release) {
     bsrc.globalrelease(skipcheck = T)
   }
-  return(ifrun)
+  if(ifrun & !logicaloutput) {return(curdb)}
+  if(logicaloutput) {return(ifrun)}
 }
 ###############Connect RedCap db for processing:
 bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
@@ -312,9 +327,9 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
 # fundsrc$timeretrived
 #Need to be more useful
 bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...){
-  ifrun<-bsrc.checkdatabase2(protocol = protocol)
+  curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
+  ifrun<-curdb$success
   if (ifrun){
-    curdb<-bsrc.checkngrab(protocol = protocol)
     funbsrc<-curdb$data
     if (flavor == 'single'){
       if(missing(id)){idt<-readline(prompt = "Please enter the participant's 6 digits or 4 digits ID: ")}else{idt<-id}
@@ -413,10 +428,15 @@ bsrc.reg.race<-function(x,reverse=F){
 }
 #Combined use of the following allow extraction of data within EVENT and FORM
 ############################
-#Function to get all data of given event:
-bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",nocalc=T,uri.e,token.e,subreg=F,mod=F,aggressivecog=1){
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun)
-  if (missing(replace)){replace=F} else {replace->funbsrc} 
+#Function to get all data of given event: (Ver 2 ready)
+bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,whivarform="default",nocalc=T,subreg=F,mod=F,aggressivecog=1,...){
+  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)}
+  funbsrc<-curdb$data
+  funevent<-curdb$eventmap
+  funstrc<-curdb$metadata
+  ifrun<-curdb$success
+  protocol$redcap_uri->input.uri
+  protocol$token->input.token
   if(ifrun) {
     if (missing(eventname)){
       print(as.character(unique(funbsrc$redcap_event_name)))
@@ -425,14 +445,18 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",n
     if (eventname=="allfu") {
     eventname<-as.character(unique(funbsrc$redcap_event_name))[grep("months_follow",as.character(unique(funbsrc$redcap_event_name)))]
     }
+    
     eventonly<-funbsrc[which(funbsrc$redcap_event_name %in% eventname),]
+    
     switch(whivarform,
-    default = ifelse(!exists("funevent") | is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = uri.e,token = token.e),print("GOT IT")),
+    default = ifelse(!exists("funevent") | is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = input.uri,token = input.token),print("GOT IT")),
     anyfile = funevent<-read.csv(file.choose())
     )
     formname<-funevent$form[funevent$unique_event_name %in% eventname]
-    if (subreg) {formname<-formname[-grep(paste("ipde","scid",sep = "|"),formname)]}    
-    variablename<-names(bsrc.getform(formname = formname,forcerun.e = T))
+    if (subreg) {formname<-formname[-grep(paste("ipde","scid",sep = "|"),formname)]}  
+    
+    variablename<-names(bsrc.getform(formname = formname,curdb = curdb,forceskip = T))
+    
     eventonly.r<-eventonly[,grep(paste(variablename,collapse = "|"),names(eventonly))]
     
     if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
@@ -450,14 +474,19 @@ bsrc.getevent<-function(eventname,replace,forcerun=FALSE, whivarform="default",n
 }
 #####################################
 #Functions to get all data from given forms: (Ver. 2.0 Ready)
-bsrc.getform<-function(protocol = protocol.cur,formname,forceskip=F,forceupdate=F,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F) {
-  if (grabnewinfo) {
-  curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F)
-  ifrun<-TRUE
-  }else if (!grabnewinfo) {ifrun<-bsrc.checkdatabase2(protocol = protocol,forceskip = forceskip, forceupdate = forceupdate)
-    curdb<-bsrc.checkngrab(protocol = protocol)
-    funbsrc<-curdb$data}
+bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,curdb = NULL,...) {
+  if (is.null(curdb)) {
   
+  if (grabnewinfo) {
+  curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
+  ifrun<-TRUE
+  }else if (!grabnewinfo) {
+    curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+    funbsrc<-curdb$data
+    ifrun<-curdb$success
+  }
+  }else {funbsrc<-curdb$data
+  ifrun<-curdb$success} 
   if (ifrun) {
   funstrc<-curdb$metadata
   funevent<-curdb$eventmap
@@ -471,6 +500,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,forceskip=F,forceupdate=
      protocol$redcap_uri->input.uri
      protocol$token->input.token
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
+     lvariname<-c("registration_redcapid","redcap_event_name",lvariname)
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
      renew<-redcap_read(redcap_uri = input.uri ,token = input.token, fields = lvariname, events = eventname)
      if (renew$success){
@@ -494,13 +524,16 @@ bsrc.getform<-function(protocol = protocol.cur,formname,forceskip=F,forceupdate=
     return(new_raw)
     }
   else print(paste("NO FORM NAMED: ",formname, sep = ""))
-    
   }
 }
 #########################
 ### MATACH FUNCTIONS ####
 ######################### Match RedCap ID to df
-bsrc.getidmatchdb<-function(db,idfield="ID") {
+bsrc.getidmatchdb<-function(db,idfield="ID",protocol=protocol.cur,...) {
+  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+  funbsrc<-curdb$data
+  ifrun<-curdb$success
+  if (ifrun) {
   idmatch.k<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
   names(idmatch.k)<-c('id','soloffid','redcapid')
   
@@ -520,10 +553,15 @@ bsrc.getidmatchdb<-function(db,idfield="ID") {
   
   if (idfield!="ID"){db$ID<-NULL}
   return(db)
+  }else stop(";_;")
 }
 
 ########################## Match MericWire Identifier to df
-bsrc.getmwidentifier<-function(db,only=F) {
+bsrc.getmwidentifier<-function(db,only=F,funbsrc=NULL,protocol = protocol.cur, ...) {
+  if (is.null(curdb)){
+    curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+    funbsrc<-curdb$data
+  } else {curdb->funbsrc}
   if(missing(db)) stop("No DB")
   mwidonly<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
   names(mwidonly)<-c('redcapid','mwidentifier')
