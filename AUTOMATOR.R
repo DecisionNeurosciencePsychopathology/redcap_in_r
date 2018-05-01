@@ -1,32 +1,26 @@
 #---
 #Title: "Automator"
 #Author: "Jiazhou Chen"
-#Version: 1.5
+#Version: 1.6
 #---
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
+#Version 1.6: 
+  #Revision to refresh function to be compatible with the new data organization method
 #Version 1.5:
   #Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
-#Version 1.4
   #Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
   #Updated the bsrc.backup() to use new mech to grab date since creataion of files
-#Version 1.31:
   #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed. 
   #Remove the main script from AUTOMATOR so that it only contains functions
-  
-#Version 1.3:
   #Just some updates to the good old bsrc.refresh()
-  
-#Version 1.2:
   #bsrc.refresh() gains the update to fMRI status function
-  
-#Version 1.1:
   #bsrc.refresh() gains the update to EMA protocl and latest IPDE function
 
 #Version 1:
   #1/1 start up function: 
-#jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
+  #jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
   #1/1 REFRESH main function, now with single ID mode:
-    #Force update, force run, if output maxevent db, if upload
+  #Force update, force run, if output maxevent db, if upload
   #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
   #0/0 MetricWire Data Grab and progress update: #See Ecologist Re; bsrc.ema.main
   #1/1 EMA and MRI status update 
@@ -37,15 +31,19 @@
 #########################
 
 ######refresh######
-bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=T, ID) {
+bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=F, upload=T,curdb=NULL,ID, ...) {
   if (missing(ID)) {ID<-NA}
-  if (!exists("input.token")) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
-  if (missing(token.e)){token.e<-input.token}
-  print("By default the refresh function will always upload to RedCap")
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,forceupdate = forceupdate.e,token = token.e)
+  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+  funbsrc<-curdb$data
+  funevent<-curdb$eventmap
+  funstrc<-curdb$metadata
+  ifrun<-curdb$success
+  protocol$redcap_uri->input.uri
+  protocol$token->input.token
+  if(upload) {print("By default the refresh function will always upload to RedCap")}
   if (ifrun){
     #get info from registration
-    subreg<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
+    subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
     subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
     subreg$sincelastfu<-as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
     subreg$fudue<-round((as.numeric(as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
@@ -104,15 +102,17 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     
     #For fMRI Status:
     #Dates:
-    mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),forcerun.e = T) 
+    mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),mod = F,aggressivecog=0,curdb = curdb) 
     mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mriscreen_yesno","mricheck_scheudleddate","mricheck_scanneddate","mricheck_mricomplete___0118","mricheck_mricomplete___p16")) 
     #mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mriscreen_yesno) | !is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_mricomplete___p16)),]
     mripgonly.c<-mripgonly.a
     mripgonly.c$prog_fmristatus<-NA
+    mripgonly.c$mricheck_scheudleddate[which(mripgonly.c$mricheck_scheudleddate=="")]<-NA
+    mripgonly.c$mricheck_scanneddate[which(mripgonly.c$mricheck_scanneddate=="")]<-NA
     mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==0)]<-"REFUSED/INELIGIBLE"
     mripgonly.c$prog_fmristatus[which(mripgonly.c$mriscreen_yesno==1)]<-"Screened/MaybeEligible"
-    mripgonly.c$prog_fmristatus[which(mripgonly.c$mricheck_mricomplete___p16==1)]<-"2016 Pilot"
     mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scheudleddate))]<-paste("Scheduled:",mripgonly.c$mricheck_scheudleddate[which(!is.na(mripgonly.c$mricheck_scheudleddate))])
+    mripgonly.c$prog_fmristatus[which(mripgonly.c$mricheck_mricomplete___p16==1)]<-"2016 Pilot"
     mripgonly.c$prog_fmristatus[which(!is.na(mripgonly.c$mricheck_scanneddate))]<-paste("Scanned:",mripgonly.c$mricheck_scanneddate[which(!is.na(mripgonly.c$mricheck_scanneddate))])
     #Subset:
     mripgonly.d<-subset(mripgonly.c,select = c("registration_redcapid","prog_fmristatus"))
@@ -123,7 +123,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     #For EMA Status:
     #Due Date:
     funbsrc$ema_setuptime[which(funbsrc$ema_setuptime=="")]<-NA
-    emaonly<-bsrc.getform(formname = "ema_session_checklist", forcerun.e = T)
+    emaonly<-bsrc.getform(formname = "ema_session_checklist", curdb=curdb)
     emaonly<-emaonly[which(!is.na(emaonly$ema_setuptime)),]
     emaonly.s<-subset(emaonly,select = c("registration_redcapid","redcap_event_name","ema_setuptime","ema_completed___2","ema_completed___3","ema_completed___999","ema_termdate"))
     emaonly.s$ema_setuptime<-as.Date(emaonly.s$ema_setuptime)
@@ -147,7 +147,7 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     emaonly.s$prog_emastatus_di[emaonly.s$ema_completed___3==1]<-NA
     emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
     #Screened:
-    emaonly.j<-bsrc.getform(formname = "ema_screening_form", forcerun.e = T)
+    emaonly.j<-bsrc.getform(formname = "ema_screening_form", curdb = curdb)
     emaonly.j<-subset(emaonly.j[!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1,],select = c("registration_redcapid"))
     emaonly.j$prog_emastatus<-"Screened&Ready"
     #Merge:
@@ -163,10 +163,10 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
     maxevent<-maxevent[which(!maxevent$registration_redcapid %in% terminatedsublist),]
     
     #Update back to local database so no need to reload:
-    print("Updating Local Database")
-    funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
-    funbsrc<<-funbsrc
-    subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
+    #print("Updating Local Database")
+    #funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
+    #funbsrc<<-funbsrc
+    #subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
     
     idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
     names(idmatch)<-c('id','soloffid','redcapid')
@@ -201,18 +201,20 @@ bsrc.refresh<-function (forcerun.e=F,token.e, forceupdate.e=T, output=F, upload=
 ####Missing Assessment Given a Arm####
 #Pending
 ####Back-up######
-bsrc.backup<-function(forcerun.e=F, forceupdate.e=F,token, path,clean=T,expiration=30) {
-  if (missing(token)){token<-input.token}
-  ifrun<-bsrc.checkdatabase(forcerun = forcerun.e,token = token,forceupdate = forceupdate.e)
-  if (missing(path)) {path<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/Redcap Database Backup"
+bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path,clean=T,expiration=30) {
+  protocol$rdpath->rdpath
+  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+  funbsrc<-curdb$data
+  if (missing(path)) {
+    path<-"/Users/jiazhouchen/Box Sync/skinner/data/RedCap Data/BSocial/Backup"
     print("Default Location is BOXSYNC")}
   if (ifrun) {
-    csvname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.csv")
-    csv<-paste(path,csvname,sep = "/")
-    write.csv(funbsrc,csv)
-    print("Success")
+    backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
+    topath<-paste(path,backupname,sep = "/")
+    file.copy(from = rdpath, to = topath, overwrite = T)
     
-    lfile<-list.files(path=path,pattern="*.csv")
+    
+    lfile<-list.files(path=path,pattern="*RAW.rdata")
     yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
     delfile<-lfile[which(yur>expiration)]  
     if (clean & length(delfile)>0) {
