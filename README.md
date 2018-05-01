@@ -39,13 +39,19 @@ Within it there are:
 
 You can load these data to your R environment and use them whatever you desire so. 
 
-A good practice is to only attach data:
+The bsrc.attachngrab() in REDREW.R, will allow you to import the content in the rdata in a more efficient way
+
+- Load them as list:
+	
 ```
-attach("~/emadata.all.rdata")
-yourdf<-fulldata.ema
-...
-detach("file: ~/emadata.all.rdata")
+	list.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "list"))
+	curdb<-list.load[[1]]
 ```
+- Load them as environment:
+```
+	envir.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "envir"))
+	objectlist<-object(envir=envir.load)
+```	
 
 Below are the orgnization for objects within emadata.all.rdata:
 
