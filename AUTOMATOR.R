@@ -1,11 +1,12 @@
 #---
 #Title: "Automator"
 #Author: "Jiazhou Chen"
-#Version: 1.6
+#Version: 1.6.1
 #---
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
-#Version 1.6: 
+#Version 1.6 & 1.6.1 Changelog: 
   #Revision to refresh function to be compatible with the new data organization method
+  #Refresh function and backup function now fully functional when used in Automator
 #Version 1.5:
   #Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
   #Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
@@ -201,10 +202,11 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
 ####Missing Assessment Given a Arm####
 #Pending
 ####Back-up######
-bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path,clean=T,expiration=30) {
+bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path,clean=T,expiration=30,...) {
   protocol$rdpath->rdpath
   if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
   funbsrc<-curdb$data
+  ifrun<-curdb$success
   if (missing(path)) {
     path<-"/Users/jiazhouchen/Box Sync/skinner/data/RedCap Data/BSocial/Backup"
     print("Default Location is BOXSYNC")}
