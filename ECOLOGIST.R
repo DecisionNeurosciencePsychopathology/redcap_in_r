@@ -655,7 +655,19 @@ dnpl.ema.meanbyweek<-function(fulldata.ema=fulldata.ema){
       x<-as.numeric(sapply(strsplit(x,split = " %"),"[[",1))
     } else {x<-as.numeric(x)}
     mean(na.omit(x))})
-  return(y)
+  y<-as.data.frame(y)
+  ls.y<-strsplit(rownames(y),split = "_")
+  y$type<-sapply(ls.y, "[[",3)
+  y$time<-sapply(ls.y, "[[",4)
+  y<-reshape(y,direction = "wide",idvar = "type")
+  rownames(y)<-y$type
+  y$type<-NULL
+  names(y)<-sapply(strsplit(names(y),split = ".", fixed = T),"[[",2)
+  y$mean<-apply(y, 1, mean)
+  y.ex<-apply(y, 2, mean)
+  y.x<-rbind(y,y.ex)
+  rownames(y.x)<-c(rownames(y),"mean")
+  return(y.x)
 }
 ################################
 ################Ver 2: Intergrated main and redcapupload (Single; Legacy)
