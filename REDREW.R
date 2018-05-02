@@ -1,12 +1,16 @@
 #---
 #Title: "REDREW"
 #Author: "Jiazhou Chen"
-#Version: 2.1
+#Version: 2.2
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
 #0.5/1 Attach demo info for given list of IDs [NO NEED]
 #0.5/1 function to bridge current and pass db
+#Version 2.2 Changelog:
+  #bsec.getchoicemapping() get the choice from metadata object which can be updated according to design, no more fixed codessss
+  #General bug fix to redcap connection/check redcap; so that the refresh function can run
+
 #Version 2.1 Changelog: 
   #Some new functions to help backward compatibility and efficiency
   #New version of the bsrc.attachngrab() deals with the new data organization method
@@ -228,6 +232,7 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
 bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
   reload<-FALSE
   ifrun<-TRUE
+  protocol$rdpath->rdpath
   if(file.exists(rdpath)){
     list.load<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
     curdb<-list.load[[1]]
@@ -356,7 +361,6 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...
     }}
 }
 ####Find duplicate RedCap IDs
-
 bsrc.findduplicate <- function(protocol = protocol.cur) {
   ifrun<-bsrc.checkdatabase2(protocol = protocol)
   if (ifrun){
@@ -394,7 +398,31 @@ bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collap
     return(x)}
   else {return(list(Checkbox_text=x$knxmncua,Checkbox_list=x$xudjfnx,Checkbox_ifmultiple=x$vximnucj))}
 }
-#######
+####### get choice mapping and its list varient
+bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",type="redcap",protocol=protocol.cur,...){
+  if (is.null(variablenames)){stop("No variable name provided. Give me at least one name please!")}
+  if (is.null(metadata)){
+  curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
+  metadata<-curdb$metadata
+  }
+  metasub<-subset(metadata,select = c(varifield,typefield,choicefield))
+  names(metasub)<-c("fieldname","fieldtype","choice")
+  variname.list<-as.list(variablenames)
+  xzej<-lapply(variname.list,FUN = function(x){
+    argk<-which(metasub$fieldname==x)
+    if (metasub$fieldtype[argk] %in% c("dropdown","checkbox","radio")){
+      tarstr<-metasub$choice[argk]
+      firstspilt<-strsplit(tarstr,split = "|",fixed = T)[[1]]
+      secondspilt<-strsplit(firstspilt,split = ", ")
+      choice.code<-sapply(secondspilt,"[[",1)
+      choice.string<-sapply(secondspilt,"[[",2)
+      x<-data.frame(choice.code,choice.string)
+  } else {print(paste("This variable: '",x,"' has a type of [",metasub$fieldtype[argk],"], which is not supported!",sep = ""))}
+  })
+  if (length(xzej)==1){xzej<-xzej[[1]]}
+  return(xzej)
+}
+########
 bsrc.reg.group<-function(x,protocol,reverse=F){
   switch(protocol, 
          "bsocial"={
@@ -476,7 +504,6 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,whivarform="d
 #Functions to get all data from given forms: (Ver. 2.0 Ready)
 bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,curdb = NULL,...) {
   if (is.null(curdb)) {
-  
   if (grabnewinfo) {
   curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
   ifrun<-TRUE
