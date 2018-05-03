@@ -104,7 +104,9 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
     filename<-file.choose()
   }
   tryCatch({
-    emadata.raw<- read.csv(filename, stringsAsFactors=FALSE)}, error=function(x){}) #find function
+  emadata.raw<- read.csv(filename, stringsAsFactors=FALSE)}, error=function(x){
+    
+  }) #find function
   run2<-F
   run3<-F
   switch(curver, "2" = {run2<-T}, "3" = {run3<-T})
@@ -112,9 +114,9 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
   variname<-read.csv("variname.csv") #find variname
   variname<-as.character(variname$variname)
   names(emadata.raw)<-as.list(variname)
-  mwmatch<-data.frame(funbsrc$registration_redcapid,funbsrc$ema_studyidentifier)
-  names(mwmatch)<-c('registration_redcapid','funbsrc$ema_studyidentifier')
-  emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`funbsrc$ema_studyidentifier`)]
+  mwmatch<-data.frame(funema$registration_redcapid,funema$ema_studyidentifier)
+  names(mwmatch)<-c('registration_redcapid','ema_studyidentifier')
+  emadata.raw$RedcapID<-mwmatch$registration_redcapid[match(emadata.raw$User_Id,mwmatch$`ema_studyidentifier`)]
   RedcapID<-unique(emadata.raw$RedcapID)
   emadata.raw$Survey_Class<-emadata.raw$TriggerName
   emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD"))]<-"MB"
@@ -143,7 +145,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
 }
 ############### EMA2 Main function:
 #####Currently hard fixed for EMA 3; new main function needed:
-bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,protocol=protocol.cur,...){
+bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,funema=NULL,protocol=protocol.cur,...){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile(curver = "2")
@@ -175,7 +177,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,pr
   
   if (ifrun){
     #Read EMA Data:
-    table.emadata<-data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
+    table.emadata<-data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
     table.emadata[,count:=seq_len(.N), by=Type]
@@ -192,13 +194,13 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,pr
     emadata<-emadata[order(emadata$date),]
     names(emadata)<-c("redcapID","date","BoD","DoD","EoD","MB")
     emadata$MB[which(is.na(emadata$MB))]<-0
-    emadata<-na.locf(emadata)
+    emadata<-zoo::na.locf(emadata)
     emadata$date<-as.Date(emadata$date)
     emadata[is.na(emadata)]<-0
     emadata$Total<-as.numeric(emadata$BoD)+as.numeric(emadata$DoD)+as.numeric(emadata$EoD)
     #Generate Expectation Grid:
     lengthofema<-21
-    startdate<-as.Date(funbsrc$ema_setuptime[which(funbsrc$registration_redcapid==RedcapID & funbsrc$ema_setuptime!="")])
+    startdate<-as.Date(funema$ema_setuptime[which(funema$registration_redcapid==RedcapID & funema$ema_setuptime!="")])
     enddate<-startdate+lengthofema
     
     emaseqdate<-seq.Date(from=startdate,to=enddate,by="days")
@@ -212,7 +214,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,pr
     ematotal$EoD<-emaseq.one
     ematotal$DoD<-emaseq.six
     #Replace enddate to termination if earlier than expected (def could do better here)
-    terminationdate<-as.Date(funbsrc$ema_termdate[which(funbsrc$registration_redcapid==RedcapID & funbsrc$ema_termdate!="")])
+    terminationdate<-as.Date(funema$ema_termdate[which(funema$registration_redcapid==RedcapID & funema$ema_termdate!="")])
     if (length(terminationdate)>0){
       if ((terminationdate-1) < enddate){enddate<-terminationdate} 
       if ((terminationdate-1) > enddate){
@@ -223,19 +225,19 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,pr
     #basic info
     info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid,DeviceOS)
     
-    mbonly<-as.data.table(emadata.raw[which(emadata.raw$MBYES),c("Survey_Submitted_Date","MBCount")])
+    mbonly<-data.table::as.data.table(emadata.raw[which(emadata.raw$MBYES),c("Survey_Submitted_Date","MBCount")])
     mbonly<-mbonly[, sum(MBCount), by = Survey_Submitted_Date]
     names(mbonly)<-c("date","MB")
     ematotal<-merge(ematotal,mbonly,all=T)
     ematotal$Total<-as.numeric(ematotal$BoD)+as.numeric(ematotal$DoD)+as.numeric(ematotal$EoD)
     ematotal$MB[which(is.na(ematotal$MB))]<-0
-    ematotal.melt<-melt(ematotal,id.var='date',variable.name="Type",value.name="expectation")
+    ematotal.melt<-reshape2::melt(ematotal,id.var='date',variable.name="Type",value.name="expectation")
     
     #melt data
     emadata.full<-merge(ematotal.donly,emadata,all = T)
     
-    emadata.full<-na.locf(emadata.full)
-    emadata.full.melt<-melt(emadata.full,id.var=c("redcapID","date"), measure.vars=c("BoD","DoD","EoD","Total","MB"),variable.name="Type",value.name="actual")
+    emadata.full<-zoo::na.locf(emadata.full)
+    emadata.full.melt<-reshape2::melt(emadata.full,id.var=c("redcapID","date"), measure.vars=c("BoD","DoD","EoD","Total","MB"),variable.name="Type",value.name="actual")
     emadata.full.melt$date<-as.Date(emadata.full.melt$date)
     
     #New Merge
@@ -484,7 +486,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
     print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
     filename<-paste(path,temp[i],sep = "/")
     emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
-    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic, path = gpath,subreg = subreg)
+    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic, path = gpath,subreg = subreg, funema = funema)
     if (!as.character (output.c$info$RedcapID) %in% as.character(info.combo$RedcapID) | forcerun){
     output<-output.c$data
     startdate<-output.c$info$startdate
@@ -536,7 +538,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
       output<-NULL
       output.r<-NULL
       tryCatch({
-        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath, subreg = subreg)
+        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath, subreg = subreg, funema = funema)
         output<-output.c$data
         startdate<-output.c$info$startdate
         enddate<-output.c$info$enddate
