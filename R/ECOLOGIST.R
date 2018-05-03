@@ -468,7 +468,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
     allobjects<-objects(envir = envir.load)
     pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
-    file.copy(from = rdpath, to = topath, overwrite = T)
+    file.copy(from = rdpath.ema, to = topath, overwrite = T)
     print("Backed-up previousely used db, in case it broke...")
     outcome<-fulldata.ema$pdata
     outcome.r<-fulldata.ema$rdata
@@ -581,8 +581,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
   if (updatedata & writetofile){
     print("Saving back to file...")
     fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())
-    save(list = allobjects,file = rdpath)
-    dnpl.ema.procdb(rdpath = rdpath)
+    save(list = allobjects,file = rdpath.ema)
+    dnpl.ema.procdb(rdpath = rdpath.ema)
     }
   if (ifupload.e) {
     if (length(outcome.r.temp$registration_redcapid)>1){
