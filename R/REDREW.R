@@ -43,16 +43,14 @@
   #Refined bsrc.getevent() and bsrc.getdemo()
     #bsrc.getevent() functional again 
   #New bsrc.findduplicate() function to identify duplicated records in RedCap caused by ID transition
-  
-#Version 1.0 [Completed]
-#1/1 Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
-#1/1 Pull Demo for given sinlge ID
-#1/1 Check if environment has up to date local redcap database
-#1/1 Get all data of given form
-#1/1 Get RedCap ID for Soloff ID [V useful]
-#1/1 Get MetircWire Identifier
-#1/1 Race/Gender/Status Processing 
-#1/1 Missingness check ID specific
+  #Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
+  #Pull Demo for given sinlge ID
+  #Check if environment has up to date local redcap database
+  #Get all data of given form
+  #Get RedCap ID for Soloff ID [V useful]
+  #Get MetircWire Identifier
+  #Race/Gender/Status Processing 
+  #Missingness check ID specific
 
 #------------Notes-------------
 #might be useful:

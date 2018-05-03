@@ -466,7 +466,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
     fulldata.ema<-envir.load$fulldata.ema
     metadata.ema<-envir.load$metadata.ema
     allobjects<-objects(envir = envir.load)
-    pathsplit<-strsplit(rdpath,split = "/")[[1]]
+    pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
     file.copy(from = rdpath, to = topath, overwrite = T)
     print("Backed-up previousely used db, in case it broke...")
