@@ -445,7 +445,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
 ################ Loop:
 bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=T, curver.e="3",protocol=protocol.cur,...) {
   if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
-  if(curver.e=="3" & is.null(file)){file<-file.choose()}
+  if(curver.e=="3" & is.null(file)){filename<-file.choose()}
   if(is.null(gpath)){print("Graphic is turned off because no graphic path provided...")
   graphic=FALSE}
   run2<-F
@@ -521,7 +521,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
   },
   "3" = {
     emadata.raw<-NULL
-    emadata.raw<-bsrc.ema.getfile(filename = file, curver = "3",funema = funema)
+    emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "3",funema = funema)
     if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
       completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
       
@@ -542,15 +542,13 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
         output<-output.c$data
         startdate<-output.c$info$startdate
         enddate<-output.c$info$enddate
-        }, error=function(x){
-        fstatus<-T
+        },error=function(x){
         print("EMA MAIN NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])
         }) 
       tryCatch({
         output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
         }, error=function(x){
-        fstatus<-T
         print("REDCAP UPLOAD NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])
         }) 
