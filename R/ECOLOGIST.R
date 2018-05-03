@@ -144,7 +144,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
   return(emadata.raw)
 }
 ############### EMA2 Main function:
-#####Currently hard fixed for EMA 3; new main function needed:
+##### urrently hard fixed for EMA 3; new main function needed:
 bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,funema=NULL,protocol=protocol.cur,...){
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
@@ -177,12 +177,11 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   
   if (ifrun){
     #Read EMA Data:
-    table.emadata<-data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
+    assign("table.emadata",data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class))
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
     table.emadata[,count:=seq_len(.N), by=Type]
     table.emadata[table.emadata$Type=="MB",count:=seq_len(.N), by=date]
-    
     table.emadata<-na.omit(table.emadata)
     #table.emadata<-table.emadata[which(table.emadata$Type %in% c("DoD","BoD","EoD"))]
     
@@ -460,7 +459,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
   emadata.raw.combo<-NULL
   info.combo<-NULL 
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
-  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T,protocol = protocol,... = ...)
+  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T, protocol = protocol,... = ...)
   protocol$redcap_uri->input.uri
   protocol$token->input.token
   if (file.exists(rdpath.ema)) {

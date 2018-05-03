@@ -5,7 +5,7 @@ Version: 1.0.0
 Author: Jiazhou Chen
 Maintainer: Jiazhou Chen <chenj20@upmc.edu>
 Description: Please see the README.MD for more description
-Depends: R (>= 3.4.0)
+Depends: R (>= 3.4.0), data.table
 License: I don't know...don't really apply to other people's situation
 Imports: REDCapR,data.table,lubridate, ggplot2,zoo,plyr,ggrepel,redcapAPI,RCurl,reshape2
 Encoding: UTF-8
