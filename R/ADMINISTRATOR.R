@@ -1,9 +1,9 @@
 ###---
 #Title: "Administrator"
 #Author: "Jiazhou Chen"
-#Version: 0.7
+#Version: 0.7.1
 ###---
-###Version 0.7:
+###Version 0.7 & 0.7.1:
   #Added new function bsrc.emastats() for ema stats
 
 ##Version 0.6
@@ -34,8 +34,12 @@
 #####
 
 ###########################Bi-Weekly Meeting Sheet:
-bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
-  
+bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=NA,...){
+  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+  funbsrc<-curdb$data
+  ifrun<-curdb$success
+  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
+  if (ifrun) {
   #Find Max Follow-Up Dates: 
   funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
   maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
@@ -46,14 +50,14 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
 
   
   #Get EMA Dates:
-  emapg<-bsrc.getform(formname = "ema_progress_check")
+  emapg<-bsrc.getform(formname = "ema_progress_check",curdb = curdb)
   emapgonly<-subset(emapg,select = c("registration_redcapid","emapg_date_7days","emapg_date_14days","emapg_date_21days"))
   emapgonly$ema_maxdate<-apply(emapgonly[-grep("registration_redcapid",names(emapgonly))],1,max,na.rm=T)
   emapgonly.a<-subset(emapgonly,select = c("registration_redcapid","ema_maxdate"))
   names(emapgonly.a)<-c("registration_redcapid","EMA")
   
   #Get MRI Dates:
-  mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"))
+  mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),curdb = curdb)
   mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mricheck_scheudleddate","mricheck_scanneddate")) 
   mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_scanneddate)),]
   mripgonly.b$MRI<-apply(mripgonly.b[-grep("registration_redcapid",names(mripgonly.b))],1,max,na.rm=T)
@@ -63,7 +67,7 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   mripgonly.d<-mripgonly.c[-which(mripgonly.c$registration_redcapid %in% mrisc$registration_redcapid),]
 
   #Get Baseline:
-  baseline<-na.omit(subset(bsrc.getform(formname = "bldemo"),select = c('registration_redcapid',"demo_visitdate")))
+  baseline<-na.omit(subset(bsrc.getform(formname = "bldemo",curdb = curdb),select = c('registration_redcapid',"demo_visitdate")))
   baseline$demo_visitdate<-as.Date(baseline$demo_visitdate)
   names(baseline)<-c("registration_redcapid","Baseline")
   
@@ -127,15 +131,20 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
   #tarmonthree<-seq(threemon,getthreemon)
   
   ####
+
   curdate<-Sys.Date()
   plusmon<-Sys.Date()
   month(plusmon)<-month(curdate)+monthz-1
   tarmon<-month(seq.Date(from = curdate, to = plusmon, by="mon"))
   tarmon[which(tarmon>6)]<-tarmon[which(tarmon>6)]-6
   
-  threemon<-Sys.Date()
-  plusthreemon<-Sys.Date()
-  month(threemon)<-month(Sys.Date())-3
+  #To prevent the Febuary non-sense
+  usedate<-Sys.Date()
+   if (day(Sys.Date())>28) {day(usedate)<-28}
+  
+  threemon<-usedate
+  plusthreemon<-usedate
+  month(threemon)<-month(usedate)-3
   month(plusthreemon)<-month(threemon)+monthz-1
   tarmonthree<-month(seq.Date(from = threemon, to = plusthreemon, by="mon"))
   tarmonthree[which(tarmonthree>6)]<-tarmon[which(tarmonthree>6)]-6
@@ -170,18 +179,17 @@ bsrc.admin.biweekly<-function(days=14,monthz=2,exportpath=NA){
     write.csv(merged.recent, paste(exportpath,"/pasttwoweeks.csv",sep = ""))
     write.csv(future,paste(exportpath,"/nexttwoweeks.csv",sep=""))
   }
-}
+}}
 ###########################RPPR Report:
 bsrc.admin.rppr<-function(){
 
 newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
 totaln<-length(newconsent$registration_redcapid)
 }
-
 #################
-bsrc.emastats<-function(x=NULL) {
+bsrc.emastats<-function() {
   #Get funema:
-  funema<<-bsrc.getform(formname = "ema_session_checklist")
+  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)
   emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
   emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]
   emastate$status[which(is.na(emastate$status))]<-"UNKNOWN"
@@ -192,30 +200,24 @@ bsrc.emastats<-function(x=NULL) {
   emastate$group<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
   emastate$`GROUP`<-mapvalues(emastate$group,from = c("1","2","3","4","88","89"), 
                               to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
-  
-  if (length(which(emastate$status.k=="UNKNOWN"))>0){
-    print("REMARKABLE PT:")
-    for (i in 1:length(emastate$registration_redcapid[which(emastate$status.k=="UNKNOWN")])) {
-      print("####################")
-      idinv<-emastate$registration_redcapid[which(emastate$status.k=="UNKNOWN")][i]
-      print(paste("RedCap ID: ",idinv))
-      print(paste("NOTES: ",funema$ema_masnote[match(idinv,funema$registration_redcapid)]))
-    }
-  }
-  
+
   emacount<-xtabs(~`EMA Status`+GROUP,emastate)
   emacount<-addmargins(emacount)
   
   return(list(emastatus=emastate,emacount=emacount))
   
-  }
-
-
-bsrc.reg.group<-function(x){
-x$registration_group_txt<-mapvalues(x$registration_group, from = c(1:4,88,89), 
-          to = c("HC","LL ATT","HL ATT","NON-ATT","NOTSURE BPD","INELIGIBLE"),warn_missing = F)
+  if (length(which(emastate$status.w=="UNKNOWN"))>0){
+    print("REMARKABLE PT:")
+    for (i in 1:length(emastate$registration_redcapid[which(emastate$status.w=="UNKNOWN")])) {
+      print("####################")
+      idinv<-emastate$registration_redcapid[which(emastate$status.w=="UNKNOWN")][i]
+      print(paste("RedCap ID: ",idinv))
+      print(paste("NOTES: ",funema$ema_masnote[match(idinv,funema$registration_redcapid)]))
+      }
+    }
+  
 }
-
+####################
 
 ###########################Data Meeting:
 bsrc.datameeting<-function(protocol="bsocial"){

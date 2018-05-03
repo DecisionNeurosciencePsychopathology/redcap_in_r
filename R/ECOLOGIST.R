@@ -1,9 +1,12 @@
 ###
 #Title: "Ecologist"
 #Author: "Jiazhou Chen"
-#Version: 1.5
+#Version: 1.6
 ###Note: 
 ##Ones starts with dnpl.*() can run without redcap database; while bsrc.*() replies somewhat on other scripts (mainly REDREW)
+#Version 1.6 Changelog:
+  #
+
 #Version 1.5: [Major Revision]
   #Update all the necessary function to accomandate the changes made in REDREW organization, now with more flexibility
   #Temporarily the localupdate function will not be working because the new method of getting data
@@ -678,7 +681,6 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   else {filename.e->filename.c}
   bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
-
 ########################
 ###  ANALYSIS/GRAPH  ###
 ########################
