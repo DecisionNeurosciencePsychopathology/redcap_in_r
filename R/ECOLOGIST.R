@@ -442,10 +442,10 @@ bsrc.ema.scaletonum<-function(emadata.raw){
 }
 ################ Loop:
 bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=T, curver.e="3",protocol=protocol.cur,...) {
-  if(curver.e=="2" & is.null(path)){path<-getwd()}
+  if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
   if(curver.e=="3" & is.null(file)){file<-file.choose()}
-  if(is.null(gpath)){print("By default, saving plots to box sync")
-    gpath<-"/Users/jiazhouchen/Box Sync/skinner/data/EMA Data/Plots"}
+  if(is.null(gpath)){print("Graphic is turned off because no graphic path provided...")
+  graphic=FALSE}
   run2<-F
   run3<-F
   skip<-F
@@ -478,7 +478,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
   switch(curver.e, 
   "2" = {
   loop.path->path
-  temp<-list.files(path<-loop.path,pattern="*.csv")
+  temp<-list.files(path,pattern="*.csv")
   print("This is to upload and update redcap")
   for (i in 1:length(temp)){
     print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
