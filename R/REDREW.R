@@ -71,7 +71,7 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
     stop("The required parameter `redcap_uri` was missing from the call to `redcap.eventmapping`.")
   if (missing(token)) 
     stop("The required parameter `token` was missing from the call to `redcap.eventmapping`.")
-  token <- sanitize_token(token)
+  token <- REDCapR::sanitize_token(token)
   post_body <- list(token = token, content = "formEventMapping", format = "csv", arms = arms)
   result <- httr::POST(url = redcap_uri, body = post_body, 
                        config = config_options)
@@ -181,7 +181,7 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
   anyfailed<-FALSE
-  funstrc.x<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)
+  funstrc.x<-REDCapR::redcap_metadata_read(redcap_uri = input.uri,token = input.token)
     if (funstrc.x$success){
       funstrc<-funstrc.x$data
     }else{anyfailed<-TRUE
@@ -192,8 +192,8 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
   }else{anyfailed<-TRUE
   print("Event mapping not loaded")}
   if (fullupdate){
-  redcap.local<-redcap_project$new(redcap_uri=input.uri, token=input.token)
-  funbsrc.x<-redcap.local$read(batch_size = batch_size)
+  redcap.local<-redcap_project$new()
+  funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
     if (funbsrc.x$success){
       funbsrc<-funbsrc.x$data
     }else{anyfailed<-TRUE

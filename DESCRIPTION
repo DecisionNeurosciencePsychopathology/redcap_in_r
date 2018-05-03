@@ -7,6 +7,6 @@ Maintainer: Jiazhou Chen <chenj20@upmc.edu>
 Description: Please see the README.MD for more description
 Depends: R (>= 3.4.0)
 License: What license is it under?
-Imports: data.table,lubridate, ggplot2,zoo,plyr,ggrepel,redcapAPI,RCurl,REDCapR
+Imports: REDCapR,data.table,lubridate, ggplot2,zoo,plyr,ggrepel,redcapAPI,RCurl,REDCapR
 Encoding: UTF-8
 LazyData: true
