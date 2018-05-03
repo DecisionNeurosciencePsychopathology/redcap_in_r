@@ -14,14 +14,7 @@ finish<-FALSE
 whichtouse<-as.character(Sys.getenv("whichtouse"))
 
 tryCatch({jiazhou.startup(load = F)
-  
-  source("REDREW.R")
-  source("AUTOMATOR.R")
-  source("ECOLOGIST.R")
-  source("ADMINISTRATOR.R")
-
 protocol.cur<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
-
 switch(whichtouse,"three" = {
 bsrc.conredcap2(protocol = protocol.cur)
 }

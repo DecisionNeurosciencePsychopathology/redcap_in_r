@@ -45,9 +45,9 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
   if (ifrun){
     #get info from registration
     subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
-    subreg$curage<-as.period(interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
-    subreg$sincelastfu<-as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
-    subreg$fudue<-round((as.numeric(as.period(interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
+    subreg$curage<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
+    subreg$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
+    subreg$fudue<-round((as.numeric(lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
     regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("registration_consentdate",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
     
     #find max fudate:
@@ -190,7 +190,7 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
 
     
     if (upload) {
-    result.maxevent<-redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
+    result.maxevent<-REDCapR::redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
     return(result.maxevent)
     if (result.maxevent$success) {
       Print("Congrats, Upload was successful")}

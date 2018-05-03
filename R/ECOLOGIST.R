@@ -354,7 +354,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
     test3$ema_completed___999<-0}
 
   if (ifupload) {
-    result.test3<-redcap_write(test3,token = input.token,redcap_uri = input.uri)
+    result.test3<-REDCapR::redcap_write(test3,token = input.token,redcap_uri = input.uri)
     if (result.test3$success) {print("DONE")}}
   #if (updatelocaldb) {
     #if (length(grep("date",names(test3)))>1){
@@ -545,13 +545,15 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
         }, error=function(x){
         fstatus<-T
         print("EMA MAIN NOT DONE")
-        print(unique(emadata.raw$RedcapID)[i])}) 
+        print(unique(emadata.raw$RedcapID)[i])
+        }) 
       tryCatch({
         output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
         }, error=function(x){
         fstatus<-T
         print("REDCAP UPLOAD NOT DONE")
-        print(unique(emadata.raw$RedcapID)[i])}) 
+        print(unique(emadata.raw$RedcapID)[i])
+        }) 
       
       if (i==1 & !is.null(output) & !is.null(output.r)){
                 outcome.temp<-output
@@ -589,7 +591,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath=NULL,file
   if (ifupload.e) {
     if (length(outcome.r.temp$registration_redcapid)>1){
     print("Starting to upload updates to RedCap...")
-    result.outcome.r<-redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
+    result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
     if (result.outcome.r$success) {print("DONE")} else {print("SOMETHING WENT WRONG")}
   }else{print("Nothing to upload...closing down...")}}
   return(list(main=outcome.temp,redcapupload=outcome.r.temp))

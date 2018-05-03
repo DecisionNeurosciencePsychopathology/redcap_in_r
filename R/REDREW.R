@@ -190,7 +190,6 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
   }else{anyfailed<-TRUE
   print("Event mapping not loaded")}
   if (fullupdate){
-  redcap.local<-redcap_project$new()
   funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
     if (funbsrc.x$success){
       funbsrc<-funbsrc.x$data
@@ -527,7 +526,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
      lvariname<-c("registration_redcapid","redcap_event_name",lvariname)
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
-     renew<-redcap_read(redcap_uri = input.uri ,token = input.token, fields = lvariname, events = eventname)
+     renew<-REDCapR::redcap_read(redcap_uri = input.uri ,token = input.token, fields = lvariname, events = eventname)
      if (renew$success){
        raw<-renew$data
      }else {stop("Update failed...;_; Try again?")}
