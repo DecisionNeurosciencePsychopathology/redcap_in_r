@@ -1,18 +1,32 @@
 # REDCAP IN R REPOSITORY
 This a project that use R to deal with RedCap data. Although now it might have extended beyond that...
-- REDREW: main functions
-	- New Major Revision (Ver 2.0):  
-		- Refresh data organization method to be similar as EMA; 
-		- Now automator refresh in background every 3 hours
-- AUTOMATOR: automator refresh and back-up functions
-- ECOLOGIST: ema data processing and organizing functions 
-	- New Major Revision (Ver 1.1):  
-		- Introduce new data organization method using RData file. Pretty clean and nice to use;
-		- Now will preprocess data into separate data frame within list structure
-- ADMINISTRATOR: functions that helps speed up administrative tasks
+
+Instead of scripts, now 4 main scripts are consolidated into one package:
+- bsrc:
+	- REDREW: main functions
+		- New Major Revision (Ver 2.0):  
+			- Refresh data organization method to be similar as EMA; 
+			- Now automator refresh in background every 3 hours
+	- AUTOMATOR: automator refresh and back-up functions
+	- ECOLOGIST: ema data processing and organizing functions 
+		- New Major Revision (Ver 1.1):  
+			- Introduce new data organization method using RData file. Pretty clean and nice to use;
+			- Now will preprocess data into separate data frame within list structure
+	- ADMINISTRATOR: functions that helps speed up administrative tasks
+
+Functions in the following are still staying in script because they are not fully tested and functional
 - RETRO: replicating matlab functions that process behavioral data in R
 
-Find changelogs and function description on the top of each script.
+Find changelogs and function description on the first section of each script. For functions that are within the 'bsrc' package, go the 'R' folder to find the actual scripts.
+
+To install the 'bsrc' package, you will need the package 'devtools'
+```
+library("devtools")
+devtools::install_github("DecisionNeurosciencePsychopathology/redcap_in_r")
+objects("package:bsrc")
+```
+**Before use of the package, you will need a profile for each RedCap connection**
+You can use the bsrc.switcher() function to create one
 
 **Required Packages:**
 ```
