@@ -699,10 +699,10 @@ dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
     print(targettype)
     df.x<-df[which(df$Type==targettype),]
     x.j<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID)) +  
-      geom_jitter() + geom_abline(slope=1, intercept=0)+ggtitle(paste(targettype,"Jittered"))
+      geom_jitter() + geom_abline(slope=1, intercept=0.8)+ggtitle(paste(targettype,"Jittered"))
     ggsave(paste(targettype,"jittered.jpeg",sep = "_"),device = "jpeg",plot = x.j,dpi = 300,path = path, height = 8.3, width = 11.7)
     x.g<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID))+
-      stat_smooth(method = "gam")+ggtitle(paste(targettype,"gam"))
+      geom_abline(slope = 1,size = 0.8)+geom_smooth(method = "loess")+ ggtitle(paste(targettype,"Line"))
     ggsave(paste(targettype,"gam.jpeg",sep = "_"),device = "jpeg",plot = x.g,dpi = 300,path = path, height = 8.3, width = 11.7)
     }
 }
