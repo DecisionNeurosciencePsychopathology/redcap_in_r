@@ -260,6 +260,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
 }
 #########Graphing function:
 bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
+  require('ggplot2')
   #Safe guard the plot:
   emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
   
@@ -271,7 +272,7 @@ bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=
     ylab("Percentage")+
     scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
     geom_point()+
-    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
+    ggrepel::geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
   if (output){
   ggsave(paste(Initial,"_EMAProg_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path, height = 8.3, width = 11.7)
   print("Percentage Plot Saved to Working Directory")}
@@ -284,8 +285,8 @@ bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=
     ylab("Percentage")+
     scale_x_date(name="Date",limits = c(startdate+1,NA) ,date_breaks = "2 days")+
     geom_point()+
-    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=actual,label=actual))+
-    geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
+    ggrepel::geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=actual,label=actual))+
+    ggrepel::geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
   if (output){ 
   ggsave(paste(Initial,"_EMAProg_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
   print("Completion (count) Plot Saved to Working Directory")}
@@ -545,12 +546,14 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
         output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath, subreg = subreg, funema = funema)
         output<-output.c$data
         startdate<-output.c$info$startdate
-        enddate<-output.c$info$enddate},error=function(x){
+        enddate<-output.c$info$enddate
+        },error=function(x){
         print("EMA MAIN NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])
         }) 
       tryCatch({
-        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)}, error=function(x){
+        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
+        }, error=function(x){
         print("REDCAP UPLOAD NOT DONE")
         print(unique(emadata.raw$RedcapID)[i])
         }) 
