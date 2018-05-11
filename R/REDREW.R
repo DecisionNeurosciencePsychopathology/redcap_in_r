@@ -106,13 +106,18 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
 ##########################Switcher
 bsrc.switcher<-function(preset=protocol.s,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F){
   #This is used to switch protocols [hard coding lab protocls]
-  if (any(preset %in% c("bsocial","ksocial"))) {
-    switch(preset, "bsocial"={
+  if (any(preset %in% c("bsocial","ksocial","scandb"))) {
+    switch(preset, 
+    "bsocial"={
       protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.b,rdpath=rdpaths$bsocial)
     },
     "ksocial"={
-      protocol<-list(name="bsocial",redcap_uri=input.uri,token=input.token.k,rdpath=rdpaths$ksocial)
-    })
+      protocol<-list(name="ksocial",redcap_uri=input.uri,token=input.token.k,rdpath=rdpaths$ksocial)
+    },
+    "scandb"={
+      protocol<-list(name="scandb",redcap_uri=input.uri,token=input.token.s,rdpath=rdpaths$scandb)
+    }
+    )
   } else if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
     print("constructing new one...")
     protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)

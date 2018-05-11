@@ -14,11 +14,17 @@ finish<-FALSE
 whichtouse<-as.character(Sys.getenv("whichtouse"))
 
 tryCatch({jiazhou.startup(load = F)
-protocol.cur<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
+
 switch(whichtouse,"three" = {
-bsrc.conredcap2(protocol = protocol.cur)
+protocol.b<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
+bsrc.conredcap2(protocol = protocol.b)
+protocol.k<-bsrc.switcher(preset = "ksocial",protocol.cur = T)
+bsrc.conredcap2(protocol = protocol.k)
+protocol.s<-bsrc.switcher(preset = "scandb",protocol.cur = T)
+bsrc.conredcap2(protocol = protocol.s)
 }
 ,"midnight"={
+protocol.cur<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
 curdb<-bsrc.checkdatabase2(protocol.cur,forceupdate = T)
 bsrc.refresh(protocol = protocol.cur,curdb = curdb)
 bsrc.backup(curdb = curdb, protocol = protocol.cur)
