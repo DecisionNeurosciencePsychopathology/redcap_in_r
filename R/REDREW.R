@@ -180,55 +180,55 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
   pathsplit<-strsplit(rdpath,split = "/")[[1]]
   topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
   file.copy(from = rdpath, to = topath, overwrite = T)
+  cur.envir<-bsrc.attachngrab(protocol = protocol, returnas = "envir")
   }else{"Starting new file..."
+    cur.envir<-new.env(parent = emptyenv())
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
-  anyfailed<-FALSE
+  anyfailed.s<-FALSE
+  anyfailed.e<-FALSE
+  anyfailed.d<-FALSE
   funstrc.x<-REDCapR::redcap_metadata_read(redcap_uri = input.uri,token = input.token)
     if (funstrc.x$success){
       funstrc<-funstrc.x$data
-    }else{anyfailed<-TRUE
+    }else{anyfailed.s<-TRUE
       print("Metadata not loaded")}
   funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
-  if (funevent.x$success){
+    if (funevent.x$success){
     funevent<-funevent.x$data
-  }else{anyfailed<-TRUE
+    }else{anyfailed.e<-TRUE
   print("Event mapping not loaded")}
   if (fullupdate){
   funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
     if (funbsrc.x$success){
       funbsrc<-funbsrc.x$data
-    }else{anyfailed<-TRUE
+    }else{anyfailed.d<-TRUE
     print("Main database not loaded")}
   }
-  if (!anyfailed){
-  success<-"TRUE"
-  update.date<-Sys.Date()
-  update.time<-Sys.time()
+  if (!any(anyfailed.s,anyfailed.e,anyfailed.d)){
+  assign("update.date",Sys.Date(),envir = cur.envir)
+  assign("update.time",Sys.time(),envir = cur.envir)
+  assign("status",TRUE,envir = cur.envir)
   }else{
     print("something went wrong, better go check it out.")
     print("will still update successfully loaded parts.")
   }
-  if (!fullupdate) {
-    notfulldb<-list(eventmap=funevent,metadata=funstrc)
-    if (updaterd){
-      list.load<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
-      curdb<-list.load[[1]]
-      funbsrc<-curdb$data
-      assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
-    }
-    if (output) {return(notfulldb)}
+  #New way, use environment:
+  if (!anyfailed.s){
+    assign("metadata",funstrc,envir = cur.envir)
   }
-  
-  if (fullupdate){
-    assign(protocol.n,list(data=funbsrc,metadata=funstrc,eventmap=funevent,success=success,update.date=update.date,update.time=update.time))
-    if (output){
-      str<-paste("return(",protocol.n,")",sep = "")
-      eval(parse(text = str))
-    }
-    if (updaterd){
-      save(list = protocol.n,file = rdpath)}
-    }
+  if (!anyfailed.e){
+    assign("eventmap",funevent,envir = cur.envir)
+  }
+  if (!anyfailed.d){
+    assign("data",funbsrc,envir = cur.envir)
+  }
+  if (updaterd){
+  save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
+  }
+  if (output) {
+    return(cur.envir)
+  }
   }
 ##############################Check Date Base
 bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
@@ -236,16 +236,13 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
   ifrun<-TRUE
   protocol$rdpath->rdpath
   if(file.exists(rdpath)){
-    list.load<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
-    curdb<-list.load[[1]]
-    updated.time<-curdb$update.time
+    curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
+    if (is.null(curdb$updated.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
   if(!forceskip){  
-    if (curdb$success) {
+    if (curdb$status) {
       if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
         print(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
-        reload<-TRUE
-      }
-    }else {print("Something went wrong when loading rdata file...")
+        reload<-TRUE} }else {print("Something went wrong when loading rdata file...")
       ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
       if (!as.logical(ifso)){reload<-T}
       }
