@@ -16,7 +16,7 @@ dnpl.envir2df<-function(x.envir){
 }
 
 dnpl.access2redcap<-function(x,map,eventvariable="redcap_event_name"){
-  if (any(class(x) %in% "data.frame")) stop("x object has to be a data.frame object")
+  if (!any(class(x) %in% "data.frame")) stop("x object has to be a data.frame object")
   as.environment(x)->y.envir
   map[map==""]<-NA
   accu<-new.env(parent = emptyenv())

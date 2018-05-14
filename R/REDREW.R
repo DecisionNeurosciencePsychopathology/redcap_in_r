@@ -240,7 +240,7 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
     curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
     if (is.null(curdb$update.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
   if(!forceskip){  
-    if (curdb$status) {
+    if (curdb$success) {
       if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
         print(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
         reload<-TRUE} }else {print("Something went wrong when loading rdata file...")
