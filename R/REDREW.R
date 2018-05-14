@@ -204,14 +204,15 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
       funbsrc<-funbsrc.x$data
     }else{anyfailed.d<-TRUE
     print("Main database not loaded")}
-  }
+  }else {anyfailed.d<-TRUE}
   if (!any(anyfailed.s,anyfailed.e,anyfailed.d)){
   assign("update.date",Sys.Date(),envir = cur.envir)
   assign("update.time",Sys.time(),envir = cur.envir)
-  assign("status",TRUE,envir = cur.envir)
+  assign("success",TRUE,envir = cur.envir)
   }else{
     print("something went wrong, better go check it out.")
     print("will still update successfully loaded parts.")
+    assign("success",FALSE,envir = cur.envir)
   }
   #New way, use environment:
   if (!anyfailed.s){

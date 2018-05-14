@@ -34,8 +34,9 @@
 #####
 
 ###########################Bi-Weekly Meeting Sheet:
-bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=NA,...){
-  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=NA, curdb=NULL,...){
+  if (is.null(curdb)){
+  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)}
   funbsrc<-curdb$data
   ifrun<-curdb$success
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
