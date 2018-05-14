@@ -413,7 +413,7 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
     argk<-which(metasub$fieldname==x)
     if (metasub$fieldtype[argk] %in% c("dropdown","checkbox","radio")){
       tarstr<-metasub$choice[argk]
-      firstspilt<-strsplit(tarstr,split = "|",fixed = T)[[1]]
+      firstspilt<-strsplit(tarstr,split = " | ",fixed = T)[[1]]
       secondspilt<-strsplit(firstspilt,split = ", ")
       choice.code<-sapply(secondspilt,"[[",1)
       choice.string<-sapply(secondspilt,"[[",2)
