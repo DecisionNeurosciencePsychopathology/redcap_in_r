@@ -237,7 +237,7 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
   protocol$rdpath->rdpath
   if(file.exists(rdpath)){
     curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
-    if (is.null(curdb$updated.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
+    if (is.null(curdb$update.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
   if(!forceskip){  
     if (curdb$status) {
       if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
@@ -247,7 +247,8 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
       if (!as.logical(ifso)){reload<-T}
       }
   
-  }else{print("FORCE SKIP RDATA CHECKS")}
+  }else{print("FORCE SKIP RDATA CHECKS")
+  ifrun<-T}
     }else{print("No such file...reloading")
     reload<-T}
   
