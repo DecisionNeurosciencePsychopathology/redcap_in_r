@@ -166,7 +166,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
     } else {"No such file...."}
 }
 #########################New Ver in DEV
-bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,...) {
+bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F...) {
   if (missing(protocol)) {stop("no protocol specified")}
   if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
   if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
@@ -176,12 +176,12 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     input.token<-protocol$token
     rdpath<-protocol$rdpath
   }
-  if (file.exists(rdpath)) {
-  pathsplit<-strsplit(rdpath,split = "/")[[1]]
-  topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
-  file.copy(from = rdpath, to = topath, overwrite = T)
-  cur.envir<-bsrc.attachngrab(protocol = protocol, returnas = "envir")
-  }else{"Starting new file..."
+  if (file.exists(rdpath) & !newfile) {
+    pathsplit<-strsplit(rdpath,split = "/")[[1]]
+    topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
+    file.copy(from = rdpath, to = topath, overwrite = T)
+    cur.envir<-bsrc.attachngrab(protocol = protocol, returnas = "envir")
+  }else if (newfile | !file.exists(rdpath)) {"Starting new file..."
     cur.envir<-new.env(parent = emptyenv())
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
@@ -189,26 +189,26 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
   anyfailed.e<-FALSE
   anyfailed.d<-FALSE
   funstrc.x<-REDCapR::redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-    if (funstrc.x$success){
-      funstrc<-funstrc.x$data
-    }else{anyfailed.s<-TRUE
-      print("Metadata not loaded")}
+  if (funstrc.x$success){
+    funstrc<-funstrc.x$data
+  }else{anyfailed.s<-TRUE
+  print("Metadata not loaded")}
   funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
-    if (funevent.x$success){
+  if (funevent.x$success){
     funevent<-funevent.x$data
-    }else{anyfailed.e<-TRUE
+  }else{anyfailed.e<-TRUE
   print("Event mapping not loaded")}
   if (fullupdate){
-  funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
+    funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
     if (funbsrc.x$success){
       funbsrc<-funbsrc.x$data
     }else{anyfailed.d<-TRUE
     print("Main database not loaded")}
   }else {anyfailed.d<-TRUE}
   if (!any(anyfailed.s,anyfailed.e,anyfailed.d)){
-  assign("update.date",Sys.Date(),envir = cur.envir)
-  assign("update.time",Sys.time(),envir = cur.envir)
-  assign("success",TRUE,envir = cur.envir)
+    assign("update.date",Sys.Date(),envir = cur.envir)
+    assign("update.time",Sys.time(),envir = cur.envir)
+    assign("success",TRUE,envir = cur.envir)
   }else{
     print("something went wrong, better go check it out.")
     print("will still update successfully loaded parts.")
@@ -225,12 +225,12 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     assign("data",funbsrc,envir = cur.envir)
   }
   if (updaterd){
-  save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
+    save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
   if (output) {
     return(cur.envir)
   }
-  }
+}
 ##############################Check Date Base
 bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
   reload<-FALSE
