@@ -166,7 +166,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
     } else {"No such file...."}
 }
 #########################New Ver in DEV
-bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F...) {
+bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
   if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
