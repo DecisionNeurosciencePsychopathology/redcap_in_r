@@ -420,6 +420,7 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
       x<-data.frame(choice.code,choice.string)
   } else {print(paste("This variable: '",x,"' has a type of [",metasub$fieldtype[argk],"], which is not supported!",sep = ""))}
   })
+  names(xzej)<-variablenames
   if (length(xzej)==1){xzej<-xzej[[1]]}
   return(xzej)
 }
@@ -439,7 +440,7 @@ bsrc.reg.group<-function(x,protocol,reverse=F){
     f.from<-to.x
     f.to<-from.x
   }
-  xt<-mapvalues(x, from = f.from, to = f.to, warn_missing = F)
+  xt<-pylr::mapvalues(x, from = f.from, to = f.to, warn_missing = F)
   return(xt)
 }
 ##############################
@@ -452,7 +453,7 @@ bsrc.reg.race<-function(x,reverse=F){
     f.from<-to.x
     f.to<-from.x
   }
-  xt<-mapvalues(x, from = f.from, to = f.to, warn_missing = F)
+  xt<-pylr::mapvalues(x, from = f.from, to = f.to, warn_missing = F)
   return(xt)
 }
 #Combined use of the following allow extraction of data within EVENT and FORM
