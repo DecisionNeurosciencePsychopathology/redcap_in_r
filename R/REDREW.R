@@ -166,7 +166,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
     } else {"No such file...."}
 }
 #########################New Ver in DEV
-bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
   if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
@@ -176,6 +176,7 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     input.token<-protocol$token
     rdpath<-protocol$rdpath
   }
+  if (!output & updaterd) {
   if (file.exists(rdpath) & !newfile) {
     pathsplit<-strsplit(rdpath,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
@@ -185,6 +186,7 @@ bsrc.conredcap2<-function(rdpath=rdpath.load,protocol=protocol.cur,updaterd=T,ba
     cur.envir<-new.env(parent = emptyenv())
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
+  }
   anyfailed.s<-FALSE
   anyfailed.e<-FALSE
   anyfailed.d<-FALSE
