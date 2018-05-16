@@ -186,7 +186,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     cur.envir<-new.env(parent = emptyenv())
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
-  }
+  } else {cur.envir<-new.env(parent = emptyenv())}
   anyfailed.s<-FALSE
   anyfailed.e<-FALSE
   anyfailed.d<-FALSE
