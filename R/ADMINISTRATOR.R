@@ -187,7 +187,7 @@ bsrc.admin.rppr<-function(){
 newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
 totaln<-length(newconsent$registration_redcapid)
 }
-#################
+################# Future update to include automatic sync
 bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
@@ -204,16 +204,16 @@ bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   emastate$group.num<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
   emastate$`GROUP`<-plyr::mapvalues(emastate$group,from = c("1","2","3","4","88","89"), 
                                     to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
+  emacount<-xtabs(~GROUP+`EMA Status`,emastate)
+  emacount<-addmargins(emacount)
+  
   if (shortlist){
     emastate.s<-emastate
     emastate.s$group.num<-NULL
     emastate.s$status<-NULL
     emastate.s<-emastate.s[-grep("ema_completed__",names(emastate.s))]
-  }
-  emacount<-xtabs(~GROUP+`EMA Status`,emastate)
-  emacount<-addmargins(emacount)
-  
-  return(list(emastatus=emastate,emacount=emacount))
+    return(list(emastatus=emastate.s,emacount=emacount))
+  } else {return(list(emastatus=emastate,emacount=emacount))}
   
   if (length(which(!emastate$status.w %in% c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3")))>0){
     print("REMARKABLE PT:")
