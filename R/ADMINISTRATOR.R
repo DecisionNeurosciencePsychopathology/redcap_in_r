@@ -188,39 +188,45 @@ newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & su
 totaln<-length(newconsent$registration_redcapid)
 }
 #################
-bsrc.emastats<-function(protocol=protocol.cur,...) {
+bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
+  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
   #Get funema:
   funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)
   
   emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
   emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]
   emastate$status[which(is.na(emastate$status))]<-"UNKNOWN"
-  emastate$status.w<-plyr::mapvalues(emastate$status,from = c("ema_completed___ip","ema_completed___2","ema_completed___3","ema_completed___999"), 
-                             to = c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3","UNKNOWN"), warn_missing = F)
-  emastate$`EMA Status`<-plyr::mapvalues(emastate$status,from = c("ema_completed___ip","ema_completed___2","ema_completed___3","ema_completed___999"), 
-                               to = c("IN PROGRESS","COMPELETED","COMPELETED","UNKNOWN"), warn_missing = F)
-  emastate$group<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
+  emastate$`EMA Status FULL`<-plyr::mapvalues(emastate$status,from = c("ema_completed___ip","ema_completed___2","ema_completed___3","ema_completed___999","ema_completed___et"), 
+                                              to = c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3","DID NOT COMPELETE","Early Termination"), warn_missing = F)
+  emastate$`EMA Status`<-emastate$`EMA Status FULL`
+  emastate$`EMA Status`[agrep("COMPLETED",emastate$`EMA Status`)]<-"COMPLETED"
+  emastate$group.num<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
   emastate$`GROUP`<-plyr::mapvalues(emastate$group,from = c("1","2","3","4","88","89"), 
-                              to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
-
-  emacount<-xtabs(~`EMA Status`+GROUP,emastate)
+                                    to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
+  if (shortlist){
+    emastate.s<-emastate
+    emastate.s$group.num<-NULL
+    emastate.s$status<-NULL
+    emastate.s<-emastate.s[-grep("ema_completed__",names(emastate.s))]
+  }
+  emacount<-xtabs(~GROUP+`EMA Status`,emastate)
   emacount<-addmargins(emacount)
   
   return(list(emastatus=emastate,emacount=emacount))
   
-  if (length(which(emastate$status.w=="UNKNOWN"))>0){
+  if (length(which(!emastate$status.w %in% c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3")))>0){
     print("REMARKABLE PT:")
-    for (i in 1:length(emastate$registration_redcapid[which(emastate$status.w=="UNKNOWN")])) {
+    for (i in 1:length(emastate$registration_redcapid[which(!emastate$status.w %in% c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3"))])) {
       print("####################")
-      idinv<-emastate$registration_redcapid[which(emastate$status.w=="UNKNOWN")][i]
+      idinv<-emastate$registration_redcapid[which(!emastate$status.w %in% c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3"))][i]
       print(paste("RedCap ID: ",idinv))
       print(paste("NOTES: ",funema$ema_masnote[match(idinv,funema$registration_redcapid)]))
-      }
     }
+  }
   
 }
+
 ####################
 
 ###########################Data Meeting:
