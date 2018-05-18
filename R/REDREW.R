@@ -266,7 +266,7 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
   if(ifrun & !logicaloutput) {return(curdb)}
   if(logicaloutput) {return(ifrun)}
 }
-###############Connect RedCap db for processing:
+###############Legacy
 bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
   if (missing(uri)) {uri<-'DNPL'
   print("By default, the location is set to Pitt's RedCap.")}

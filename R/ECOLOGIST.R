@@ -56,7 +56,7 @@
 #subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))
 
 #EMA 3 Exclusive Functions; match metricwire user ID to redcap ID
-bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,...) {
+bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
   localmatch<-ema3[which(!is.na(ema3$ema_id) & !duplicated(ema3$ema_id)),grep(paste("User.Id","ema_id",sep = "|"),names(ema3))]
@@ -72,40 +72,48 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,...) {
   print(disrupt)
     #
       for (i in 1:length(disrupt$ema_studyidentifier)) {
-          if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
-            if (length(which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)) > 1) {
-              actualid.try<-localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% localmatch$ema_studyidentifier[which(duplicated(localmatch$ema_studyidentifier))])][!localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% localmatch$ema_studyidentifier[which(duplicated(localmatch$ema_studyidentifier))])] %in% disrupt$registration_redcapid]
+          if (!is.null(envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
+          if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
+            print("Try to grab from previouse matchdb")
+            p.id.try<-matchdb$registration_redcapid[match(disrupt$ema_studyidentifier[i],matchdb$ema_studyidentifier)]
+            if (length(p.id.try)==1){p.id.try->actualid}
+          } else if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
+            actualid.try<-NULL
+            if (length(which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])) > 1) { #if more than 1 match in localmatch, try localmatch duplicate
+              actualid.try<-localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])][which(!localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])] %in% disrupt$registration_redcapid[i])]
               print("Try to grab from localmatch duplicates")
+              print(actualid.try)
               if (length(actualid.try)==1){
               stepone<-TRUE
               actualid.try->actualid
               print("success!")}
-              }else {stepone<-FALSE}
+            }else {stepone<-FALSE}
+            
           if (!stepone){
           print("Try to grab it from RedCap.")
           maybeid<-funema$registration_redcapid[match(disrupt$ema_studyidentifier[i],funema$ema_studyidentifier)]  
-          idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for this person? y/n?   :"))
+          idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for", disrupt$ema_studyidentifier[i] ,"y/n?   :"))
           if (idq=="y"){idq<-TRUE} else (idq<-FALSE)
           if (idq) {maybeid->actualid} else {actualid<-readline(prompt = "What's their actual RedCap ID? : ")}}
-          localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)]<-actualid
-          } else {actualid<-readline(prompt =paste("MetricWire Identifier Has No Match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))
-         localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier)]<-actualid}
+          } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))}
+          localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
       }
   }    
   else {print("NO DISRUPT")}
   localmatch<-localmatch[-which(duplicated(localmatch)),]
+  assign("matchdb",localmatch,envir = envir)
   return(localmatch)
     #
   }
 ############### General Get File
-bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
+bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
     filename<-file.choose()
   }
   tryCatch({
-  emadata.raw<- read.csv(filename, stringsAsFactors=FALSE)}, error=function(x){
-    
+  emadata.raw<- read.csv(filename, stringsAsFactors=FALSE)
+  }, error=function(x){
   }) #find function
   run2<-F
   run3<-F
@@ -135,7 +143,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL){
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("EoD_U"))]<-"EoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c(""))]<-"SetUp"
     emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
-    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema)
+    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,...)
     emadata.raw$RedcapID<-idmatch$registration_redcapid[match(emadata.raw$User_Id, idmatch$ema_studyidentifier)]
     lRedcapID<-unique(emadata.raw$RedcapID)
     emadata.raw$Survey_Started_Date<-as.Date(emadata.raw$Survey_Started_Date)
@@ -443,7 +451,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   return(emadata.nums)
 }
 ################ Loop:
-bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=T, curver.e="3",protocol=protocol.cur,...) {
+bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=T, local=F,curver.e="3",protocol=protocol.cur,envir.load=NULL,...) {
   if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
   if(curver.e=="3" & is.null(file)){filename<-file.choose()}
   if(missing(gpath)) {
@@ -465,14 +473,13 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   emadata.raw.combo<-NULL
   info.combo<-NULL 
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
-  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T, protocol = protocol,... = ...)
+  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = !local, protocol = protocol,... = ...)
   protocol$redcap_uri->input.uri
   protocol$token->input.token
   if (file.exists(rdpath.ema)) {
     envir.load<-invisible(bsrc.attachngrab(rdpath = rdpath.ema,returnas = "envir"))
     fulldata.ema<-envir.load$fulldata.ema
     metadata.ema<-envir.load$metadata.ema
-    allobjects<-objects(envir = envir.load)
     pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
     file.copy(from = rdpath.ema, to = topath, overwrite = T)
@@ -481,7 +488,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
     outcome.r<-fulldata.ema$rdata
     emadata.raw.combo<-fulldata.ema$raw
     info.combo<-fulldata.ema$info
-  }else {allobjects<-c("fulldata.ema","metadata.ema")}
+  }else if (is.null(envir.load)) {envir.load<-new.env(parent = emptyenv())}
   switch(curver.e, 
   "2" = {
   loop.path->path
@@ -526,7 +533,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   },
   "3" = {
     emadata.raw<-NULL
-    emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "3",funema = funema)
+    emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "3",funema = funema,envir=envir.load)
     if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
       completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
       
@@ -588,7 +595,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   if (updatedata & writetofile){
     print("Saving back to file...")
     fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())
-    save(list = allobjects,file = rdpath.ema)
+    assign("fulldata.ema",fulldata.ema,envir=envir.load)
+    save(list = objects(envir.load),file = rdpath.ema,envir = envir.load)
     dnpl.ema.procdb(rdpath = rdpath.ema)
     }
   if (ifupload.e) {
@@ -626,8 +634,8 @@ dnpl.ema.procdb<-function(rdpath=ema.data.rdpath,fulldata.ema=NULL,metadata.ema=
   fulldata.ema$info$status[fulldata.ema$info$duration<21]<-"EARLY-TERMINATION"
   
   fulldata.ema<-dnpl.ema.spiltraw(fulldata.ema = fulldata.ema,metadata.ema = metadata.ema)
-  
-  save(list = allobjects,file = rdpath)
+  assign("fulldata.ema",fulldata.ema,envir=envir.load)
+  save(list = allobjects,file = rdpath,envir = envir.load)
 }
 ############################
 dnpl.ema.spiltraw<-function(fulldata.ema=fulldata.ema,metadata.ema=metadata.ema,getmore.u=NULL,base.n=NULL) {
