@@ -59,7 +59,8 @@
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
-  localmatch<-ema3[which(!is.na(ema3$ema_id) & !duplicated(ema3$ema_id)),grep(paste("User.Id","ema_id",sep = "|"),names(ema3))]
+  localmatch<-ema3[which(!is.na(ema3$ema_id)),grep(paste("User_Id","ema_id",sep = "|"),names(ema3))]
+  localmatch<-localmatch[which(!duplicated(localmatch$User_Id)),]
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
   if (any(duplicated(localmatch$ema_studyidentifier))){
@@ -624,7 +625,7 @@ dnpl.ema.procdb<-function(rdpath=ema.data.rdpath,fulldata.ema=NULL,metadata.ema=
       envir.load<-invisible(bsrc.attachngrab(rdpath = rdpath,returnas = "envir"))
       fulldata.ema<-envir.load$fulldata.ema
       metadata.ema<-envir.load$metadata.ema
-      allobjects<-objects(envir = envir.load)}
+      }
   }
   #Indicate status
   fulldata.ema$info$status<-"UNKNOWN"
@@ -635,7 +636,7 @@ dnpl.ema.procdb<-function(rdpath=ema.data.rdpath,fulldata.ema=NULL,metadata.ema=
   
   fulldata.ema<-dnpl.ema.spiltraw(fulldata.ema = fulldata.ema,metadata.ema = metadata.ema)
   assign("fulldata.ema",fulldata.ema,envir=envir.load)
-  save(list = allobjects,file = rdpath,envir = envir.load)
+  save(list = objects(envir = envir.load),file = rdpath,envir = envir.load)
 }
 ############################
 dnpl.ema.spiltraw<-function(fulldata.ema=fulldata.ema,metadata.ema=metadata.ema,getmore.u=NULL,base.n=NULL) {
