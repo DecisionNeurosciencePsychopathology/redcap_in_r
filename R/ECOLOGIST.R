@@ -63,11 +63,9 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   localmatch<-localmatch[-which(duplicated(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid))),]
   if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
-  if (any(duplicated(localmatch$ema_studyidentifier))){
-    print("HMM,Maybe it's right in another entry?")}
-  if (any(is.na(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))))) 
-  {print("ARGHHHHHH!!! THESE PAIRS DON'T MATCH")
   disrupt<-localmatch[which(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))),]
+  if (length(disrupt$ema_studyidentifier)>0){
+  print("ARGH,THESE PAIRS DON'T MATCH")
   print(disrupt)
     #
       for (i in 1:length(disrupt$ema_studyidentifier)) {
@@ -97,8 +95,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
           } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))}
           localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
       }
-  }    
-  else {print("NO DISRUPT")}
+  }else {print("NO DISRUPT")}
   localmatch<-localmatch[-which(duplicated(localmatch)),]
   assign("matchdb",localmatch,envir = envir)
   return(localmatch)
