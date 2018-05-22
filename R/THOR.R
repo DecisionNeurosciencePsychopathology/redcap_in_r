@@ -96,7 +96,7 @@ thorndike.updaterc<-function(protocol=protocol.cur,index.list=NULL,preset=T,prep
   dbinfo$eventmap$event<-nevent
   uevent<-unique(nevent)
   stu<-as.character(unique(index.list$index.study$study))
-  uform<-dbinfo$eventmap$form[match(map.s$rc,dbinfo$eventmap$event)]
+  uform<-dbinfo$eventmap$form[match(uevent,dbinfo$eventmap$event)]
   #started to create mapping...
   map.s<-data.frame(rc=uevent,thorn=stu[match(uevent,stu)],form=uform)
   map.s$thorn<-as.character(map.s$thorn)
