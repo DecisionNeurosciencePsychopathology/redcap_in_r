@@ -97,7 +97,26 @@ Below are the orgnization for objects within emadata.all.rdata:
 		
 You may use functions in ECOLOGIST.R (found on git) to help navigate this data, currently, the function include:
 ```
-bsrc.ema.progress.graph()  #graph each participant’s progress and their count number 
-dnpl.ema.missinggraph()    #graph missingness on each survey using the $data
-dnpl.ema.meanbyweek()      #calculate each form’s mean completion rate by week
+bsrc::bsrc.ema.progress.graph()  #graph each participant’s progress and their count number 
+bsrc::dnpl.ema.missinggraph()    #graph missingness on each survey using the $data
+bsrc::dnpl.ema.meanbyweek()      #calculate each form’s mean completion rate by week
+```
+
+# README for Thorndike specific code:
+These can only be used with Thorndike (by direct commandline or SSH).
+
+To update RedCap scan database follow 3 steps:
+1, Use start-up function to grab needed info from thorndike:
+```
+thorndike.startup(protocol="scandb",mode="offline")
+#By default the function assign information list "protocol.cur" to global environment, which is on search path for step 3.  
+```
+2, Generate index.list object:
+```
+#Currently only accepts smartfind=T, later will add actual configuration files for higher precision.
+index.list<-bsrc::thorndike.getfuncproclist(rootdir="/Volumes/bek",smartfind=T,dir.pattern="MR_Proc",proc.pattern="*nfsw*.nii.gz",id.pattern="[0-9]{4,6}",mprage.pattern="mprage",mapping=NULL,...)
+```
+3, Update RedCap using default parameters or alter with your own parameters:
+```
+bsrc::thorndike.updaterc(protocol=protocol.cur,index.list=NULL,preset=T,preproc.pattern="preproc", censor=c("120517.bsocial"),upload=T,output=F,...)
 ```
