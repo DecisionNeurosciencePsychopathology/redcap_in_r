@@ -106,6 +106,7 @@ bsrc::dnpl.ema.meanbyweek()      #calculate each form’s mean completion rate b
 These can only be used with Thorndike (by direct commandline or SSH).
 
 To update RedCap scan database follow 3 steps:
+
 1, Use start-up function to grab needed info from thorndike:
 ```
 thorndike.startup(protocol="scandb",mode="offline")
@@ -118,5 +119,6 @@ index.list<-bsrc::thorndike.getfuncproclist(rootdir="/Volumes/bek",smartfind=T,d
 ```
 3, Update RedCap using default parameters or alter with your own parameters:
 ```
+#censor argument will take following pattern in list: id.rcstudy; rcstudy is the RedCap study name. 
 bsrc::thorndike.updaterc(protocol=protocol.cur,index.list=NULL,preset=T,preproc.pattern="preproc", censor=c("120517.bsocial"),upload=T,output=F,...)
 ```
