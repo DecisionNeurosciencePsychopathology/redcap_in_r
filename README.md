@@ -28,9 +28,10 @@ devtools::install_github("DecisionNeurosciencePsychopathology/redcap_in_r")
 objects("package:bsrc")
 ```
 **Before use of the package, you will need a profile for each RedCap connection**
-You can use the bsrc.switcher() function to create one
+You can use the bsrc.switcher(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F) function to create one
 
 **Required Packages:**
+Since now this repo can be loaded as package, the required packages are automatically loaded during installation of 'bsrc'
 ```
 library("data.table")
 library("lubridate")
@@ -58,15 +59,15 @@ You can load these data to your R environment and use them whatever you desire s
 The bsrc.attachngrab() in REDREW.R, will allow you to import the content in the rdata in a more efficient way
 
 - Load them as list:
-	
 ```
-	list.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "list"))
-	curdb<-list.load[[1]]
+list.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "list"))
+curdb<-list.load[[1]]
 ```
+
 - Load them as environment:
 ```
-	envir.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "envir"))
-	objectlist<-object(envir=envir.load)
+envir.load<-invisible(bsrc.attachngrab(rdpath=rdpath,returnas = "envir"))
+objectlist<-object(envir=envir.load)
 ```	
 
 Below are the orgnization for objects within emadata.all.rdata:
