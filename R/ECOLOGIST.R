@@ -97,6 +97,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
       }
   }else {print("NO DISRUPT")}
   localmatch<-localmatch[-which(duplicated(localmatch)),]
+  rownames(localmatch)<-NULL
   assign("matchdb",localmatch,envir = envir)
   return(localmatch)
     #

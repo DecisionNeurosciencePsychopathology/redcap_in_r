@@ -348,8 +348,9 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...
                rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)]))
         if(length(rid)==1){
         idonly<-funbsrc[which(funbsrc$registration_redcapid==rid & funbsrc$redcap_event_name=='enrollment_arm_1'),]
-        #ID, Names, 
-        curage<-as.period(interval(start = as.Date(idonly$registration_dob), end = Sys.Date()))$year
+        #ID, Names,
+        
+        curage<-lubridate::as.period(lubridate::interval(start = as.Date(idonly$registration_dob), end = Sys.Date()))$year
         bsg<-data.frame(idonly$registration_id,idonly$registration_soloffid,idonly$registration_initials,
                         idonly$registration_dob,idonly$registration_consentdate,curage)
         names(bsg)<-c('ID',"Soloffid","Initials","Date of Birth","Consent Date" ,"AgeToday")
