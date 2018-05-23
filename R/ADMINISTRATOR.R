@@ -177,16 +177,10 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
   return(list(Past_Two_Weeks=merged.recent,Next_Two_Month = future))
   }
   else {
-    write.csv(merged.recent, paste(exportpath,"/pasttwoweeks.csv",sep = ""))
-    write.csv(future,paste(exportpath,"/nexttwoweeks.csv",sep=""))
+    writexl::write_xlsx(list(Past_Two_Weeks=merged.recent,Next_Two_Month = future),path = "BS_BIWEEK_REPORT.xlsx")
   }
 }}
-###########################RPPR Report:
-bsrc.admin.rppr<-function(){
 
-newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
-totaln<-length(newconsent$registration_redcapid)
-}
 ################# Future update to include automatic sync
 bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
@@ -227,8 +221,13 @@ bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   
 }
 
-####################
-
+##################
+###########################RPPR Report:
+bsrc.admin.rppr<-function(){
+  
+  newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
+  totaln<-length(newconsent$registration_redcapid)
+}
 ###########################Data Meeting:
 bsrc.datameeting<-function(protocol="bsocial"){
   if(missing(protocol)) {
