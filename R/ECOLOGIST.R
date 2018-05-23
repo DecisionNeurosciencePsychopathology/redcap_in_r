@@ -69,7 +69,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   print(disrupt)
     #
       for (i in 1:length(disrupt$ema_studyidentifier)) {
-          if (!is.null(envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
+          if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
           if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
             print("Try to grab from previouse matchdb")
             p.id.try<-matchdb$registration_redcapid[match(disrupt$ema_studyidentifier[i],matchdb$ema_studyidentifier)]
@@ -115,6 +115,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
   run3<-F
   switch(curver, "2" = {run2<-T}, "3" = {run3<-T})
   if (run2){
+  if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
   variname<-read.csv("variname.csv") #find variname
   variname<-as.character(variname$variname)
   names(emadata.raw)<-as.list(variname)
@@ -338,7 +339,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       currentexp<-paste("test3$ema_completed___",curver,"<-1", sep = "")
       eval(parse(text=currentexp))
       test3$ema_completed___999<-0
-      test3$ema_termdate<-enddate+1
+      test3$ema_termdate<-enddate
       test3$redcap_event_name<-"ema_arm_1"
       test3$prog_emastatus_di<-NA
       }
