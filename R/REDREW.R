@@ -104,7 +104,7 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               raw_text = raw_text))
 }
 ##########################Switcher
-bsrc.switcher<-function(preset=protocol.s,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F){
+bsrc.switcher<-function(preset=NULL,name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F){
   #This is used to switch protocols [hard coding lab protocls]
   if (any(preset %in% c("bsocial","ksocial","scandb"))) {
     switch(preset, 
@@ -166,7 +166,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
     } else {"No such file...."}
 }
 #########################New Ver in DEV
-bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
   if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
@@ -177,6 +177,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     rdpath<-protocol$rdpath
   }
   if (!output & updaterd) {
+  if (!online) {
   if (file.exists(rdpath) & !newfile) {
     pathsplit<-strsplit(rdpath,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
@@ -186,6 +187,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     cur.envir<-new.env(parent = emptyenv())
     allobjects<-c(protocol.n)
     fullupdate<-TRUE}
+  } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
   anyfailed.s<-FALSE
   anyfailed.e<-FALSE
@@ -226,20 +228,21 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
   if (!anyfailed.d){
     assign("data",funbsrc,envir = cur.envir)
   }
-  if (updaterd){
+  if (updaterd & !online){
     save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
-  if (output) {
+  if (output | online) {
     return(cur.envir)
   }
 }
 ##############################Check Date Base
-bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
+bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
   reload<-FALSE
   ifrun<-TRUE
   protocol$rdpath->rdpath
+  if(!online){
   if(file.exists(rdpath)){
-    curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "list"))
+    curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "envir"))
     if (is.null(curdb$update.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
   if(!forceskip){  
     if (curdb$success) {
@@ -252,13 +255,22 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, forceupdate=F
   
   }else{print("FORCE SKIP RDATA CHECKS")
   ifrun<-T}
-    }else{print("No such file...reloading")
+  }else{print("No such file...reloading")
     reload<-T}
+  } else {print("Online mode is on")
+    reload<-F
+    online<-T
+    forceupdate<-F}
   
   if (reload | forceupdate) {
-    bsrc.conredcap2(protocol = protocol,... = ...)
-    bsrc.checkdatabase2(protocol = protocol,forceupdate = F)
+    bsrc.conredcap2(protocol = protocol,online=online,... = ...)
+    bsrc.checkdatabase2(protocol = protocol,forceupdate = F,...)
   }else {ifrun<-TRUE}
+  
+  if (online) {
+    curdb<-bsrc.conredcap2(protocol = protocol,online=online,... = ...)
+    ifrun<-TRUE
+  }
   
   if (glob.release) {
     bsrc.globalrelease(skipcheck = T)
