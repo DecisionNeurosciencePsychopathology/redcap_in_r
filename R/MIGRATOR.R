@@ -44,4 +44,52 @@ dnpl.access2redcap<-function(x,map,eventvariable="redcap_event_name"){
   return(z)
 }
 
+son.getidmap<-function(ptc.from=son2,idfield.from="subject_id",idfield.to="otherid_1",data.from=NULL,sonfilter=T) {
+  if (is.null(data.from)) {
+    data.from<-bsrc.checkdatabase2(protocol = ptc.from,online = T)
+  }
+  from.data<-data.from$data
+  data.idfields<-from.data[,c(idfield.from,idfield.to)]
+  data.idfields[data.idfields==""]<-NA
+  names(data.idfields)<-c("idfield.from","idfield.to")
+  data.idfields<-na.omit(data.idfields)
+  #Verify so that >900 or not even a number will not survive
+  if (sonfilter) {
+    data.idfields<-data.idfields[-which(suppressWarnings(unlist(lapply(sapply(strsplit(data.idfields$idfield.to,split = "_"),"[[",2), function(x) {
+      as.numeric(x)->x
+      if (!is.na(x)){if(x>900) {x<-NA}}
+      is.na(x)
+    })))),]
+  }
+  rownames(data.idfields)<-NULL
+  return(data.idfields)
+}
+
+son.whichvisit<-function(ptc.from=son2,data.from=NULL){
+  if (is.null(data.from)) {
+    data.from<-bsrc.checkdatabase2(protocol = ptc.from,online = T)
+  }
+  idmatch<-data.from$data[,c("record_id","subject_id")]
+  idmatch[idmatch==""]<-NA
+  na.omit(idmatch)->idmatch
+  data.from$data[,c("record_id","redcap_event_name","med_type")]->working
+  working[grep("Plac",working$med_type),]->working.f
+  working.f[working.f==""]<-NA
+  merge(working.f,idmatch,all = T,by.x = "record_id", by.y = "record_id")->working.f
+  return(working.f)
+}
+
+son.getideventmap<-function(ptc.from=NULL,data.from=NULL,...){
+  if (is.null(data.from)) {
+    data.from<-bsrc.checkdatabase2(protocol = ptc.from,online = T)
+  }
+  id<-son.getidmap(data.from = data.from,...)
+  working.f<-son.whichvisit(data.from = data.from,...)
+  merge(id,working.f,all = T,by.x = "idfield.from", by.y = "subject_id")->id.map
+  f.id.map<-na.omit(id.map)
+  return(f.id.map)
+}
+
+
+
 

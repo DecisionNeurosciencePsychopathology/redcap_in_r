@@ -455,8 +455,9 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   outcome.r<-NULL
   emadata.raw.combo<-NULL
   info.combo<-NULL 
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
+  #subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
   funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = !local, protocol = protocol,... = ...)
+  subreg<-bsrc.getform(formname = c("record_registration","progress_check"),grabnewinfo = !local, protocol = protocol,... = ...)
   protocol$redcap_uri->input.uri
   protocol$token->input.token
   if (file.exists(rdpath.ema)) {

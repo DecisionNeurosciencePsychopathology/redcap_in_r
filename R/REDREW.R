@@ -599,6 +599,21 @@ bsrc.getidmatchdb<-function(db,idfield="ID",protocol=protocol.cur,...) {
   return(db)
   }else stop(";_;")
 }
+##########################Working progress
+dnpl.mappingtransfer<-function(map,spiltsign="."){
+  getnthobject<-function(x,n) {
+    sapply(x,"[[",n)
+  }
+  internmap<-data.frame(direction=getnthobject(strsplit(names(map),split = spiltsign,fixed = T),1),
+                        dig=getnthobject(strsplit(names(map),split = spiltsign,fixed = T),2),
+                        event=getnthobject(strsplit(names(map),split = spiltsign,fixed = T),3))
+  cur.envir<-new.env(parent = emptyenv())
+  for (i in unqiue(internmap$dig)) {
+    rownames(internmap[internmap$dig==i])->rownum.x
+    map[as.numeric(rownum.x)]->newmap
+  }
+}
+
 
 ########################## Match MericWire Identifier to df
 bsrc.getmwidentifier<-function(db,only=F,funbsrc=NULL,protocol = protocol.cur, ...) {
