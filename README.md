@@ -13,7 +13,7 @@ Instead of scripts, now 4 main scripts are consolidated into one package:
 			- Introduce new data organization method using RData file. Pretty clean and nice to use;
 			- Now will preprocess data into separate data frame within list structure
 	- ADMINISTRATOR: functions that helps speed up administrative tasks
-	- MIGRATOR: functions for migrating data from access 
+	- MIGRATOR: functions for migrating data from access; as well as from redcap to redcap.
 	- THOR: codes specifically deals with contents on thorndike
 
 Functions in the following are still staying in script because they are not fully tested and functional
