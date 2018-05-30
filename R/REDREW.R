@@ -346,8 +346,10 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
-bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...){
+bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",printout=T,curdb=NULL,...){
+  if (is.null(curdb)){
   curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
+  }
   ifrun<-curdb$success
   if (ifrun){
     funbsrc<-curdb$data
@@ -366,7 +368,7 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...
         bsg<-data.frame(idonly$registration_id,idonly$registration_soloffid,idonly$registration_initials,
                         idonly$registration_dob,idonly$registration_consentdate,curage)
         names(bsg)<-c('ID',"Soloffid","Initials","Date of Birth","Consent Date" ,"AgeToday")
-        if (output==T){
+        if (printout==T){
         print(as.character('======================'))
         print(bsg)}
         }
@@ -378,23 +380,20 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",output=T,...
 }
 ####Find duplicate RedCap IDs
 bsrc.findduplicate <- function(protocol = protocol.cur) {
-  ifrun<-bsrc.checkdatabase2(protocol = protocol)
-  if (ifrun){
-    curdb<-bsrc.checkngrab(protocol = protocol)
-    funbsrc<-curdb$data    
-  
+  curdb<-bsrc.checkdatabase2(protocol = protocol)
+  funbsrc<-curdb$data
   dpqid<-data.frame()
     for (i in 1:length(unique(funbsrc$registration_soloffid)) ) {
       tryCatch({
     idq<-unique(funbsrc$registration_soloffid)[i]
-    invisible(capture.output(krz<-bsrc.getdemo(id=idq,output = F)))
+    invisible(capture.output(krz<-bsrc.getdemo(id=idq,printout = F,curdb=curdb)))
     if(length(krz)>1){print(idq)
-      print(krz)}
+      print(krz)
+      print(i)}
      },error=function(x){})
-    print(i)
       }
     print("DONE")
-}}
+}
 ################# Universal Function to deal with checkbox items:
 bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collapse=",",...) {
   raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
@@ -415,7 +414,7 @@ bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collap
   else {return(list(Checkbox_text=x$knxmncua,Checkbox_list=x$xudjfnx,Checkbox_ifmultiple=x$vximnucj))}
 }
 ####### get choice mapping and its list varient
-bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",type="redcap",protocol=protocol.cur,...){
+bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
   if (is.null(variablenames)){stop("No variable name provided. Give me at least one name please!")}
   if (is.null(metadata)){
   curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
@@ -473,7 +472,7 @@ bsrc.reg.race<-function(x,reverse=F){
 }
 #Combined use of the following allow extraction of data within EVENT and FORM
 ############################
-#Function to get all data of given event: (Ver 2 ready)
+#Function to get all data of given event:  #Get form names and then use get form have better flexiblity
 bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,whivarform="default",nocalc=T,subreg=F,mod=F,aggressivecog=1,...){
   if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)}
   funbsrc<-curdb$data
@@ -518,8 +517,8 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,whivarform="d
   }
 }
 #####################################
-#Functions to get all data from given forms: (Ver. 2.0 Ready)
-bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,curdb = NULL,...) {
+#Functions to get all data from given forms: 
+bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,res.event=NULL,curdb = NULL,...) {
   if (is.null(curdb)) {
   if (grabnewinfo) {
   curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
@@ -541,12 +540,14 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
   }
   if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
    if (grabnewinfo) {print("Grab updated data from RedCap.")
-     protocol$redcap_uri->input.uri
-     protocol$token->input.token
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
      lvariname<-c("registration_redcapid","redcap_event_name",lvariname)
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
-     renew<-REDCapR::redcap_read(redcap_uri = input.uri ,token = input.token, fields = lvariname, events = eventname)
+      if (!is.null(res.event)) {
+        #New feature: event restriction; for better subsetting when doing multiple forms
+        eventname<-eventname[which(eventname %in% res.event)]
+      }
+     renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = lvariname, events = eventname)
      if (renew$success){
        raw<-renew$data
      }else {stop("Update failed...;_; Try again?")}
@@ -554,6 +555,10 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
      raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+     if (!is.null(res.event)) {
+       #New feature: event restriction; for better subsetting when doing multiple forms
+       eventname<-eventname[which(eventname %in% res.event)]
+     }
      raw<-raw[which(raw$redcap_event_name %in% eventname),]
    }
    tempch<-funstrc[which(funstrc$form_name %in% formname),]

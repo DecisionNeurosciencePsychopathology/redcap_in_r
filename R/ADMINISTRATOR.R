@@ -31,8 +31,10 @@
 # Break down by group; use interaction() better
 # NEW, EMA, MRI
 
-#####
-
+######Percent function
+percent <- function(x, digits = 2, format = "f", ...) {
+  paste0(formatC(100 * x, format = format, digits = digits, ...), "%")
+}
 ###########################Bi-Weekly Meeting Sheet:
 bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=NA, curdb=NULL,...){
   if (is.null(curdb)){
@@ -366,6 +368,7 @@ bsrc.irb.numsum<-function() {
 
 
 if (FALSE) {
+  
 opu$registration_initials <- paste(toupper(substr(opu$`First Name`,0,1)),toupper(substr(opu$`Last Name`,0,3)))
 opu$registration_initials[which(opu$registration_initials=="NA NA")]<-"NA"
 odz$registration_redcapid<-idmatch$redcapid[match(odz$ID,idmatch$soloffid)]
@@ -449,6 +452,46 @@ qplot (test$month,geom="histogram")
 ###Edu###
 funbsrc$demo_eduyears
 which(!is.na(funbsrc$demo_eduyears))
+
+
+#######Death data pie chart code:
+
+
+
+deathdata$DeathCat.words<-plyr::mapvalues(deathdata$`Death Category`,from = 1:7, 
+                                          to = c("Cardiovascular/Respiratory Related",
+                                                 "Cancer",
+                                                 "Dementia",
+                                                 "Other",
+                                                 "Suicide",
+                                                 "Suicide",
+                                                 "Accidental Death"))
+
+as.data.frame(table(deathdata$DeathCat.words))->deathcat.df
+names(deathcat.df)<-c("Death Category","Proportions")
+deathcat.df$`Death Category`<-paste(deathcat.df$`Death Category`," n=[",deathcat.df$Proportions,"]",sep = "")
+
+
+ggplot(deathcat.df, aes(x="", y=Proportions, fill=`Death Category`))+
+  ggtitle("Proportions of Death by Reported Cause")+
+  geom_bar(stat = "identity")+
+  coord_polar(theta = "y")+
+  xlab("")+
+  #scale_fill_brewer(palette="Set2")+
+  scale_fill_grey()+
+  theme(axis.text.x=element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid  = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0.5))+
+  geom_text(aes(label = percent(deathcat.df$Proportions/sum(deathcat.df$Proportions),digits = 0)), size=5, position = position_stack(vjust = 0.5))+
+  labs(caption = "Other includes all other deaths by natural causes, such as sepsis, multiorgan failure, DM, etc.
+       Suicides include 5 confirmed deaths by suicide and 4 strongly suspected suicides (i.e. drug overdose but not explicitly listed as suicide on death certificate).
+       Accidental death includes car accident.")
+
+
+
 
 
 
