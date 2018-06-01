@@ -171,27 +171,31 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
         transfer.from.c$record_id<-record.id.to
         #Temporarily fixed, see brain for better solution:
         transfer.from.c$redcap_event_name<-s.event
-        #Maybe do a check up before uploading everything. 
+        #Maybe do a check up before uploading everything. \
+        if (is.null(functioncall)){do.call(functioncall,args = list(transfer.from.c))}
         if (upload) {
-          #REDCapR::redcap_write(transfer.from.c,redcap_uri = ptc.to$redcap_uri,token = ptc.to$token)
+          REDCapR::redcap_write(transfer.from.c,redcap_uri = ptc.to$redcap_uri,token = ptc.to$token)
         } 
-      } #End Loop
+        if (output) {
+          assign(interaction(from.id,to.id),transfer.from.c,envir = envir.ept)
+        }
+      } #End Event Loop 
     }else {
       print("Nothing to upload...next person...")
-    }
-  } 
+    } # End if length check
+  } # End subject loop
+  
+  if (output) {
+    return(envir.ept)
+  }
   
   #Step Checking to make sure:
-  if (length()>0 | bypass) {
-    
-    
-  } else if (length()==0) {print("nothing to upload at all...wasting my time...argh...") 
-    pass<-false} else if (bypass) {"Bypassed checking procedure...risk of data contemedation is possible."}
-  
-  
-  
-  
-  
+  #if (length()>0 | bypass) {
+  #  
+  #  
+  #} else if (length()==0) {print("nothing to upload at all...wasting my time...argh...") 
+  # pass<-false} else if (bypass) {"Bypassed checking procedure...risk of data contemedation is possible."}
+
 }
 
 
