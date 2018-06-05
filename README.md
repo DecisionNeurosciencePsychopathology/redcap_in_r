@@ -28,10 +28,18 @@ devtools::install_github("DecisionNeurosciencePsychopathology/redcap_in_r")
 objects("package:bsrc")
 ```
 **Before use of the package, you will need a profile for each RedCap connection**
-You can use the bsrc.switcher(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F) function to create one
-
+You can use the following function to create one using necessary information:
+```
+bsrc.switcher(name=NULL,      #Any name you wish to give it to the profile, just easy way to identify
+	      redcap_uri=NULL,#RedCap URL for the redcap system *required
+	      token=NULL,     #RedCap token.                    *required
+	      rdpath=NULL,    #local .rdata path, let it remain NULL if wish to use fully online mode
+	      protocol.cur=F  #do not use global variable protocol.cur to generate profile
+	      ) 
+```
 **Required Packages:**
 Since now this repo can be loaded as package, the required packages are automatically loaded during installation of 'bsrc'
+But here's a list of the packages:
 ```
 library("data.table")
 library("lubridate")
