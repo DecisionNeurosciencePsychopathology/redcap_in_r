@@ -618,8 +618,6 @@ dnpl.mappingtransfer<-function(map,spiltsign="."){
     map[as.numeric(rownum.x)]->newmap
   }
 }
-
-
 ########################## Match MericWire Identifier to df
 bsrc.getmwidentifier<-function(db,only=F,funbsrc=NULL,protocol = protocol.cur, ...) {
   if (is.null(curdb)){
@@ -654,10 +652,32 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
   return(df)  
 }
 
+########################## function call
+dnpl.dffunctioncall<-function(lfunc.object=list(
+                                              list(call=NULL, #either this function(x){} or this "function"
+                                                   argument=list(x=NULL,
+                                                                 y=NULL)
+                                                   )
+                                              ), envir=parent.env()) {
+  
+  lapply(lfunc.object, function(x) {print(x)
+  if (class(x$call)=="function") {
+    mode=FALSE
+  } else if (class(x$functionname)=="character") {
+    mode=TRUE
+  }
+  do.call(x$call,args = x$argument,quote = FALSE,envir = envir)
+  })
+} 
+
+lfunc.object=list(list(call=max,argument=list(numtest),functionname="max"))
+
+
+
 
 ###############################
 ####### IN DEVELOPMENT ########
-###############################fd
+###############################
 if (FALSE){
 
 bsrc.process.race<-function(odk,Race) {

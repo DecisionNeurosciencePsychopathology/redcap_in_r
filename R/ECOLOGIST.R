@@ -626,6 +626,7 @@ dnpl.ema.infochange<-function(fulldata.ema=fulldata.ema){
   fulldata.ema$info$status[fulldata.ema$info$duration==21]<-"COMPLETED"
   fulldata.ema$info$status[fulldata.ema$info$duration>21]<-"EXCESSIVE"
   fulldata.ema$info$status[fulldata.ema$info$duration<21]<-"EARLY-TERMINATION"
+  fulldata.ema$info$end_completion_rate<-fulldata.ema
   return(fulldata.ema)
 }
 ############################
@@ -681,7 +682,7 @@ dnpl.ema.meanbyweek<-function(fulldata.ema=fulldata.ema){
     if (length(agrep("*%",x))>0) {
       x<-as.numeric(sapply(strsplit(x,split = " %"),"[[",1))
     } else {x<-as.numeric(x)}
-    mean(na.omit(x))})
+    mean(na.omit(x))})fulldata.ema$pdata$
   y<-as.data.frame(y)
   ls.y<-strsplit(rownames(y),split = "_")
   y$type<-sapply(ls.y, "[[",3)

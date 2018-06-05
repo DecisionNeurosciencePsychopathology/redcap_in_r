@@ -92,7 +92,8 @@ son.getideventmap<-function(ptc.from=NULL,data.from=NULL,...){
 
 dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,map=NULL,
                                   trigger.a=NULL,trigger.b=NULL,
-                                  data.from=NULL,data.to=NULL,idvariable="record_id",
+                                  data.from=NULL,data.to=NULL,idvariable.from="record_id",
+                                  idvariable.to=idvariable.from,
                                   overwrite=F,bypass=F,functioncall=NULL,...) {
   #This function is used for transfer data 
   if (is.null(ptc.from) | is.null(ptc.to)) {stop("Need both protocol objects")}
@@ -108,9 +109,9 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
     data.to<-bsrc.checkdatabase2(protocol = ptc.to,online = T)
   }
   #Generalizing function:
-  colnames(data.from$data)[grep(idvariable,names(data.from$data))]<-"record_id"
-  colnames(data.to$data)[grep(idvariable,names(data.to$data))]<-"record_id"
-  colnames(idmap)[grep(idvariable,names(idmap))]<-"record_id"
+  colnames(data.from$data)[grep(idvariable.from,names(data.from$data))]<-"record_id"
+  colnames(data.to$data)[grep(idvariable.from,names(data.to$data))]<-"record_id"
+  colnames(idmap)[grep(idvariable.from,names(idmap))]<-"record_id"
   
   #We will use person loops to ensure it always checks for completion before uploading
   map->map.backup
@@ -169,10 +170,15 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
         #transfer.from.a[which(transfer.from.a$redcap_event_name==s.event),]->transfer.from.b
         transfer.from.a[which(transfer.from.a$record_id==id),]->transfer.from.c
         transfer.from.c$record_id<-record.id.to
-        #Temporarily fixed, see brain for better solution:
         transfer.from.c$redcap_event_name<-s.event
-        #Maybe do a check up before uploading everything. \
+        
+        #Call for additional function if needed:
         if (is.null(functioncall)){do.call(functioncall,args = list(transfer.from.c))}
+        #Change ID variable back to what they are supposed to be:
+        colnames(data.from$data)[grep("record_id",names(data.from$data))]<-idvariable.to
+        colnames(data.to$data)[grep("record_id",names(data.to$data))]<-idvariable.to
+        colnames(idmap)[grep("record_id",names(idmap))]<-idvariable.to
+        
         if (upload) {
           REDCapR::redcap_write(transfer.from.c,redcap_uri = ptc.to$redcap_uri,token = ptc.to$token)
         } 
