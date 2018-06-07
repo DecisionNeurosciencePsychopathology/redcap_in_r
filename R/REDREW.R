@@ -653,25 +653,27 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
 }
 
 ########################## function call
-dnpl.dffunctioncall<-function(lfunc.object=list(
-                                              list(call=NULL, #either this function(x){} or this "function"
-                                                   argument=list(x=NULL,
-                                                                 y=NULL)
-                                                   )
-                                              ), envir=parent.env()) {
-  
-  lapply(lfunc.object, function(x) {print(x)
-  if (class(x$call)=="function") {
-    mode=FALSE
-  } else if (class(x$functionname)=="character") {
-    mode=TRUE
-  }
-  do.call(x$call,args = x$argument,quote = FALSE,envir = envir)
-  })
-} 
 
-lfunc.object=list(list(call=max,argument=list(numtest),functionname="max"))
-
+# dnpl.dffunctioncall<-function(lfunc.object=list(
+#                                               list(call=NULL, #either this function(x){} or this "function"
+#                                                    argument=list(x=NULL,
+#                                                                  y=NULL)
+#                                                    )
+#                                               ), envir=parent.env()) {
+#   
+#   lapply(lfunc.object, function(x) {print(x)
+#   if (class(x$call)=="function") {
+#     mode=FALSE
+#   } else if (class(x$functionname)=="character") {
+#     mode=TRUE
+#   }
+#   do.call(x$call,args = x$argument,quote = FALSE,envir = envir)
+#   lfunc.object=list(list(call=max,argument=list(numtest),functionname="max"))
+#   })
+# } 
+# 
+# 
+# 
 
 
 

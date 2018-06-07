@@ -90,6 +90,7 @@ son.getideventmap<-function(ptc.from=NULL,data.from=NULL,...){
   return(f.id.map)
 }
 
+
 dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,map=NULL,
                                   trigger.a=NULL,trigger.b=NULL,
                                   data.from=NULL,data.to=NULL,idvariable.from="record_id",

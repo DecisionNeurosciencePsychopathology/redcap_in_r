@@ -592,6 +592,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   return(list(main=outcome.temp,redcapupload=outcome.r.temp))
 }
 ################################
+#PENDING DX TOOL FOR PT
+#############################
 dnpl.ema.updatevariref<-function(filename=NULL){
   if (is.null(filename)){
     print("Please choose a file...")
@@ -626,7 +628,8 @@ dnpl.ema.infochange<-function(fulldata.ema=fulldata.ema){
   fulldata.ema$info$status[fulldata.ema$info$duration==21]<-"COMPLETED"
   fulldata.ema$info$status[fulldata.ema$info$duration>21]<-"EXCESSIVE"
   fulldata.ema$info$status[fulldata.ema$info$duration<21]<-"EARLY-TERMINATION"
-  fulldata.ema$info$end_completion_rate<-fulldata.ema
+  endtarget<-merge(aggregate(date ~ redcapID + Type,data=fulldata.ema$pdata[which(fulldata.ema$pdata$Type=="Total"),], max),fulldata.ema$pdata,all.x=TRUE)
+  fulldata.ema$info$completion_rate<-endtarget$per[match(fulldata.ema$info$RedcapID,endtarget$redcapID)]
   return(fulldata.ema)
 }
 ############################
@@ -676,26 +679,35 @@ dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
   }
 }
 ###############################
-dnpl.ema.meanbyweek<-function(fulldata.ema=fulldata.ema){
-  y<-apply(fulldata.ema$rdata[grep("emapg_per_",names(fulldata.ema$rdata))], 2, function(x) {
+dnpl.ema.statsbyweek<-function(fulldata.ema=fulldata.ema){
+  yz<-apply(fulldata.ema$rdata[grep("emapg_per_",names(fulldata.ema$rdata))], 2, function(x) {
     x<-na.omit(x)
     if (length(agrep("*%",x))>0) {
       x<-as.numeric(sapply(strsplit(x,split = " %"),"[[",1))
     } else {x<-as.numeric(x)}
-    mean(na.omit(x))})fulldata.ema$pdata$
-  y<-as.data.frame(y)
-  ls.y<-strsplit(rownames(y),split = "_")
-  y$type<-sapply(ls.y, "[[",3)
-  y$time<-sapply(ls.y, "[[",4)
-  y<-reshape(y,direction = "wide",idvar = "type")
-  rownames(y)<-y$type
-  y$type<-NULL
-  names(y)<-sapply(strsplit(names(y),split = ".", fixed = T),"[[",2)
-  y$mean<-apply(y, 1, mean)
-  y.ex<-apply(y, 2, mean)
-  y.x<-rbind(y,y.ex)
-  rownames(y.x)<-c(rownames(y),"mean")
-  return(y.x)
+    summary(na.omit(x))})
+  #fulldata.ema$pdata$
+  
+  final<-list()
+  for (i in 1:length(rownames(yz))) {
+    y<-yz[i,]
+    typename<-rownames(yz)[i]
+    y<-as.data.frame(y)
+    ls.y<-strsplit(rownames(y),split = "_")
+    y$type<-sapply(ls.y, "[[",3)
+    y$time<-sapply(ls.y, "[[",4)
+    y<-reshape(y,direction = "wide",idvar = "type")
+    rownames(y)<-y$type
+    y$type<-NULL
+    names(y)<-sapply(strsplit(names(y),split = ".", fixed = T),"[[",2)
+    #y$mean<-apply(y, 1, mean)
+    #y.ex<-apply(y, 2, mean)
+    #y.x<-rbind(y,y.ex)
+    #rownames(y.x)<-c(rownames(y),"rownames")
+    final[[typename]]<-y
+  }
+
+  return(final)
 }
 ################################
 ################Ver 2: Intergrated main and redcapupload (Single; Legacy)
@@ -709,3 +721,4 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
 #####################
 ########END##########
 #####################
+
