@@ -190,7 +190,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     emadata$Total<-as.numeric(emadata$BoD)+as.numeric(emadata$DoD)+as.numeric(emadata$EoD)
     #Generate Expectation Grid:
     lengthofema<-21
-    startdate<-as.Date(funema$ema_setuptime[which(funema$registration_redcapid==RedcapID & funema$ema_setuptime!="")])
+    startdate<-as.Date(funema$ema_setuptime[which(funema$registration_redcapid == RedcapID & funema$ema_setuptime!="")])
     enddate<-startdate+lengthofema
     
     emaseqdate<-seq.Date(from=startdate,to=enddate,by="days")
@@ -434,7 +434,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   return(emadata.nums)
 }
 ################ Loop:
-bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=T, local=F,curver.e="3",protocol=protocol.cur,envir.load=NULL,...) {
+bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=TRUE, local=F,curver.e="3",protocol=protocol.cur,envir.load=NULL,...) {
   if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
   if(curver.e=="3" & is.null(file)){filename<-file.choose()}
   if(missing(gpath)) {
@@ -517,7 +517,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   },
   "3" = {
     emadata.raw<-NULL
-    emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "3",funema = funema,envir=envir.load)
+    emadata.raw<-bsrc.ema.getfile(filename = filename,curver = "3",funema = funema,envir=envir.load)
     if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
       completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
       
@@ -549,9 +549,13 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
         print(unique(emadata.raw$RedcapID)[i])
         }) 
       
-      if (i==1 & !is.null(output) & !is.null(output.r)){
-                outcome.temp<-output
-                outcome.r.temp<-output.r}
+      #if (i==1 & !is.null(output) & !is.null(output.r)){
+      #          outcome.temp<-output
+      #          outcome.r.temp<-output.r}
+      if ((!exists("outcome.temp") | !exists("outcome.r.temp")) & !is.null(output) & !is.null(output.r))  {
+          outcome.temp<-output
+          outcome.r.temp<-output.r
+      }
         if (!is.null(output)) {
         print("MERGING MAIN")
         outcome.temp<-merge(outcome.temp,output,all=T)
@@ -588,7 +592,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
     print("Starting to upload updates to RedCap...")
     result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
     if (result.outcome.r$success) {print("DONE")} else {print("SOMETHING WENT WRONG")}
-  }else{print("Nothing to upload...closing down...")}}
+    }else{print("Nothing to upload...closing down...")}
+  } else {print("ifupload.e arugement is FALSE, no uploading")}
   return(list(main=outcome.temp,redcapupload=outcome.r.temp))
 }
 ################################
