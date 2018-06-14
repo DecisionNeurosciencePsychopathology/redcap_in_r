@@ -168,7 +168,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   
   if (ifrun){
     #Read EMA Data:
-    assign("table.emadata",data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class))
+    table.emadata<-data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
     names(table.emadata)<-c("redcapID","date","Type")
     table.emadata<-table.emadata[order(table.emadata$Type,table.emadata$date),]
     table.emadata[,count:=seq_len(.N), by=Type]
@@ -523,7 +523,9 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
       
       emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
       print(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
-      }
+    }
+    outcome.r.temp<-data.frame()
+    outcome.temp<-data.frame()
     for (i in 1:length(unique(emadata.raw$RedcapID))) {
       print("##########################")
       print(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
@@ -549,20 +551,24 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
         print(unique(emadata.raw$RedcapID)[i])
         }) 
       
-      #if (i==1 & !is.null(output) & !is.null(output.r)){
-      #          outcome.temp<-output
-      #          outcome.r.temp<-output.r}
-      if ((!exists("outcome.temp") | !exists("outcome.r.temp")) & !is.null(output) & !is.null(output.r))  {
-          outcome.temp<-output
-          outcome.r.temp<-output.r
-      }
+      # if (i==1){
+      #           outcome.temp<-data.frame(date=NA,Type=NA,redcapID=NA,actual=NA,expectation=NA,
+      #                                    diff=NA,porp=NA,per=NA)
+      #           outcome.r.temp<-data.frame()
+      #           }
+      if (!is.null(output)  & length(outcome.temp)==0){
+        outcome.temp<-output}
+      if (!is.null(output.r) & length(outcome.r.temp)==0)  {
+           outcome.r.temp<-output.r
+       }
         if (!is.null(output)) {
         print("MERGING MAIN")
-        outcome.temp<-merge(outcome.temp,output,all=T)
+            outcome.temp<-merge(outcome.temp,output,all = T)
+
         }
         if (!is.null(output.r)) {
         print("MERGING REDCAP")
-        outcome.r.temp<-merge(outcome.r.temp,output.r,all=T)
+            outcome.r.temp<-merge(outcome.r.temp,output.r,all = T)
         }
       if (!is.null(output.r)) {  
       if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
