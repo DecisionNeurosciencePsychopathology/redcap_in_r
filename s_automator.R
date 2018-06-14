@@ -16,15 +16,22 @@ whichtouse<-as.character(Sys.getenv("whichtouse"))
 tryCatch({jiazhou.startup(load = F)
 
 switch(whichtouse,"three" = {
-protocol.b<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
-bsrc.conredcap2(protocol = protocol.b)
-protocol.k<-bsrc.switcher(preset = "ksocial",protocol.cur = T)
-bsrc.conredcap2(protocol = protocol.k)
-protocol.s<-bsrc.switcher(preset = "scandb",protocol.cur = T)
-bsrc.conredcap2(protocol = protocol.s)
+  protocol.b<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,
+               token='F4D36C656D822DF09832B5A4A8F323E6',
+               rdpath=rdpaths$bsocial)
+  protocol.k<-bsrc.switcher(name="ksocial",
+               redcap_uri=input.uri,
+               token='D542DAFD381E12682A7CFBB11286AC9B',
+               rdpath=rdpaths$ksocial)
+  protocol.s<-bsrc.switcher(name="scandb",
+              redcap_uri=input.uri,
+              token='0386803904E8E249F8D9500859528327',
+              rdpath=rdpaths$scandb)
 }
 ,"midnight"={
-protocol.cur<-bsrc.switcher(preset = "bsocial",protocol.cur = T)
+protocol.cur<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,
+                            token='F4D36C656D822DF09832B5A4A8F323E6',
+                            rdpath=rdpaths$bsocial)
 curdb<-bsrc.checkdatabase2(protocol.cur,forceupdate = T)
 bsrc.refresh(protocol = protocol.cur,curdb = curdb)
 bsrc.backup(curdb = curdb, protocol = protocol.cur)
