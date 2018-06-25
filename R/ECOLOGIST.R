@@ -124,7 +124,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("BoD_U"))]<-"BoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("DoD_U"))]<-"DoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("EoD_U"))]<-"EoD"
-    emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c(""))]<-"SetUp"
+    emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("SetUp"))]<-"SetUp"
     emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
     idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,...)
     emadata.raw$RedcapID<-idmatch$registration_redcapid[match(emadata.raw$User_Id, idmatch$ema_studyidentifier)]
@@ -143,8 +143,10 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   }
   if (is.null(subreg)){
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,... = ...)
-  ifrun<-TRUE
-  } else {ifrun<-TRUE}
+  }
+  
+  #Require a safeguard of the emadata.raw because the SetUp might bring up the start date earlier than actual:
+  emadata.raw[which(emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","MB")),]->emadata.raw
   
   #MAKE SURE TO CHECK REDCAP
   #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
@@ -166,7 +168,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   #Patch the data
   emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")
   
-  if (ifrun){
+
     #Read EMA Data:
     table.emadata<-data.table::data.table(emadata.raw$RedcapID,emadata.raw$Survey_Submitted_Date,emadata.raw$Survey_Class)
     names(table.emadata)<-c("redcapID","date","Type")
@@ -175,16 +177,16 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     table.emadata[table.emadata$Type=="MB",count:=seq_len(.N), by=date]
     table.emadata<-na.omit(table.emadata)
     #table.emadata<-table.emadata[which(table.emadata$Type %in% c("DoD","BoD","EoD"))]
+    table.emadata$redcapID<-as.character(table.emadata$redcapID)
     
     #Aggregate Total:
-    table.emadata$redcapID<-as.character(table.emadata$redcapID)
     emadata<-aggregate(table.emadata,FUN = max,by=list(interaction(table.emadata$date,table.emadata$Type)))
     emadata$Group.1<-NULL
     emadata<-reshape(emadata,idvar = "date",timevar = "Type",direction = "wide", v.names = c("count"))
     emadata<-emadata[order(emadata$date),]
     names(emadata)<-c("redcapID","date","BoD","DoD","EoD","MB")
     emadata$MB[which(is.na(emadata$MB))]<-0
-    emadata<-zoo::na.locf(emadata)
+    emadata<-zoo::na.locf(emadata,na.rm=F)
     emadata$date<-as.Date(emadata$date)
     emadata[is.na(emadata)]<-0
     emadata$Total<-as.numeric(emadata$BoD)+as.numeric(emadata$DoD)+as.numeric(emadata$EoD)
@@ -247,7 +249,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
       #End Graphic
     }
     return(list(data=emamelt.merge,info=info))
-    }
+    
 }
 #########Graphing function:
 bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
