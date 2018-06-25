@@ -15,7 +15,8 @@ whichtouse<-as.character(Sys.getenv("whichtouse"))
 
 tryCatch({jiazhou.startup(load = F)
 
-switch(whichtouse,"three" = {
+switch(whichtouse,
+"three" = {
   protocol.b<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,
                token='F4D36C656D822DF09832B5A4A8F323E6',
                rdpath=rdpaths$bsocial)
@@ -27,15 +28,22 @@ switch(whichtouse,"three" = {
               redcap_uri=input.uri,
               token='0386803904E8E249F8D9500859528327',
               rdpath=rdpaths$scandb)
-}
-,"midnight"={
+  bsrc.conredcap2(protocol = protocol.b)
+  bsrc.conredcap2(protocol = protocol.k)
+  bsrc.conredcap2(protocol = protocol.s)
+},
+"midnight"={
 protocol.cur<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,
                             token='F4D36C656D822DF09832B5A4A8F323E6',
                             rdpath=rdpaths$bsocial)
 curdb<-bsrc.checkdatabase2(protocol.cur,forceupdate = T)
 bsrc.refresh(protocol = protocol.cur,curdb = curdb)
 bsrc.backup(curdb = curdb, protocol = protocol.cur)
-})
+},
+"sunday"={
+  #DONOTHING YET; REFRESH FOR SCANDB UPCOMING...
+}
+)
 
 print("DONE")
 finish<-TRUE
