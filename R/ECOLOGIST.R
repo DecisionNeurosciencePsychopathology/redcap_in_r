@@ -148,6 +148,9 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   #Require a safeguard of the emadata.raw because the SetUp might bring up the start date earlier than actual:
   emadata.raw[which(emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","MB")),]->emadata.raw
   
+  #Require a safeguard of the emadata.raw because the SetUp might bring up the start date earlier than actual:
+  emadata.raw[which(emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","MB")),]->emadata.raw
+  
   #MAKE SURE TO CHECK REDCAP
   #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
   #Currently take out nas, should only be one item:
