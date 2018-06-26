@@ -1,7 +1,7 @@
 ##########THIS IS THE ACTUAL AUTOMATOR SCRIPT:
 setwd("/Users/jiazhouchen/Documents/UPMC/RStation")
 
-
+#Or any other general script; but since this is running on Jiazhou's machine...
 source("Jiazhou.Startup.R")
 
 

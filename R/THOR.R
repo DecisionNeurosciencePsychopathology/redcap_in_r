@@ -28,19 +28,37 @@ thorndike.getfuncproclist<-function(rootdir="/Volumes/bek",smartfind=T,dir.patte
     if (length(id.pos)>1){
     id.pos<-max(id.pos) 
     }
-
-    study<-as.character(sapply(l.b,"[[",which(test.x %in% tasklist)))
-    paran<-as.character(sapply(l.b, "[[",length(test.x)-1))
-    para.name<-as.character(unlist(lapply(paran,function(x){
-      substring(x,last=regexpr("[0-9]{1,3}",x)[1]-1,first = 0)
+    #study<-as.character(sapply(l.b,"[[",which(test.x %in% tasklist)))
+    #taskn<-as.character(sapply(l.b, "[[",length(test.x)-2))
+    #paran<-as.character(sapply(l.b, "[[",length(test.x)-1))
+    infox<-data.frame(id=as.character(sapply(l.b, "[[",id.pos)),
+                      study=as.character(sapply(l.b,"[[",which(test.x %in% tasklist))),
+                      task.name=as.character(sapply(l.b, "[[",length(test.x)-2)),
+                      paran=as.character(sapply(l.b, "[[",length(test.x)-1))
+    )
+    infox[which(!duplicated(infox)),]->infox
+    infox$para.name<-as.character(unlist(lapply(infox$paran,function(x){
+      x1<-substring(x,last=regexpr("[0-9]{1,3}",x)[1]-1,first = 0)
+      if (length(grep("_",x1))>0) {x1<-sapply(strsplit(x1,split = "_"),"[[",1)} 
+      return(x1)
     })))
-    para.count<-as.numeric(unlist(lapply(paran,function(x){
-      substring(x,first=regexpr("[0-9]{1,3}",x)[1])
+    infox$block.name<-as.character(unlist(lapply(infox$paran,function(x){
+      x1<-substring(x,last=regexpr("[0-9]{1,3}",x)[1]-1,first = 0)
+      if (length(grep("_",x1))>0) {x1<-sapply(strsplit(x1,split = "_"),"[[",2)
+      } else {x1<-substring(x,first = regexpr("[0-9]{1,3}",x)[1])}
+      return(x1)
     })))
-    id<-as.character(sapply(l.b, "[[",id.pos))
-    y<-data.frame(id,study,para.name,para.count)
-    y<-y[which(!duplicated(y)),]
-    rm(list = c("id","para.count","para.name","study","paran"))
+    idbytask<-paste(infox$id,infox$task.name,sep = "&")
+    infox$para.count<-unlist(lapply(split(idbytask,idbytask),seq))
+    infox$paran<-NULL
+    infox->y
+    #para.count<-as.numeric(unlist(lapply(paran,function(x){
+    #  substring(x,first=regexpr("[0-9]{1,3}",x)[1])
+    #})))
+    #id<-as.character(sapply(l.b, "[[",id.pos))
+    #y<-data.frame(id,study,para.name,para.count)
+    #y<-y[which(!duplicated(y)),]
+    #rm(list = c("id","para.count","para.name","study","paran"))
     yexist<-T
     } else {yexist<-F}
     #mprage
@@ -58,6 +76,8 @@ thorndike.getfuncproclist<-function(rootdir="/Volumes/bek",smartfind=T,dir.patte
     r<-data.frame(id,study)
     r$para.name<-"mprage"
     r$para.count<-1
+    r$task.name<-"mprage"
+    r$block.name<-1
     rexist<-T
     } else {rexist<-F}
     
@@ -82,6 +102,8 @@ thorndike.startup<-function(protocol="scandb",mode="offline"){
   source("/Volumes/bek/aux_scripts/thorndike_startup.R")
   thorndike.switcher(protocol.s=protocol,mode=mode)
 }
+
+
 
 thorndike.updaterc<-function(protocol=protocol.cur,index.list=NULL,preset=T,preproc.pattern="preproc", censor=c("120517.bsocial"),upload=T,output=F,...){
   #grab the metadata from RedCap:
