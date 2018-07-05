@@ -91,6 +91,7 @@ thorndike.getfuncproclist<-function(rootdir="/Volumes/bek",smartfind=T,dir.patte
   } #end smartfind
   index.sub<-aggregate(para.count ~ id + study + para.name, data = index, max)
   index.stu<-aggregate(para.count ~ study + para.name, data = index, max)
+  index.stu$block.name<-lapply(split(index$block.name,paste(index$study,index$para.name),sep = "&"),unique)[match(paste(index.stu$study,index.stu$para.name,sep = " "),names(lapply(split(index$block.name,paste(index$study,index$para.name),sep = "&"),unique)))]
   
   index.sub.comp<-index.sub[which(!is.na(match(interaction(index.sub$study,index.sub$para.name,index.sub$para.count),interaction(index.stu$study,index.stu$para.name,index.stu$para.count)))),]
   

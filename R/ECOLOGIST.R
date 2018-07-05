@@ -37,6 +37,7 @@
 #                                                                                                             #
 # Legacy time convertion                                                                                      #
 # subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))                         #
+#                                                                                                             #
 ###############################################################################################################
 
 
@@ -52,7 +53,6 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   if (length(disrupt$ema_studyidentifier)>0){
   print("ARGH,THESE PAIRS DON'T MATCH")
   print(disrupt)
-    #
       for (i in 1:length(disrupt$ema_studyidentifier)) {
           if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
           if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
@@ -632,10 +632,20 @@ dnpl.ema.procdb<-function(rdpath=ema.data.rdpath,fulldata.ema=NULL,metadata.ema=
   #info status:
   fulldata.ema<-dnpl.ema.infochange(fulldata.ema = fulldata.ema)
   #proc data spilt
-  fulldata.ema<-dnpl.ema.spiltraw(fulldata.ema = fulldata.ema,metadata.ema = metadata.ema)
+  fulldata.ema<-dnpl.ema.spiltraw(fulldata.ema = fulldata.ema,metadata.ema = metadata.ema,...)
+  #More stuff (device OS/daysinto the study):
+  fulldata.ema<-dnpl.ema.addmorestuff(fulldata.ema = fulldata.ema)
   #End
   assign("fulldata.ema",fulldata.ema,envir=envir.load)
   save(list = objects(envir = envir.load),file = rdpath,envir = envir.load)
+}
+#############################
+dnpl.ema.addmorestuff<-function(fulldata.ema) {
+  fulldata.ema$pdata$DeviceOS<-fulldata.ema$info$DeviceOS[match(fulldata.ema$pdata$redcapID,fulldata.ema$info$RedcapID)]
+  bodonly<-subset(fulldata.ema$pdata[which(fulldata.ema$pdata$Type=="BoD"),],select = c("date","redcapID","expectation"))
+  names(bodonly)[grep("expectation",names(bodonly))]<-"daysinstudy"
+  fulldata.ema$pdata<-merge(fulldata.ema$pdata,bodonly,all = TRUE)
+  return(fulldata.ema)
 }
 ############################
 dnpl.ema.infochange<-function(fulldata.ema=fulldata.ema){
@@ -680,18 +690,57 @@ dnpl.ema.spiltraw<-function(fulldata.ema=fulldata.ema,metadata.ema=metadata.ema,
 ###  ANALYSIS/GRAPH  ###
 ########################
 #############################
-dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd()){
+
+
+
+dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd(),#referenceline=c("horizontal","diagonal")
+                                referenceline="diagonal",
+                                graphictype=c("jitter","gam"),
+                                xa="expectation",ya="actual",by="redcapID",additional=NULL){
   colnames(df)[grep(Typename,names(df))]<-"Type"
-  for (i in 1:length(unique(df$Type))) {
-    targettype=as.character(unique(df$Type)[i])
+  x.bse<-paste("ggplot(data = df.x, aes(x= ",xa,", y= ",ya,", color = ",by,"))",sep = "")
+  if (!is.null(referenceline)) {
+     if (any(referenceline %in% "horizontal")) {
+       referl.h<-"+ geom_abline(intercept = 50,slope = 0, size=0.8)"
+     } else {referl.h<-NULL}
+     if (any(referenceline %in% "diagonal"))  {
+       referl.d<-"+ geom_abline(intercept = 0,slope = 1, size=0.8)"
+     } else {referl.d<-NULL}
+    referl<-paste(referl.h,referl.d,collapse = "",sep = " ")
+  }
+  if (!is.null(graphictype)) {
+    funclist<-list()
+    if (any(graphictype %in% "jitter")) {
+      funclist[["jitter"]]<-list(name="jitter",call="+ geom_jitter()")
+    } 
+    if (any(graphictype %in% "gam"))  {
+      funclist[["gam"]]<-list(name="gam",call="+ geom_smooth()")
+    }
+  }
+  
+  
+  for (i in unique(df$Type)) {
+    targettype=as.character(i)
     print(targettype)
     df.x<-df[which(df$Type==targettype),]
-    x.j<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID)) +  
-      geom_jitter() + geom_abline(slope=1, intercept=0.8)+ggtitle(paste(targettype,"Jittered"))
-    ggsave(paste(targettype,"jittered.jpeg",sep = "_"),device = "jpeg",plot = x.j,dpi = 300,path = path, height = 8.3, width = 11.7)
-    x.g<-ggplot(data = df.x, aes(x=expectation, y=actual, color = redcapID))+
-      geom_abline(slope = 1,size = 0.8)+geom_smooth(method = "loess")+ ggtitle(paste(targettype,"Line"))
-    ggsave(paste(targettype,"gam.jpeg",sep = "_"),device = "jpeg",plot = x.g,dpi = 300,path = path, height = 8.3, width = 11.7)
+    
+    lapply(funclist,function(x) {
+      ggsave(filename = paste(paste(targettype,xa,ya,by,x$name,sep = "_"),".jpeg",sep=""),
+             device = "jpeg",
+             plot = eval(parse(text = paste(x.bse,
+                                            paste("+ ggtitle(paste(targettype,'",x$name,"'))",sep = ""),
+                                            referl,
+                                            ifelse(is.null(additional),'',paste("+",additional)),
+                                            x$call
+                                            ))),
+             dpi = 300,path = path, height = 8.3, width = 11.7)
+    })
+   
+    
+
+    
+    
+    
   }
 }
 ###############################

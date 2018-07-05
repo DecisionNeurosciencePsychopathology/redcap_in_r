@@ -99,9 +99,6 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
   #This function is used for transfer data 
   if (is.null(ptc.from) | is.null(ptc.to)) {stop("Need both protocol objects")}
   if (is.null(map)) {stop("Mapping is missing")}
-  if (is.null(idmap)) {print("No ID mapping provided, will carry over IDs from 'a' to 'b' and transfer everyone's data")
-    #Need to generate ID Event Map Here:
-  }
   if (online) {print("Online mode is on, will alway retrive from RedCap server...")}
   if (is.null(data.from)) {
     data.from<-bsrc.checkdatabase2(protocol = ptc.from,online = T)
@@ -109,10 +106,18 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
   if (is.null(data.to)) {
     data.to<-bsrc.checkdatabase2(protocol = ptc.to,online = T)
   }
+  
   #Generalizing function:
   colnames(data.from$data)[grep(idvariable.from,names(data.from$data))]<-"record_id"
-  colnames(data.to$data)[grep(idvariable.from,names(data.to$data))]<-"record_id"
-  colnames(idmap)[grep(idvariable.from,names(idmap))]<-"record_id"
+  colnames(data.to$data)[grep(idvariable.to,names(data.to$data))]<-"record_id"
+  #colnames(idmap)[grep(idvariable.from,names(idmap))]<-"record_id"
+  if (is.null(idmap)) {print("No ID mapping provided, will carry over IDs from 'a' to 'b' and transfer everyone's data")
+    #Need to generate ID Event Map Here:
+    idmap<-data.frame(idfield.from=unique(data.from$data$record_id),
+                      idfield.to=unique(data.from$data$record_id))
+  }
+  
+  
   
   #We will use person loops to ensure it always checks for completion before uploading
   map->map.backup

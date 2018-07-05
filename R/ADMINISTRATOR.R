@@ -222,8 +222,20 @@ bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
   }
   
 }
-
 ##################
+bsrc.admin.rcstats<-function(dbenvir=NULL) {
+  if (!exists("data",envir = dbenvir) | !exists("metadata",envir = dbenvir) ) {stop("Not enough info from dbenvir")}
+  group.vari.name<-names(dbenvir$data)[grep("group",names(dbenvir$data))[1]]
+  reg.form<-bsrc.getform(curdb = dbenvir, forceskip = T, 
+               formname = dbenvir$metadata$form_name[which(dbenvir$metadata$field_name==group.vari.name)])
+  if (any(as.numeric(substring(reg.form$redcap_event_name,regexpr("_arm_",reg.form$redcap_event_name)[1]+nchar("_arm_")))>1)) {
+    multiarm<-TRUE}
+  #Total Numeber:
+  
+  bsrc.getchoicemapping(variablenames = group.vari.name,metadata = dbenvir$metadata)
+  
+  
+}
 ###########################RPPR Report:
 bsrc.admin.rppr<-function(){
   
