@@ -599,7 +599,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
     dnpl.ema.procdb(rdpath = rdpath.ema)
     }
   if (ifupload.e) {
-    if (length(outcome.r.temp$registration_redcapid)>1){
+    if (length(outcome.r.temp$registration_redcapid)>0){
     print("Starting to upload updates to RedCap...")
     result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
     if (result.outcome.r$success) {print("DONE")} else {print("SOMETHING WENT WRONG")}
@@ -690,7 +690,11 @@ dnpl.ema.spiltraw<-function(fulldata.ema=fulldata.ema,metadata.ema=metadata.ema,
 ###  ANALYSIS/GRAPH  ###
 ########################
 #############################
+if(FALSE){
+groupstat<-na.omit(subset(bsocial$data,select = c("registration_redcapid","fudemo_incomelevel")))
 
+ema$fulldata.ema$pdata$income_b<-groupstat$fudemo_incomelevel[match(ema$fulldata.ema$pdata$redcapID,groupstat$registration_redcapid)]
+}
 
 
 dnpl.ema.missinggraph<-function(df, Typename="Type",path=getwd(),#referenceline=c("horizontal","diagonal")
