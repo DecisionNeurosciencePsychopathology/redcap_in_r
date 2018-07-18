@@ -242,30 +242,122 @@ bsrc.admin.rppr<-function(){
   newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & subreg$registration_status!=89),]
   totaln<-length(newconsent$registration_redcapid)
 }
+
+#####Utility function:
+do_for_asub<-function(xdata=NULL,lxyz=c("gender","race","edu","age"),tit="B-Social New Consent",plotpath=NULL,filename=NULL){
+  for (xyz in lxyz) {
+    datalist=get(paste0(xyz,"group"))
+    print(datalist$x2)
+    assign(paste0(xyz,"plot"),graph_data_meet(datalist = datalist, xdata = xdata, title = tit))
+  }
+  
+  eval(parse(text=paste0("x<-gridExtra::arrangeGrob(",paste(paste0(lxyz,"plot"),collapse = ","),")")))
+  ggsave(plot = x,
+         filename = filename,device = "jpeg",dpi = 300,path = plotpath,width = 11.69,height = 8.27)
+}
+
+graph_data_meet<-function(datalist=NULL,xdata=NULL,title=NULL,save=F,savepath=NULL,filename=NULL){
+  if (is.null(datalist$x2)) {
+    eval(parse(text = paste0("test<-as.data.frame(xtabs(formula = ","~",datalist$x1,",data = xdata))")))
+    datalist$x2<-""
+    xd<-aes(x = test[[1]], y=Freq)
+  } else {
+    eval(parse(text = paste0("test<-as.data.frame(xtabs(formula = ","~",datalist$x1,"+",datalist$x2,",data = xdata))")))
+    xd<-aes(fill = test[[1]],x = test[[2]], y=Freq)
+  }
+  plotx<-ggplot(data=test, xd)+
+    geom_bar(position = "dodge",stat="identity",color="black")+
+    geom_text(stat = "identity",aes(label=Freq), position=position_dodge(width=0.9), vjust=-0.5)+
+    ggtitle(paste(title,"by",datalist$x1,"and",datalist$x2)) +
+    xlab(datalist$x2) + ylab("Frequency Count")+
+    scale_fill_brewer(palette="OrRd")
+  #+scale_fill_discrete(name = datalist$x1)
+  plotx$labels$fill <- datalist$x1
+  return(plotx)
+}
 ###########################Data Meeting:
-bsrc.datameeting<-function(protocol="bsocial"){
-  if(missing(protocol)) {
-    protocol=readline(prompt = "Please input the protocl: ")}
-  switch (protocol,
-          bsocial = {enddate<-as.Date("2020-08-01") 
-          startdate<-as.Date("2017-07-30")},
-          ksocial = {enddate<-as.Date("2021-08-01") 
-          startdate<-as.Date("2017-08-01")
+bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL){
+  if (is.null(curdb)){
+  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)}
+  funbsrc<-curdb$data
+  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
+  
+  switch (protocol$name,
+          bsocial = {
+            enddate<-as.Date("2020-08-01") 
+            startdate<-as.Date("2017-07-30")
+            projection<-list(totaln=100,eman=200)
+          },
+          ksocial = {
+            enddate<-as.Date("2021-08-01") 
+            startdate<-as.Date("2017-08-01")
           })
+
+  #ADD GROUP TO IT
+  bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)->groupmap
+  subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = F)
+  #Gender
+  subreg$Gender<-subreg$registration_gender
+  gendergroup<-list(x1="Group",x2="Gender")
+  #Race
+  subreg<-bsrc.checkbox(subreg)
+  subreg$registration_race_string->subreg$race
+  subreg$race[subreg$registration_race_ifmultiple]<-"Mixed"
+  bsrc.getchoicemapping("registration_race",metadata = curdb$metadata)->racemap
+  racemap$choice.string<-c("AmerIndi","Asian","AfriAmer","PaciIslander","White","Refused")
+  subreg$Race<- plyr::mapvalues(x = subreg$race, from = racemap$choice.code, to = as.character(racemap$choice.string),warn_missing = F)
+  racegroup<-list(x1="Group",x2="Race")
+  #Educ
+  bldemo<-bsrc.getform(curdb = curdb,formname = "bldemo")
+  bldemo$demo_eduyears[match(subreg$registration_redcapid,bldemo$registration_redcapid)]->subreg$eduyrs
+  edumap<-data.frame(yrlable=c("0-12","13-14","15-16","17-18","18+"),yrstar=c(0,13,15,17,19))
+  subreg$Edu<-as.character(edumap$yrlable[findInterval(subreg$eduyrs,edumap$yrstar)])
+  edugroup<-list(x1="Group",x2="Edu")
   
-  totaln<-200
+  #age
+  subreg$ageyrs<-lubridate::as.period(lubridate::interval(as.Date(subreg$registration_dob),as.Date(subreg$registration_consentdate)))$year
+  agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
+  subreg$`Age`<-as.character(agemap$yrlable[findInterval(subreg$ageyrs,agemap$yrstar)])
+  agegroup<-list(x1="Group",x2="Age")
   
+  onlygroup<-list(x1="Group",x2=NULL)
+
   if(protcol=="bsocial") {
     #New Consent since Auguest 2017
-    newconsent<-as.data.frame(funbsrc$registration_consentdate[which(as.Date(funbsrc$registration_consentdate)>startdate)])
-    names(newconsent)<-c("date")
-    newconsent$date<-as.Date(sort(newconsent$date))
+
+    newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & !subreg$registration_group %in% c(88,89)),]
+    do_for_asub(newconsent,tit = "B-Social New Consent",plotpath=plotpath,filename="by_newconsent.jpeg")
+    nplot<-graph_data_meet(datalist = onlygroup,xdata = newconsent,title = "New Consent")
+    
+    subreg[grep("Completed",subreg$prog_emastatus),]->emacompleted
+    do_for_asub(emacompleted,tit = "B-Social EMA Completed",plotpath=plotpath,filename="by_ema.jpeg")
+    eplot<-graph_data_meet(datalist = onlygroup,xdata = emacompleted,title = "EMA")
+    
+    fmricompleted<-subreg[grep(paste("Scanned","2016 Pilot",sep = "|"), subreg$prog_fmristatus),]
+    do_for_asub(fmricompleted, tit = "B-Social fMRI Completed (include 2016 pilot)",plotpath=plotpath,filename="by_fMRI.jpeg")
+    fplot<-graph_data_meet(datalist = onlygroup,xdata = fmricompleted,title = "fMRI")
+    
+    lastyrfu<-subreg[which(subreg$prog_endorfu<365),]
+    do_for_asub(lastyrfu, tit = "B-Social Follow-Up within last year",plotpath=plotpath,filename="by_fu.jpeg")
+    fuplot<-graph_data_meet(datalist = onlygroup,xdata = lastyrfu,title = "Follow-Up")
+    
+    
+    zx<-gridExtra::arrangeGrob(nplot,eplot,fplot,fuplot)
+    ggsave(plot = zx,
+           filename = "grp.jpeg",device = "jpeg",dpi = 300,path = plotpath,width = 11.69,height = 8.27)
+    
+    
+    
+    newconsent$date<-as.Date(newconsent$registration_consentdate)
+    
+    sortedpos<-sort.int(newconsent$date,index.return=T)$ix
+    newconsent<-newconsent[sortedpos,]
     newconsent$Actual<-1:length(newconsent$date)
-    totaln.new<-100 #Different
+
     
     #IDENTICAL
     seqdate<-seq.Date(from=startdate,to=enddate,by="days")
-    totalseq<-seq(from=0,to=totaln.new,length.out = length(seqdate))
+    totalseq<-seq(from=0,to=projection$totaln,length.out = length(seqdate))
     total<-as.data.frame(seqdate)
     total$accu<-totalseq
     
@@ -273,11 +365,12 @@ bsrc.datameeting<-function(protocol="bsocial"){
     new.end<-newconsent$date[length(newconsent$date)]
     new.plan<-total[which(total$seqdate %in% new.start):which(total$seqdate %in% new.end),]
     names(new.plan)<-c("date","Projection")
-    merged.new<-merge(newconsent,new.plan,by=1,all = T)
+    subconsen<-data.frame(date=newconsent$date,Actual=newconsent$Actual)
+    merged.new<-merge(subconsen,new.plan,by=1,all = T)
     merged.new.melt <- na.omit(melt(merged.new, id.var='date'))
     names(merged.new.melt)<-c("date","Number Type","count")
     merged.new.melt$label<-merged.new.melt$count
-    merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
+    #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
     
     new.plot<- ggplot(merged.new.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
       ggtitle(paste("New BPD Participant, current total:", length(newconsent$date)))+
@@ -290,6 +383,9 @@ bsrc.datameeting<-function(protocol="bsocial"){
       scale_x_date(date_labels = "%B", date_breaks = "1 month") +
       geom_label(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),], aes(label=count))+
       geom_label(data = merged.new.melt[max(which(merged.new.melt$`Number Type` == "Projection")),], aes(label=round(count)))
+    
+    
+    
     
     ###################
     #EMA
@@ -342,6 +438,10 @@ bsrc.datameeting<-function(protocol="bsocial"){
       geom_label(data = merged.ema.melt[which(merged.ema.melt$`Number Type` == "Actual"),], aes(label=count))+
       geom_label(data = merged.ema.melt[max(which(merged.ema.melt$`Number Type` == "Projection")),], aes(label=round(count)))+
       geom_label(data = merged.ema.melt[max(which(merged.ema.melt$`Number Type` == "New Projection")),], aes(label=round(count)))
+    
+  tz<-gridExtra::arrangeGrob(new.plot,ema.plot)
+  ggsave(plot = tz,filename = "recurt.jpeg",device = "jpeg",dpi = 300,path = plotpath,width = 11.69,height = 8.27)  
+  
     
   }
   
