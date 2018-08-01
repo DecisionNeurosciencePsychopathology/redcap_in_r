@@ -53,6 +53,7 @@ The environment (or list) object should include the following objects:
 - success     #If the update was successful
 
 Most of the function within this package will accept this environment (or list [limited support]) object as their data source. If not supplied, they will pull from RedCap server always using the credential. To minimize time cause, always supply this to a function when applicable. 
+
 **Required Packages:**
 Since now this repo can be loaded as package, the required packages are automatically loaded during installation of 'bsrc'
 But here's a list of the packages:
