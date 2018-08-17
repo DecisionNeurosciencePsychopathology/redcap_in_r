@@ -182,6 +182,13 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     #table.emadata<-table.emadata[which(table.emadata$Type %in% c("DoD","BoD","EoD"))]
     table.emadata$redcapID<-as.character(table.emadata$redcapID)
     
+    #Safe guard the function from god damn health controls who don't get any negative interaction whatsoever.
+    if (!any(table.emadata$Type=='MB')) {
+      table.emadata[1,]->temp
+      temp$Type<-"MB"
+      temp$count<-0
+      table.emadata<-rbind(table.emadata,temp)
+    }
     #Aggregate Total:
     emadata<-aggregate(table.emadata,FUN = max,by=list(interaction(table.emadata$date,table.emadata$Type)))
     emadata$Group.1<-NULL
@@ -439,7 +446,10 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   return(emadata.nums)
 }
 ################ Loop:
-bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL, graphic=T,updatedata=T,forcerun=F,ifupload.e=TRUE, local=F,curver.e="3",protocol=protocol.cur,envir.load=NULL,...) {
+bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath, 
+                          graphic=T,updatedata=T,forcerun=F,ifupload.e=T, 
+                          local=F,curver.e="3",protocol=protocol.cur,
+                          envir.load=NULL,...) {
   if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
   if(curver.e=="3" & is.null(file)){filename<-file.choose()}
   if(missing(gpath)) {
@@ -447,8 +457,10 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
       gpath<-ema.graph.path
     }else{gpath<-NULL}   
   }
-  if(is.null(gpath)){print("Graphing is turned off because no graphic path provided...")
+  if(is.null(gpath)){
+  print("Graphing is turned off because no graphic path provided...")
   graphic=FALSE}
+  
   run2<-F
   run3<-F
   skip<-F
@@ -460,6 +472,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
   outcome.r<-NULL
   emadata.raw.combo<-NULL
   info.combo<-NULL 
+  
   #subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
   funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = !local, protocol = protocol,... = ...)
   subreg<-bsrc.getform(formname = c("record_registration","progress_check"),grabnewinfo = !local, protocol = protocol,... = ...)
@@ -525,7 +538,6 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
     emadata.raw<-bsrc.ema.getfile(filename = filename,curver = "3",funema = funema,envir=envir.load)
     if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
       completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
-      
       emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
       print(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
     }
@@ -578,7 +590,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, gpath,file=NULL
       if (!is.null(output.r)) {  
       if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
         writetofile<-TRUE
-        print("**COMPLETED/TERMINATED**Adding this person to ema database")
+        print("**COMPLETED/TERMINATED** Adding this person to EMA database")
         info<-output.c$info
         outcome<-merge(outcome,output,all=T)
         outcome.r<-merge(outcome.r,output.r,all=T)

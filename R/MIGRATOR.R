@@ -95,7 +95,7 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
                                   trigger.a=NULL,trigger.b=NULL,
                                   data.from=NULL,data.to=NULL,idvariable.from="record_id",
                                   idvariable.to=idvariable.from,
-                                  overwrite=F,bypass=F,functioncall=NULL,...) {
+                                  overwrite=F,bypass=F,functioncall=NULL,upload=T,output=F,...) {
   #This function is used for transfer data 
   if (is.null(ptc.from) | is.null(ptc.to)) {stop("Need both protocol objects")}
   if (is.null(map)) {stop("Mapping is missing")}
@@ -123,12 +123,13 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
   map->map.backup
   
   #for now, we will use single subject loop, not sure how efficient it would be but that's what's up:
-  envir.ept<-as.environment(emptyenv())
+  envir.ept<-as.environment(list())
   for (i in 1:length(idmap$record_id)) {
     map<-map.backup
     id<-idmap$record_id[i]
     from.id<-idmap$idfield.from[i]
     to.id<-idmap$idfield.to[i]
+    subevetn<-idmap$redcap_event_name[i]
     record.id.to<-data.to$data$record_id[match(idmap$idfield.to[which(idmap$record_id==id)],data.to$data$subject_id)]
     print(paste("Processing from ID: ",from.id," to ID: ",to.id," now...",sep = ""))
     
@@ -168,18 +169,18 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
     }
     #Set up another loop to loop over to data event; i.e. only upload per person per event. 
     if (length(map$from.form)>0) {
-      for (s.event in unique(map$to.event)) {
+      for (s.event in unique(map$from.event)) {
         print(s.event)
-        map$from.form[which(map$to.event %in% s.event)]->from.form
-        map$from.event[which(map$to.event %in% s.event)]->rss.from.event
+        map$from.form[which(map$from.event %in% s.event)]->from.form
+        map$from.event[which(map$from.event %in% s.event)]->rss.from.event
         transfer.from.a<-bsrc.getform(curdb = data.from,res.event = rss.from.event,formname = from.form)
         #transfer.from.a[which(transfer.from.a$redcap_event_name==s.event),]->transfer.from.b
         transfer.from.a[which(transfer.from.a$record_id==id),]->transfer.from.c
         transfer.from.c$record_id<-record.id.to
-        transfer.from.c$redcap_event_name<-s.event
+        transfer.from.c$redcap_event_name<-as.character(map$to.event[which(as.character(map$from.event) %in% s.event)[1]])
         
         #Call for additional function if needed:
-        if (is.null(functioncall)){do.call(functioncall,args = list(transfer.from.c))}
+        if (!is.null(functioncall)){do.call(functioncall,args = list(transfer.from.c))}
         #Change ID variable back to what they are supposed to be:
         colnames(data.from$data)[grep("record_id",names(data.from$data))]<-idvariable.to
         colnames(data.to$data)[grep("record_id",names(data.to$data))]<-idvariable.to
@@ -189,7 +190,7 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
           REDCapR::redcap_write(transfer.from.c,redcap_uri = ptc.to$redcap_uri,token = ptc.to$token)
         } 
         if (output) {
-          assign(interaction(from.id,to.id),transfer.from.c,envir = envir.ept)
+          assign(as.character(interaction(from.id,to.id),transfer.from.c,envir = envir.ept))
         }
       } #End Event Loop 
     }else {
