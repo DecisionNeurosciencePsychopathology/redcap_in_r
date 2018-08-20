@@ -92,9 +92,9 @@ son.getideventmap<-function(ptc.from=NULL,data.from=NULL,...){
 
 
 dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,map=NULL,
-                                  trigger.a=NULL,trigger.b=NULL,
+                                  trigger.a=NULL,trigger.b=NULL, 
                                   data.from=NULL,data.to=NULL,idvariable.from="record_id",
-                                  idvariable.to=idvariable.from,
+                                  idvariable.to="record_id",
                                   overwrite=F,bypass=F,functioncall=NULL,upload=T,output=F,...) {
   #This function is used for transfer data 
   if (is.null(ptc.from) | is.null(ptc.to)) {stop("Need both protocol objects")}
@@ -116,8 +116,6 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
     idmap<-data.frame(idfield.from=unique(data.from$data$record_id),
                       idfield.to=unique(data.from$data$record_id))
   }
-  
-  
   
   #We will use person loops to ensure it always checks for completion before uploading
   map->map.backup
@@ -149,7 +147,8 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
       tobeinvestigate<-tobeinvestigate[which(tobeinvestigate$redcap_event_name %in% unique(map$to.event)),]
       tobeinvestigate[which(tobeinvestigate$record_id==record.id.to),]->singlesub
       missingforms<-as.character(map$to.form[as.numeric(apply(singlesub[-c(1,2)],1,function(x) {which(x==0)
-      }))])} else {
+      }))])
+      } else {
         missingforms<-map$from.form
       }
     map[which(missingforms %in% map$from.form),]->map
@@ -172,8 +171,7 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
       for (s.event in unique(map$from.event)) {
         print(s.event)
         map$from.form[which(map$from.event %in% s.event)]->from.form
-        map$from.event[which(map$from.event %in% s.event)]->rss.from.event
-        transfer.from.a<-bsrc.getform(curdb = data.from,res.event = rss.from.event,formname = from.form)
+        transfer.from.a<-bsrc.getform(curdb = data.from,res.event = s.event,formname = from.form)
         #transfer.from.a[which(transfer.from.a$redcap_event_name==s.event),]->transfer.from.b
         transfer.from.a[which(transfer.from.a$record_id==id),]->transfer.from.c
         transfer.from.c$record_id<-record.id.to
@@ -187,6 +185,7 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
         colnames(idmap)[grep("record_id",names(idmap))]<-idvariable.to
         
         if (upload) {
+          transfer.from.c$mini_d3summary<-NULL
           REDCapR::redcap_write(transfer.from.c,redcap_uri = ptc.to$redcap_uri,token = ptc.to$token)
         } 
         if (output) {

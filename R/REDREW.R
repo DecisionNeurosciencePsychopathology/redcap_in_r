@@ -164,6 +164,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     input.token<-protocol$token
     rdpath<-protocol$rdpath
   }
+  if (is.na(rdpath) | is.null(rdpath)) {online<-TRUE}
   if (!output & updaterd) {
   if (!online) {
   if (file.exists(rdpath) & !newfile) {

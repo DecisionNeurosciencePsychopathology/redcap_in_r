@@ -132,14 +132,14 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     emaonly.s$prog_emadued<-emaonly.s$ema_setuptime+3
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+22 & Sys.Date() > emaonly.s$ema_setuptime+15]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+22 & Sys.Date() > emaonly.s$ema_setuptime+15]+22
     emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+15 & Sys.Date() > emaonly.s$ema_setuptime+8]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+15 & Sys.Date() > emaonly.s$ema_setuptime+8]+15
-    emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+3]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+3]+8
+    emaonly.s$prog_emadued[Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+4]<-emaonly.s$ema_setuptime[Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+4]+8
     emaonly.s$prog_emadued[Sys.Date() > emaonly.s$ema_setuptime+21]<-emaonly.s$ema_setuptime[Sys.Date() > emaonly.s$ema_setuptime+21]+21
     emaonly.s$prog_emadued[which(Sys.Date() >= emaonly.s$ema_termdate & emaonly.s$ema_completed___999==1)]<-emaonly.s$ema_termdate[which(Sys.Date() >= emaonly.s$ema_termdate & emaonly.s$ema_completed___999==1)]
     #EMA IP:
     emaonly.s$prog_emastatus<-paste("3days",emaonly.s$ema_setuptime+3)
     emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+22 & Sys.Date() > emaonly.s$ema_setuptime+15)]<-paste("3wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+22 & Sys.Date() > emaonly.s$ema_setuptime+15)]+22)
     emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+15 & Sys.Date() > emaonly.s$ema_setuptime+8)]<-paste("2wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+15 & Sys.Date() > emaonly.s$ema_setuptime+8)]+15)
-    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+3)]<-paste("1wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+3)]+8)
+    emaonly.s$prog_emastatus[which(Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+4)]<-paste("1wks:",emaonly.s$ema_setuptime[which(Sys.Date() <= emaonly.s$ema_setuptime+8 & Sys.Date() > emaonly.s$ema_setuptime+4)]+8)
     emaonly.s$prog_emastatus[which(Sys.Date() > emaonly.s$ema_setuptime+21)]<-paste("DONE:",emaonly.s$ema_setuptime[which(Sys.Date() > emaonly.s$ema_setuptime+21)]+21)
     emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___2==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___2==1)]+21)
     emaonly.s$prog_emastatus[which(emaonly.s$ema_completed___3==1)]<-paste("Completed:",emaonly.s$ema_setuptime[which(emaonly.s$ema_completed___3==1)]+21)
