@@ -166,7 +166,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   mwuserid<-as.character(unique(emadata.raw$User_Id[which(emadata.raw$RedcapID==RedcapID)]))
   #Patch the data
   tryCatch({
-  emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")},error=function(e) {message(e)})
+  emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")},error=function(e) {})
   
 
     #Read EMA Data:
