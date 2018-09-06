@@ -144,10 +144,6 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   if (is.null(subreg)){
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,... = ...)
   }
-  
-  #Require a safeguard of the emadata.raw because the SetUp might bring up the start date earlier than actual:
-  emadata.raw[which(emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","MB")),]->emadata.raw
-  
   #Require a safeguard of the emadata.raw because the SetUp might bring up the start date earlier than actual:
   emadata.raw[which(emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","MB")),]->emadata.raw
   
@@ -169,7 +165,8 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   
   mwuserid<-as.character(unique(emadata.raw$User_Id[which(emadata.raw$RedcapID==RedcapID)]))
   #Patch the data
-  emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")
+  tryCatch({
+  emadata.raw<-bsrc.ema.patch(emadata.raw = emadata.raw,vers = "2")},error=function(e) {message(e)})
   
 
     #Read EMA Data:
@@ -186,6 +183,25 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     if (!any(table.emadata$Type=='MB')) {
       table.emadata[1,]->temp
       temp$Type<-"MB"
+      temp$count<-0
+      table.emadata<-rbind(table.emadata,temp)
+      emadata.raw$MBYES<-FALSE
+    }
+    if (!any(table.emadata$Type=='BoD')) {
+      table.emadata[1,]->temp
+      temp$Type<-"BoD"
+      temp$count<-0
+      table.emadata<-rbind(table.emadata,temp)
+    }
+    if (!any(table.emadata$Type=='DoD')) {
+      table.emadata[1,]->temp
+      temp$Type<-"DoD"
+      temp$count<-0
+      table.emadata<-rbind(table.emadata,temp)
+    }
+    if (!any(table.emadata$Type=='EoD')) {
+      table.emadata[1,]->temp
+      temp$Type<-"EoD"
       temp$count<-0
       table.emadata<-rbind(table.emadata,temp)
     }
@@ -220,19 +236,20 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     if (length(terminationdate)>0){
       if ((terminationdate-1) < enddate){enddate<-terminationdate} 
       if ((terminationdate-1) > enddate){
-        print("THIS PERSON HAS DATA PASS 21 DAYS SINCE START DATE") 
+        message("THIS PERSON HAS DATA PASS 21 DAYS SINCE START DATE") 
         enddate<-terminationdate
         }
       }
     #basic info
     info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid,DeviceOS)
-    
+    if (any(emadata.raw$MBYES)) {
     mbonly<-data.table::as.data.table(emadata.raw[which(emadata.raw$MBYES),c("Survey_Submitted_Date","MBCount")])
     mbonly<-mbonly[, sum(MBCount), by = Survey_Submitted_Date]
     names(mbonly)<-c("date","MB")
     ematotal<-merge(ematotal,mbonly,all=T)
-    ematotal$Total<-as.numeric(ematotal$BoD)+as.numeric(ematotal$DoD)+as.numeric(ematotal$EoD)
     ematotal$MB[which(is.na(ematotal$MB))]<-0
+    } else {ematotal$MB<-0}
+    ematotal$Total<-as.numeric(ematotal$BoD)+as.numeric(ematotal$DoD)+as.numeric(ematotal$EoD)
     ematotal.melt<-reshape2::melt(ematotal,id.var='date',variable.name="Type",value.name="expectation")
     
     #melt data
@@ -409,7 +426,8 @@ bsrc.ema.patch<-function(emadata.raw,vers="3",skipgetevent=F){
   rownames(emadata.raw)<-NULL
   if (!skipgetevent){
   emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
-  dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick.input = ltrigger[2], vers = vers)}else{emadata.raw->dodonly}
+  dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick.input = ltrigger[2], vers = vers)
+  }else{emadata.raw->dodonly}
   negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|",collapse = "|"),names(dodonly))
   negnum<-negnum[negnum >20]
   dodonly$ifnegative<-rowSums(dodonly[,negnum] >= 2)>0
@@ -586,7 +604,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
       if (!is.null(output.r)) {  
       if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
         writetofile<-TRUE
-        message("**COMPLETED/TERMINATED** Adding this person to EMA database")
+        message("**COMPLETED/TERMINATED**")
+        message("Adding this person to EMA database")
         info<-output.c$info
         outcome<-merge(outcome,output,all=T)
         outcome.r<-merge(outcome.r,output.r,all=T)
