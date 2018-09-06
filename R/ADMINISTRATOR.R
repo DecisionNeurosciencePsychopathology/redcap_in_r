@@ -367,7 +367,7 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL){
     names(new.plan)<-c("date","Projection")
     subconsen<-data.frame(date=newconsent$date,Actual=newconsent$Actual)
     merged.new<-merge(subconsen,new.plan,by=1,all = T)
-    merged.new.melt <- na.omit(melt(merged.new, id.var='date'))
+    merged.new.melt <- na.omit(reshape2::melt(merged.new, id.var='date'))
     names(merged.new.melt)<-c("date","Number Type","count")
     merged.new.melt$label<-merged.new.melt$count
     #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]

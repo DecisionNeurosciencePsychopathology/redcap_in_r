@@ -458,7 +458,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
     }else{gpath<-NULL}   
   }
   if(is.null(gpath)){
-  print("Graphing is turned off because no graphic path provided...")
+  message("Graphing is turned off because no graphic path provided...")
   graphic=FALSE}
   
   run2<-F
@@ -485,7 +485,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
     pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
     topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
     file.copy(from = rdpath.ema, to = topath, overwrite = T)
-    print("Backed-up previousely used db, in case it broke...")
+    message("Backed-up previousely used db, in case it broke...")
     outcome<-fulldata.ema$pdata
     outcome.r<-fulldata.ema$rdata
     emadata.raw.combo<-fulldata.ema$raw
@@ -539,13 +539,14 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
     if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
       completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
       emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
-      print(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
+      message(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
     }
     outcome.r.temp<-data.frame()
     outcome.temp<-data.frame()
     for (i in 1:length(unique(emadata.raw$RedcapID))) {
-      print("##########################")
-      print(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
+      message("##########################")
+      message(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
+      message(unique(emadata.raw$RedcapID)[i])
       curredcap<-unique(emadata.raw$RedcapID)[i]
       currda<-emadata.raw[which(emadata.raw$RedcapID==curredcap),]
       rownames(currda)<-NULL
@@ -558,39 +559,34 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
         startdate<-output.c$info$startdate
         enddate<-output.c$info$enddate
         },error=function(x){
-        print("EMA MAIN NOT DONE")
-        print(unique(emadata.raw$RedcapID)[i])
+        message("EMA MAIN NOT DONE")
+          message(unique(emadata.raw$RedcapID)[i])
         }) 
       tryCatch({
         output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
         }, error=function(x){
-        print("REDCAP UPLOAD NOT DONE")
-        print(unique(emadata.raw$RedcapID)[i])
+          message("REDCAP UPLOAD NOT DONE")
+          message(unique(emadata.raw$RedcapID)[i])
         }) 
       
-      # if (i==1){
-      #           outcome.temp<-data.frame(date=NA,Type=NA,redcapID=NA,actual=NA,expectation=NA,
-      #                                    diff=NA,porp=NA,per=NA)
-      #           outcome.r.temp<-data.frame()
-      #           }
       if (!is.null(output)  & length(outcome.temp)==0){
         outcome.temp<-output}
       if (!is.null(output.r) & length(outcome.r.temp)==0)  {
            outcome.r.temp<-output.r
        }
         if (!is.null(output)) {
-        print("MERGING MAIN")
+          message("MERGING MAIN")
             outcome.temp<-merge(outcome.temp,output,all = T)
 
         }
         if (!is.null(output.r)) {
-        print("MERGING REDCAP")
+          message("MERGING REDCAP")
             outcome.r.temp<-merge(outcome.r.temp,output.r,all = T)
         }
       if (!is.null(output.r)) {  
       if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
         writetofile<-TRUE
-        print("**COMPLETED/TERMINATED** Adding this person to EMA database")
+        message("**COMPLETED/TERMINATED** Adding this person to EMA database")
         info<-output.c$info
         outcome<-merge(outcome,output,all=T)
         outcome.r<-merge(outcome.r,output.r,all=T)
@@ -604,7 +600,7 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
   outcome<-outcome[which(!outcome$porp %in% c("NaN",NA)),]
   outcome.temp<-outcome.temp[which(!outcome.temp$porp %in% c("NaN",NA)),]
   if (updatedata & writetofile){
-    print("Saving back to file...")
+    message("Saving back to file...")
     fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())
     assign("fulldata.ema",fulldata.ema,envir=envir.load)
     save(list = objects(envir.load),file = rdpath.ema,envir = envir.load)
@@ -612,11 +608,11 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
     }
   if (ifupload.e) {
     if (length(outcome.r.temp$registration_redcapid)>0){
-    print("Starting to upload updates to RedCap...")
+      message("Starting to upload updates to RedCap...")
     result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
-    if (result.outcome.r$success) {print("DONE")} else {print("SOMETHING WENT WRONG")}
-    }else{print("Nothing to upload...closing down...")}
-  } else {print("ifupload.e arugement is FALSE, no uploading")}
+    if (result.outcome.r$success) {message("DONE")} else {message("SOMETHING WENT WRONG")}
+    }else{message("Nothing to upload...closing down...")}
+  } else {message("ifupload.e arugement is FALSE, no uploading")}
   return(list(main=outcome.temp,redcapupload=outcome.r.temp))
 }
 ################################
