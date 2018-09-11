@@ -17,20 +17,8 @@ tryCatch({jiazhou.startup(load = F)
 
 switch(whichtouse,
 "three" = {
-  protocol.b<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,
-               token='F4D36C656D822DF09832B5A4A8F323E6',
-               rdpath=rdpaths$bsocial)
-  protocol.k<-bsrc.switcher(name="ksocial",
-               redcap_uri=input.uri,
-               token='D542DAFD381E12682A7CFBB11286AC9B',
-               rdpath=rdpaths$ksocial)
-  protocol.s<-bsrc.switcher(name="scandb",
-              redcap_uri=input.uri,
-              token='0386803904E8E249F8D9500859528327',
-              rdpath=rdpaths$scandb)
-  bsrc.conredcap2(protocol = protocol.b)
-  bsrc.conredcap2(protocol = protocol.k)
-  bsrc.conredcap2(protocol = protocol.s)
+  ptcs[which(sapply(lapply(ptcs,function(x) {x$rdpath}),is.na))]<-NULL
+  NXU<-lapply(ptcs,bsrc.conredcap2)
 },
 "midnight"={
 protocol.cur<-bsrc.switcher(name="bsocial",redcap_uri=input.uri,

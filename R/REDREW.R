@@ -104,12 +104,15 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
               raw_text = raw_text))
 }
 ##########################Switcher
-bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F){
+bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F,
+                        regiformname=NULL,forcenewsubinsync=NULL){
   #This is used to switch protocols [hard coding lab protocls]
    if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
     print("constructing new one...")
     protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)
-  } else {print("Not enough info")}
+   } else {print("Not enough info")}
+  if (!is.null(regiformname)) {protocol$regiformname<-regiformname}
+  if (!is.null(forcenewsubinsync)) {protocol$forcenewsubinsync<-forcenewsubinsync}
   if (protocol.cur){
     protocol.cur<<-protocol
   } else {return(protocol)}
@@ -127,7 +130,7 @@ bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
   jzc.connection.date<<-curdb$update.date
 }
 #########################Check & Attach
-bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="list"){
+bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir"){
   if (is.null(rdpath)) {
   if(is.list(protocol)) {protocol.n<-protocol$name
     rdpath<-protocol$rdpath
