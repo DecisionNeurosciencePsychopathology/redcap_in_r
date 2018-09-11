@@ -526,12 +526,13 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
   funstrc<-curdb$metadata
   funevent<-curdb$eventmap
   if (missing(formname)){
-  print("Here's a list of forms: ")
-  print(as.character(unique(as.character(funstrc$form_name))))
+    message("Here's a list of forms: ")
+    print(as.character(unique(as.character(funstrc$form_name))))
   formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,): ")
   }
   if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
-   if (grabnewinfo) {print("Grab updated data from RedCap.")
+   if (grabnewinfo) {
+     message("Grab updated data from RedCap.")
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
      lvariname<-c("registration_redcapid","redcap_event_name",lvariname)
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
@@ -545,7 +546,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
      }else {stop("Update failed...;_; Try again?")}
    }else {
      lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
-     raw<-funbsrc[,c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc)))]
+     raw<-funbsrc[,unique(c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc))))]
      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
      if (!is.null(res.event)) {
        #New feature: event restriction; for better subsetting when doing multiple forms
@@ -554,9 +555,12 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
      raw<-raw[which(raw$redcap_event_name %in% eventname),]
    }
    tempch<-funstrc[which(funstrc$form_name %in% formname),]
-   if (nocalc){print("By default, will not take calculated field into consideration.")
-     calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
-   if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
+   if (nocalc){
+     message("By default, will not take calculated field into consideration.")
+     calmove<-length(which(tempch$field_type=="calc"))
+     } else {calmove<-0}
+   if (mod) {
+     message("By default, NA will replace '' and 0 in checkbox items")
       raw[raw==""]<-NA
       if (length(grep("___",names(raw))) > 0){
       raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
