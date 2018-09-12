@@ -336,7 +336,7 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   return(ifrun)
 }
 ###############################
-bsrc.findid<-function(df,idmap,id.var="ID"){
+bsrc.findid<-function(df,idmap,id.var="ID",onlyoutput=NULL){
   t<-lapply(df[[id.var]],function(id) {
     pos<-as.data.frame(which(idmap==id,arr.ind = T))
     dx<-idmap[unique(pos$row),]
@@ -353,11 +353,46 @@ bsrc.findid<-function(df,idmap,id.var="ID"){
     }
   })
   tx<-do.call(rbind,t)
+  if (!is.null(onlyoutput)){tx<-tx[c(onlyoutput)]}
   lx<-cbind(df,tx)
   return(lx)
 }
 
-
+######
+bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="redcap",curdb=NULL,onlyrc=T){
+  varstodo<-names(dfx)[!names(dfx) %in% c(id.var,"redcap_event_name")]
+  varstodo<-varstodo[varstodo %in% curdb$metadata$field_name]
+  dbx<-curdb$data
+  for (vartodo in varstodo) {
+    xk<-sapply(1:length(dfx[[id.var]]),function(i){
+      as.character(dfx[i,id.var])->id
+      as.character(dfx[i,"redcap_event_name"])->event
+      as.character(dfx[i,vartodo])->x
+      if (length(event)<1) {dbx[which(dbx[[id.var]]==id),vartodo]->xrc
+        xrc<-xrc[!is.na(xrc)]
+        xrc<-xrc[xrc!=""]
+      } else {
+        dbx[which(dbx[[id.var]]==id & dbx$redcap_event_name==event),vartodo]->xrc}
+      if (length(xrc)<1) {return(x)
+      } else if (is.na(xrc) | nchar(xrc)<1) {return(x)
+      } else if (is.na(x) | nchar(x)<1) {return(xrc)
+      }else if (xrc==x) {return(xrc)
+      } else {
+        if (perference == "redcap") {return(xrc)}
+        if (perference == "data") {return(x)}
+      }
+    })
+    #do duplicate action here:
+    dfx[[vartodo]]<-xk
+  }
+  
+  if(onlyrc) {
+    if(any(is.null(dfx$redcap_event_name))) {dfx<-dfx[,c(id.var,varstodo)]} else {
+      dfx<-dfx[,c(id.var,"redcap_event_name",varstodo)]}
+  }
+  
+  return(dfx)
+}
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
