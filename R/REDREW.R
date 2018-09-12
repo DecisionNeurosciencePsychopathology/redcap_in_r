@@ -336,6 +336,28 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   return(ifrun)
 }
 ###############################
+bsrc.findid<-function(df,idmap,id.var="ID"){
+  t<-lapply(df[[id.var]],function(id) {
+    pos<-as.data.frame(which(idmap==id,arr.ind = T))
+    dx<-idmap[unique(pos$row),]
+    if(length(dx[[1]])>0) {
+      dx$ogid<-id
+      dx$ifexist<-TRUE
+      return(dx)
+    }else{
+      dk <- data.frame(matrix(ncol = length(names(idmap)), nrow = 1))
+      names(dk)<-names(idmap)
+      dk$ogid<-id
+      dk$ifexist<-FALSE
+      return(dk)
+    }
+  })
+  tx<-do.call(rbind,t)
+  lx<-cbind(df,tx)
+  return(lx)
+}
+
+
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
