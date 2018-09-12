@@ -339,7 +339,7 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
-bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",printout=T,curdb=NULL,...){
+bsrc.getdemo <- function(id,flavor="single",protocol = protocol.cur,printout=T,curdb=NULL,...){
   if (is.null(curdb)){
   curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
   }
@@ -362,13 +362,13 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",printout=T,c
                         idonly$registration_dob,idonly$registration_consentdate,curage)
         names(bsg)<-c('ID',"Soloffid","Initials","Date of Birth","Consent Date" ,"AgeToday")
         if (printout==T){
-        print(as.character('======================'))
-        print(bsg)}
+        message(as.character('======================'))
+        message(bsg)}
         }
-        else {print("Multiple RedCap Record Identified")
+        else {message("Multiple RedCap Record Identified")
               return(rid)}
       }
-      else {print("NO ID FOUND, PLEASE DOUBLE CHECK")
+      else {message("NO ID FOUND, PLEASE DOUBLE CHECK")
         return(NULL)}
     }}
 }
