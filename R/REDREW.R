@@ -223,6 +223,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
   if (updaterd & !online){
     save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
+  assign("name",protocol$name,envir = cur.envir)
   if (output | online) {
     return(cur.envir)
   }
@@ -390,11 +391,9 @@ bsrc.findduplicate <- function(protocol = protocol.cur) {
 bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collapse=",",...) {
   raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
   options<-gsub(paste(variablename,"___",sep = ""),"",names(raceonly))
-  x$xudjfnx<-apply(raceonly, 1, function(x) {which(x==1)})
-  names(x$xudjfnx)<-NULL
-  x$xudjfnx<-sapply(x$xudjfnx,function(x) {
-  names(x)<-NULL
-  x} )
+  x$xudjfnx<-lapply(1:length(raceonly[[1]]), function(i) {
+    gsub(paste(variablename,"___",sep = ""),"",names(raceonly[i,])[which(raceonly[i,]==1)])
+    })
   x$knxmncua<-sapply(x$xudjfnx, function(x) {paste(na.omit(x),collapse = collapse)})
   x$vximnucj<-sapply(x$xudjfnx,function(x) {length(x)>1})
   
@@ -421,9 +420,12 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
       tarstr<-metasub$choice[argk]
       firstspilt<-strsplit(tarstr,split = " | ",fixed = T)[[1]]
       secondspilt<-strsplit(firstspilt,split = ", ")
-      choice.code<-sapply(secondspilt,"[[",1)
-      choice.string<-sapply(secondspilt,"[[",2)
-      x<-data.frame(choice.code,choice.string)
+      choice.code<-as.character(sapply(secondspilt,"[[",1))
+      choice.string<-as.character(sapply(secondspilt,"[[",2))
+      xk<-data.frame(choice.code,choice.string)
+      xk$choice.code<-as.character(xk$choice.code)
+      xk$choice.string<-as.character(xk$choice.string)
+      return(xk)
   } else {print(paste("This variable: '",x,"' has a type of [",metasub$fieldtype[argk],"], which is not supported!",sep = ""))}
   })
   names(xzej)<-variablenames
