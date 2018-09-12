@@ -368,7 +368,8 @@ bsrc.getdemo <- function(protocol = protocol.cur,id,flavor="single",printout=T,c
         else {print("Multiple RedCap Record Identified")
               return(rid)}
       }
-      else {print("NO ID FOUND, PLEASE DOUBLE CHECK")}
+      else {print("NO ID FOUND, PLEASE DOUBLE CHECK")
+        return(NULL)}
     }}
 }
 ####Find duplicate RedCap IDs
