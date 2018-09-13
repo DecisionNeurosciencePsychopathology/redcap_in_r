@@ -61,7 +61,11 @@
 #gsub("_months_.*$","",maxevent$redcap_event_name)
 
 #- Event variable name: "redcap_event_name"
-
+cleanuplist<-function(listx){
+  if (any(sapply(listx, is.null))){
+    listx[sapply(listx, is.null)] <- NULL}
+  return(listx)
+}
 ###############Get Event Mapping from RedCap:
 redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
   start_time <- Sys.time()
@@ -357,34 +361,48 @@ bsrc.findid<-function(df,idmap,id.var="ID",onlyoutput=NULL){
   lx<-cbind(df,tx)
   return(lx)
 }
-
-######
+#############
 bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="redcap",curdb=NULL,onlyrc=T){
   varstodo<-names(dfx)[!names(dfx) %in% c(id.var,"redcap_event_name")]
   varstodo<-varstodo[varstodo %in% curdb$metadata$field_name]
   dbx<-curdb$data
+  metd<-curdb$metadata
+  if (any(varstodo %in% metd$field_name[metd$field_type=="checkbox"])) {
+    cbs<-varstodo[which(varstodo %in% metd$field_name[metd$field_type=="checkbox"])]
+    for (cb in cbs) {
+      dbx<-bsrc.checkbox(x = dbx,variablename = cb)
+    }
+  }
   for (vartodo in varstodo) {
     xk<-sapply(1:length(dfx[[id.var]]),function(i){
       as.character(dfx[i,id.var])->id
       as.character(dfx[i,"redcap_event_name"])->event
-      as.character(dfx[i,vartodo])->x
-      if (length(event)<1) {dbx[which(dbx[[id.var]]==id),vartodo]->xrc
+      dfx[[i,vartodo]]->x
+      if (length(event)<1) {
+        dbx[which(dbx[[id.var]]==id),vartodo]->xrc
+        if (is.list(xrc)){
+          xrc<-lapply(xrc,function(x){if(length(x)<1) {return(NULL)} else return(x)})
+          xrc<-unlist(cleanuplist(xrc))
+        }
         xrc<-xrc[!is.na(xrc)]
         xrc<-xrc[xrc!=""]
       } else {
         dbx[which(dbx[[id.var]]==id & dbx$redcap_event_name==event),vartodo]->xrc}
-      if (length(xrc)<1) {return(x)
-      } else if (is.na(xrc) | nchar(xrc)<1) {return(x)
-      } else if (is.na(x) | nchar(x)<1) {
-        if (perference == "redcap") {return(xrc)}
-        if (perference == "data") {return(NA)}
-        if (perference == "NA") {return(NA)}
-      }else if (xrc==x) {return(xrc)
-      } else {
+      
+      if(length(xrc)<1 |is.null(xrc) |!any(!is.na(xrc))) {xrc<-NA
+      } else if (length(xrc)>1 && any(is.na(xrc))) {xrc<-na.omit(xrc)}
+      if(length(x)<1 |is.null(x) |!any(!is.na(x))) {x<-NA
+      } else if (length(x)>1 && any(is.na(x))) {x<-na.omit(x)}
+      
+      
+      if (any(is.na(xrc))) {return(x)}
+      if (any(is.na(x))) {return(xrc)}
+      if (length(xrc)!=length(x) | any(!xrc %in% x)){
         if (perference == "redcap") {return(xrc)}
         if (perference == "data") {return(x)}
         if (perference == "NA") {return(NA)}
-      }
+      } else return(xrc)
+      
     })
     #do duplicate action here:
     dfx[[vartodo]]<-xk
@@ -394,9 +412,47 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
     if(any(is.null(dfx$redcap_event_name))) {dfx<-dfx[,c(id.var,varstodo)]} else {
       dfx<-dfx[,c(id.var,"redcap_event_name",varstodo)]}
   }
+  dfx<-bsrc.choice2checkbox(dfx = dfx,metadata = metd)
   
   return(dfx)
 }
+
+##############
+
+bsrc.choice2checkbox<-function(dfx=NULL,metadata=NULL,cleanupog=T){
+  varstodo<-names(dfx)[which(metadata$field_type[match(names(dfx),metadata$field_name)] == "checkbox")]
+  for (var in varstodo) {
+    choicemap<-bsrc.getchoicemapping(variablenames = var,metadata = metadata)
+    as.list(dfx[[var]])->lsvar
+    lxvar<-lapply(lsvar,function(xa) {
+      if (!any(!xa %in% choicemap$choice.code)) {
+        xc<-xa
+      } else if (!any(!xa %in% choicemap$choice.string)) {
+        xc<-choicemap$choice.code[match(xa,choicemap$choice.string)]
+      } else if (length(xa) < 2 && is.na(xa)){
+        xc<-NA
+      } else if (any(is.na(xa))) {
+        xc<-na.omit(xa)
+      }else {
+        warning(paste0("variable ",var," contains unmatched value: ",xa,", will return NA"))
+        xc<-NA
+      }
+      
+      dk <- data.frame(matrix(ncol = length(choicemap$choice.code), nrow = 1,data = 0))
+      names(dk)<-paste(var,choicemap$choice.code,sep = "___")
+      if (!any(is.na(xc))) {
+        dk[match(xc,choicemap$choice.code)]<-1
+      }
+      return(dk)
+    })
+    dfvar<-do.call(rbind,lxvar)
+    dfx<-cbind(dfx,dfvar)
+    if (cleanupog) {dfx[[var]]<-NULL}
+  }
+  return(dfx)
+}
+
+######
 # use the info intergraded in redcap for more elegant solution:
 # fundsrc$timeretrived
 #Need to be more useful
