@@ -375,11 +375,15 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
         dbx[which(dbx[[id.var]]==id & dbx$redcap_event_name==event),vartodo]->xrc}
       if (length(xrc)<1) {return(x)
       } else if (is.na(xrc) | nchar(xrc)<1) {return(x)
-      } else if (is.na(x) | nchar(x)<1) {return(xrc)
+      } else if (is.na(x) | nchar(x)<1) {
+        if (perference == "redcap") {return(xrc)}
+        if (perference == "data") {return(NA)}
+        if (perference == "NA") {return(NA)}
       }else if (xrc==x) {return(xrc)
       } else {
         if (perference == "redcap") {return(xrc)}
         if (perference == "data") {return(x)}
+        if (perference == "NA") {return(NA)}
       }
     })
     #do duplicate action here:
