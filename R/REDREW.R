@@ -365,8 +365,9 @@ bsrc.findid<-function(df,idmap,id.var="ID",onlyoutput=NULL){
 bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="redcap",curdb=NULL,onlyrc=T){
   varstodo<-names(dfx)[!names(dfx) %in% c(id.var,"redcap_event_name")]
   varstodo<-varstodo[varstodo %in% curdb$metadata$field_name]
-  dbx<-curdb$data
   metd<-curdb$metadata
+  formn<-unique(metd$form_name[metd$field_name %in% varstodo])
+  dbx<-bsrc.getform(curdb = curdb,formname = formn)
   if (any(varstodo %in% metd$field_name[metd$field_type=="checkbox"])) {
     cbs<-varstodo[which(varstodo %in% metd$field_name[metd$field_type=="checkbox"])]
     for (cb in cbs) {
@@ -374,30 +375,38 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
     }
   }
   for (vartodo in varstodo) {
-    xk<-sapply(1:length(dfx[[id.var]]),function(i){
+    xk<-lapply(1:length(dfx[[id.var]]),function(i){
       as.character(dfx[i,id.var])->id
       as.character(dfx[i,"redcap_event_name"])->event
       dfx[[i,vartodo]]->x
+      if (is.list(x)){
+        x<-lapply(x,function(x){if(length(x)<1) {return(NULL)} else return(x)})
+        x<-unlist(cleanuplist(x))
+      }
+      x<-x[!is.na(x)]
+      x<-x[x!=""]
+      x<-unique(x)
       if (length(event)<1) {
         dbx[which(dbx[[id.var]]==id),vartodo]->xrc
-        if (is.list(xrc)){
-          xrc<-lapply(xrc,function(x){if(length(x)<1) {return(NULL)} else return(x)})
-          xrc<-unlist(cleanuplist(xrc))
-        }
-        xrc<-xrc[!is.na(xrc)]
-        xrc<-xrc[xrc!=""]
       } else {
         dbx[which(dbx[[id.var]]==id & dbx$redcap_event_name==event),vartodo]->xrc}
+      
+      if (is.list(xrc)){
+        xrc<-lapply(xrc,function(x){if(length(x)<1) {return(NULL)} else return(x)})
+        xrc<-unlist(cleanuplist(xrc))
+      }
+      xrc<-xrc[!is.na(xrc)]
+      xrc<-xrc[xrc!=""]
+      xrc<-unique(xrc)
       
       if(length(xrc)<1 |is.null(xrc) |!any(!is.na(xrc))) {xrc<-NA
       } else if (length(xrc)>1 && any(is.na(xrc))) {xrc<-na.omit(xrc)}
       if(length(x)<1 |is.null(x) |!any(!is.na(x))) {x<-NA
       } else if (length(x)>1 && any(is.na(x))) {x<-na.omit(x)}
       
-      
-      if (any(is.na(xrc))) {return(x)}
-      if (any(is.na(x))) {return(xrc)}
-      if (length(xrc)!=length(x) | any(!xrc %in% x)){
+      if (any(is.na(xrc))) {return(x)
+      } else if (any(is.na(x))) {return(xrc)
+      } else if (length(xrc)!=length(x) | any(!xrc %in% x)){
         if (perference == "redcap") {return(xrc)}
         if (perference == "data") {return(x)}
         if (perference == "NA") {return(NA)}
@@ -405,6 +414,7 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
       
     })
     #do duplicate action here:
+    if (!any(sapply(xk,length)>1) ) {xk<-unlist(xk)}
     dfx[[vartodo]]<-xk
   }
   
