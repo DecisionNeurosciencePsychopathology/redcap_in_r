@@ -515,22 +515,49 @@ bsrc.findduplicate <- function(protocol = protocol.cur) {
       }
     print("DONE")
 }
-################# Universal Function to deal with checkbox items:
-bsrc.checkbox<-function(x,variablename = "registration_race",returndf = T,collapse=",",...) {
-  raceonly<-x[grep(paste(variablename,"___",sep = ""),names(x))]
-  options<-gsub(paste(variablename,"___",sep = ""),"",names(raceonly))
-  x$xudjfnx<-lapply(1:length(raceonly[[1]]), function(i) {
-    gsub(paste(variablename,"___",sep = ""),"",names(raceonly[i,])[which(raceonly[i,]==1)])
-    })
-  x$knxmncua<-sapply(x$xudjfnx, function(x) {paste(na.omit(x),collapse = collapse)})
-  x$vximnucj<-sapply(x$xudjfnx,function(x) {length(x)>1})
+####################
+bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T) {
+  datesx<-curdb$data[c("registration_redcapid","redcap_event_name","demo_visitdate","fudemo_visitdate")]
+  datesx[datesx==""]<-NA
+  datesx$event_date<-sapply(1:length(datesx$registration_redcapid), function(iz) {
+    if (!is.na(datesx[iz,]$demo_visitdate)) {return(datesx[iz,]$demo_visitdate)
+    } else if (!is.na(datesx[iz,]$fudemo_visitdate)) {return(datesx[iz,]$fudemo_visitdate)
+    } else {return(NA)} 
+  })
+  datesz<-datesx[!is.na(datesx$event_date),c("registration_redcapid","redcap_event_name","event_date")]
+  datesz$timeframe<-as.numeric(gsub("([0-9]+).*$", "\\1", datesz$redcap_event_name))
+  datesz$timeframe[datesz$redcap_event_name=="baseline_arm_1"]<-0
   
+  if (is.null(dfx) | returnmap) {
+    return(datesz)
+  } else if (returndfx) {
+    
+  } else {message("unable to return based on input argument")}
+  
+}
+#####################
+
+
+################# Universal Function to deal with checkbox items:
+bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T,cleandf=T,collapse=",",...) {
+  varionly<-dfx[grep(paste(variablename,"___",sep = ""),names(dfx))]
+  options<-gsub(paste(variablename,"___",sep = ""),"",names(varionly))
+  dfx[[variablename]]<-lapply(1:length(varionly[[1]]), function(i) {
+    ix<-gsub(paste(variablename,"___",sep = ""),"",names(varionly[i,])[which(varionly[i,]==1)])
+    if (length(ix)>0) {return(ix)} else {return(NA)}
+  })
+  dfx[[paste(variablename,"__string",sep = "")]]<-sapply(dfx[variablename], function(x) {paste(na.omit(x),collapse = collapse)})
+  dfx[[paste(variablename,"__ifmultiple",sep = "")]]<-sapply(dfx[variablename],function(x) {length(x)>1})
   if (returndf) {
-    colnames(x)[grep("xudjfnx",names(x))]<-variablename
-    colnames(x)[grep("knxmncua",names(x))]<-paste(variablename,"_string",sep = "")
-    colnames(x)[grep("vximnucj",names(x))]<-paste(variablename,"_ifmultiple",sep = "")
-    return(x)}
-  else {return(list(Checkbox_text=x$knxmncua,Checkbox_list=x$xudjfnx,Checkbox_ifmultiple=x$vximnucj))}
+    if (cleandf) { 
+      dfx<-dfx[-c(grep(paste(variablename,"___",sep = ""),names(dfx)),
+                  grep(paste(paste(variablename,c("string","ifmultiple"),sep = "__"),collapse = "|"),names(dfx)))]
+      
+    }
+    return(dfx)}
+  else {return(list(Checkbox_text=dfx[[variablename]],
+                    Checkbox_list=dfx[[paste(variablename,"__string",sep = "")]],
+                    Checkbox_ifmultiple=dfx[[paste(variablename,"__ifmultiple",sep = "")]]))}
 }
 ####### get choice mapping and its list varient
 bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
