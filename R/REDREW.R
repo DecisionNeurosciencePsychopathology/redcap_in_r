@@ -536,23 +536,55 @@ bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T) {
   
 }
 #####################
-
-
+dnpl.bso.getsahx<-function(curdb) {
+  metd<-curdb$metadata
+  sahx<-bsrc.getform(formname = "suicide_history",curdb = curdb)
+  cbvars<-metd$field_name[which(metd$form_name=="suicide_history" & metd$field_type=="checkbox")]
+  for (varx in cbvars) {
+    sahx<-bsrc.checkbox(varx,sahx,returnstring = T)
+  }   
+  varying<-names(sahx)[grep("[0-9]+",names(sahx))]
+  notvarying<-names(sahx)[-grep("[0-9]+",names(sahx))]
+  dfz<-tolong_multivalue(dfx = sahx, varying = varying, notvarying = notvarying,id.var = c("registration_redcapid","redcap_event_name"),
+                         var.left = "type",var.right="attempt",sep = "_at",timepos = "right")
+  dfe<-dfz[!is.na(dfz$sahx_sadate),]
+  idmap<-subreg<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
+  dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
+  return(dff)
+}
+##########################
+tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
+  dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
+  dfx_var_melt[[var.left]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",1)
+  dfx_var_melt[[var.right]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",2)
+  dfx_var_melt$variable<-NULL
+  if (timepos=="right") {
+    timevar<-var.left
+    id.var<-c(id.var,var.right)
+  } else if (timepos=="left") {
+    timevar<-var.right
+    id.var<-c(id.var,var.left)
+  }
+  dfx_reshape<-reshape(dfx_var_melt,timevar = timevar,v.names = "value",idvar = id.var,direction = "wide")
+  names(dfx_reshape)<-gsub("value.","",names(dfx_reshape),fixed = T)
+  
+  return(dfx_reshape)
+}
 ################# Universal Function to deal with checkbox items:
-bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T,cleandf=T,collapse=",",...) {
+bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T,cleandf=T,returnstring=F,collapse=",",...) {
   varionly<-dfx[grep(paste(variablename,"___",sep = ""),names(dfx))]
   options<-gsub(paste(variablename,"___",sep = ""),"",names(varionly))
   dfx[[variablename]]<-lapply(1:length(varionly[[1]]), function(i) {
     ix<-gsub(paste(variablename,"___",sep = ""),"",names(varionly[i,])[which(varionly[i,]==1)])
     if (length(ix)>0) {return(ix)} else {return(NA)}
   })
-  dfx[[paste(variablename,"__string",sep = "")]]<-sapply(dfx[variablename], function(x) {paste(na.omit(x),collapse = collapse)})
-  dfx[[paste(variablename,"__ifmultiple",sep = "")]]<-sapply(dfx[variablename],function(x) {length(x)>1})
+  dfx[[paste(variablename,"__string",sep = "")]]<-sapply(dfx[[variablename]], function(x) {paste(na.omit(x),collapse = collapse)})
+  dfx[[paste(variablename,"__ifmultiple",sep = "")]]<-sapply(dfx[[variablename]],function(x) {length(x)>1})
   if (returndf) {
     if (cleandf) { 
       dfx<-dfx[-c(grep(paste(variablename,"___",sep = ""),names(dfx)),
                   grep(paste(paste(variablename,c("string","ifmultiple"),sep = "__"),collapse = "|"),names(dfx)))]
-      
+      if (returnstring) {dfx[[variablename]]<-sapply(dfx[[variablename]], function(x) {paste(na.omit(x),collapse = collapse)})}
     }
     return(dfx)}
   else {return(list(Checkbox_text=dfx[[variablename]],
