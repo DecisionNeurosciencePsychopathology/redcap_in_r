@@ -276,11 +276,11 @@ graph_data_meet<-function(datalist=NULL,xdata=NULL,title=NULL,save=F,savepath=NU
   return(plotx)
 }
 ###########################Data Meeting:
-bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL){
+bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
   if (is.null(curdb)){
-  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)}
+  curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
   funbsrc<-curdb$data
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
+  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,...)
   
   switch (protocol$name,
           bsocial = {

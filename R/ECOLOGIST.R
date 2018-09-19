@@ -120,13 +120,14 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
   emadata.raw$TriggerDate<-as.Date(ifelse(d < "2012-12-31", format(d, "20%y-%m-%d"), format(d)))}
   if(run3) {
     if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
+    emadata.raw<-emadata.raw[which(emadata.raw$User_Id!=""),]
     emadata.raw$Survey_Class<-emadata.raw$TriggerName
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("BoD_U"))]<-"BoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("DoD_U"))]<-"DoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("EoD_U"))]<-"EoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("SetUp"))]<-"SetUp"
     emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
-    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,...)
+    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,envir = envir,...)
     emadata.raw$RedcapID<-idmatch$registration_redcapid[match(emadata.raw$User_Id, idmatch$ema_studyidentifier)]
     lRedcapID<-unique(emadata.raw$RedcapID)
     emadata.raw$Survey_Started_Date<-as.Date(emadata.raw$Survey_Started_Date)
