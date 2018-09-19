@@ -340,7 +340,11 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   return(ifrun)
 }
 ###############################
-bsrc.findid<-function(df,idmap,id.var="ID",onlyoutput=NULL){
+bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,protocol=protocol.cur,...){
+  if (is.null(idmap)) {
+    if (is.null(curdb)) {curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
+    idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
+  }
   t<-lapply(df[[id.var]],function(id) {
     pos<-as.data.frame(which(idmap==id,arr.ind = T))
     dx<-idmap[unique(pos$row),]
@@ -369,11 +373,12 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
   formn<-unique(metd$form_name[metd$field_name %in% varstodo])
   dbx<-bsrc.getform(curdb = curdb,formname = formn)
   if (any(varstodo %in% metd$field_name[metd$field_type=="checkbox"])) {
+    cbyes<-T
     cbs<-varstodo[which(varstodo %in% metd$field_name[metd$field_type=="checkbox"])]
     for (cb in cbs) {
       dbx<-bsrc.checkbox(x = dbx,variablename = cb)
     }
-  }
+  } else {cbyes<-F}
   for (vartodo in varstodo) {
     xk<-lapply(1:length(dfx[[id.var]]),function(i){
       as.character(dfx[i,id.var])->id
@@ -384,8 +389,9 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
         x<-unlist(cleanuplist(x))
       }
       x<-x[!is.na(x)]
-      x<-x[x!=""]
+      if (any(is.character(x))) {x<-x[x!=""]}
       x<-unique(x)
+      
       if (length(event)<1) {
         dbx[which(dbx[[id.var]]==id),vartodo]->xrc
       } else {
@@ -396,7 +402,7 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
         xrc<-unlist(cleanuplist(xrc))
       }
       xrc<-xrc[!is.na(xrc)]
-      xrc<-xrc[xrc!=""]
+      if (any(is.character(xrc))) {xrc<-xrc[xrc!=""]}
       xrc<-unique(xrc)
       
       if(length(xrc)<1 |is.null(xrc) |!any(!is.na(xrc))) {xrc<-NA
@@ -422,7 +428,7 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
     if(any(is.null(dfx$redcap_event_name))) {dfx<-dfx[,c(id.var,varstodo)]} else {
       dfx<-dfx[,c(id.var,"redcap_event_name",varstodo)]}
   }
-  dfx<-bsrc.choice2checkbox(dfx = dfx,metadata = metd)
+  if (cbyes){dfx<-bsrc.choice2checkbox(dfx = dfx,metadata = metd)}
   
   return(dfx)
 }
@@ -516,7 +522,10 @@ bsrc.findduplicate <- function(protocol = protocol.cur) {
     print("DONE")
 }
 ####################
-bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T) {
+bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T,protocol=protocol.cur,...) {
+  if (is.null(curdb)){
+    curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
+  }
   datesx<-curdb$data[c("registration_redcapid","redcap_event_name","demo_visitdate","fudemo_visitdate")]
   datesx[datesx==""]<-NA
   datesx$event_date<-sapply(1:length(datesx$registration_redcapid), function(iz) {
@@ -548,7 +557,7 @@ dnpl.bso.getsahx<-function(curdb) {
   dfz<-tolong_multivalue(dfx = sahx, varying = varying, notvarying = notvarying,id.var = c("registration_redcapid","redcap_event_name"),
                          var.left = "type",var.right="attempt",sep = "_at",timepos = "right")
   dfe<-dfz[!is.na(dfz$sahx_sadate),]
-  idmap<-subreg<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
+  idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
   dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
   return(dff)
 }
@@ -764,6 +773,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
 ### MATACH FUNCTIONS ####
 ######################### Match RedCap ID to df
 bsrc.getidmatchdb<-function(db,idfield="ID",protocol=protocol.cur,...) {
+  message("This function is being depreciated, use bsrc.findid() instead.")
   curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
   funbsrc<-curdb$data
   ifrun<-curdb$success
