@@ -88,7 +88,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
     #
   }
 ############### General Get File
-bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
+bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
   if (missing(filename)) {
     print("No file specified, please choose the target file")  
     filename<-file.choose()
@@ -127,7 +127,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,...){
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("EoD_U"))]<-"EoD"
     emadata.raw$Survey_Class[which(emadata.raw$Survey_Class %in% c("SetUp"))]<-"SetUp"
     emadata.raw$Survey_Class[which(!emadata.raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
-    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,envir = envir,...)
+    idmatch<-bsrc.ema.mwredcapmatch(emadata.raw,funema=funema,envir=envir,...)
     emadata.raw$RedcapID<-idmatch$registration_redcapid[match(emadata.raw$User_Id, idmatch$ema_studyidentifier)]
     lRedcapID<-unique(emadata.raw$RedcapID)
     emadata.raw$Survey_Started_Date<-as.Date(emadata.raw$Survey_Started_Date)
@@ -219,7 +219,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     emadata$Total<-as.numeric(emadata$BoD)+as.numeric(emadata$DoD)+as.numeric(emadata$EoD)
     #Generate Expectation Grid:
     lengthofema<-21
-    startdate<-as.Date(funema$ema_setuptime[which(funema$registration_redcapid == RedcapID & funema$ema_setuptime!="")])
+    startdate<-as.Date(funema$ema_setuptime[which(funema$registration_redcapid %in% RedcapID & funema$ema_setuptime!="")])
     enddate<-startdate+lengthofema
     
     emaseqdate<-seq.Date(from=startdate,to=enddate,by="days")
