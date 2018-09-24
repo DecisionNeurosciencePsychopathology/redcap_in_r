@@ -45,9 +45,9 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
   if (ifrun){
     #get info from registration
     subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
-    subreg$curage<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_dob), end = Sys.Date()))$year #Get current age
-    subreg$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date())) #get since date 
-    subreg$fudue<-round((as.numeric(lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
+    subreg$curage<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_dob,format = "%Y-%m-%d"), end = Sys.Date()))$year #Get current age
+    subreg$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate,format = "%Y-%m-%d"), end = Sys.Date())) #get since date 
+    subreg$fudue<-round((as.numeric(lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate,format = "%Y-%m-%d"), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
     regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("registration_consentdate",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
     
     #find max fudate:
@@ -150,7 +150,7 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     emaonly.x<-subset(emaonly.s,select = c("registration_redcapid","prog_emastatus","prog_emastatus_di","prog_emadued"))
     #Screened:
     emaonly.j<-bsrc.getform(formname = "ema_screening_form", curdb = curdb)
-    emaonly.j<-subset(emaonly.j[!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1,],select = c("registration_redcapid"))
+    emaonly.j<-data.frame(registration_redcapid=emaonly.j[which(!(emaonly.j$registration_redcapid %in% emaonly.x$registration_redcapid) & emaonly.j$ema_yesno==1),c("registration_redcapid")])
     emaonly.j$prog_emastatus<-"Screened&Ready"
     #Merge:
     emaonly.r<-merge(emaonly.x,emaonly.j,all=T)

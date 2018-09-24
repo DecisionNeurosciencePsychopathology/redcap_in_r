@@ -332,10 +332,11 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
   originaldata$ema_completed___3->threestatus
   emamelt.merge<-emamelt.merge[which(!emamelt.merge$Type %in% c("MB","SetUp")),]
   emamelt.merge$check<-NA
+  #emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"3Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"7Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+14))]<-"14Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+21))]<-"21Days"
-  if (length(which(is.na((emamelt.merge$check)))) != length(emamelt.merge$date)) {
+  if (length(which(is.na(emamelt.merge$check))) != length(emamelt.merge$date)) {
     test1<-reshape(emamelt.merge[!is.na(emamelt.merge$check),],idvar = "check",timevar = "Type",direction = "wide", v.names = c("actual","per"),drop = c("porp","expectation","diff"))
     test1[which(test1$date>=Sys.Date()),grep("actual",names(test1))[1]:length(test1)]<-"NOT FINISH"
     test2<-reshape(test1,idvar = "redcapID",timevar = "check",direction = "wide", v.names = names(test1)[-c(2,3)])
@@ -368,8 +369,8 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       test3$ema_completed___3<-threestatus
     }
     }else {print(paste("Nothing to upload yet, come back after: ", startdate+7))
-    test3<-data.frame(unique(emamelt.merge$redcapID),"1")
-    names(test3)<-c("registration_redcapid","ema_completed___ip")
+    test3<-data.frame(registration_redcapid=unique(emamelt.merge$redcapID),ema_completed___ip="1")
+    #names(test3)<-c("registration_redcapid","ema_completed___ip")
     test3$redcap_event_name<-"ema_arm_1"
     test3$ema_completed___3<-0
     test3$ema_completed___999<-0}
