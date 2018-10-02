@@ -66,6 +66,10 @@ cleanuplist<-function(listx){
     listx[sapply(listx, is.null)] <- NULL}
   return(listx)
 }
+###################
+is.empty<-function(...) {
+  return(...=="")
+}
 ###############Get Event Mapping from RedCap:
 redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
   start_time <- Sys.time()
@@ -98,6 +102,59 @@ redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, c
                                 raw_text, "'.")}
   }
   else {
+    ds <- data.frame()
+    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
+                              raw_text)}
+  if (message){ 
+    message(outcome_message)}
+  return(list(data = ds, success = success, status_code = status_code, 
+              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
+              raw_text = raw_text))
+}
+
+redcap.getreport<-function(redcap_uri, token, reportid = NULL, message = TRUE, config_options = NULL) {
+  
+  library(RCurl)
+  result <- postForm(
+    uri='https://www.ctsiredcap.pitt.edu/redcap/api/',
+    token='F4D36C656D822DF09832B5A4A8F323E6',
+    content='report',
+    format='csv',
+    report_id='8545',
+    rawOrLabel='raw',
+    rawOrLabelHeaders='raw',
+    exportCheckboxLabel='false',
+    returnFormat='json'
+  )
+  
+  start_time <- Sys.time()
+  if (missing(redcap_uri))  {
+    stop("The required parameter `redcap_uri` was missing from the call to `redcap.getreport`.") }
+  if (missing(token)) {
+    stop("The required parameter `token` was missing from the call to `redcap.getreport`.") }
+  token <- REDCapR::sanitize_token(token)
+  post_body <- list(token = token, content = "report", format = "csv", report_id=as.character(reportid))
+  result <- httr::POST(url = redcap_uri, body = post_body, 
+                       config = config_options)
+  status_code <- result$status
+  success <- (status_code == 200L)
+  raw_text <- httr::content(result, "text")
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  if (success) {
+    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
+        silent = TRUE)
+    if (exists("ds") & inherits(ds, "data.frame")) {
+      outcome_message <- paste0("The data dictionary describing ", 
+                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
+                                " fields was read from REDCap in ", 
+                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
+                                status_code, ".")
+      raw_text <- ""} else {success <- FALSE
+    ds <- data.frame()
+    outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
+                              status_code, ".  The 'raw_text' returned was '", 
+                              raw_text, "'.")}
+  } else {
     ds <- data.frame()
     outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
                               raw_text)}

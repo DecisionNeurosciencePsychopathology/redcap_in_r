@@ -47,14 +47,14 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
   localmatch<-ema3[which(!is.na(ema3$ema_id)),grep(paste("User_Id","ema_id",sep = "|"),names(ema3))]
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
-  localmatch<-localmatch[-which(duplicated(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid))),]
+  localmatch<-localmatch[!duplicated(localmatch),]
   if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
+  if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
   disrupt<-localmatch[which(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))),]
   if (length(disrupt$ema_studyidentifier)>0){
   print("ARGH,THESE PAIRS DON'T MATCH")
   print(disrupt)
       for (i in 1:length(disrupt$ema_studyidentifier)) {
-          if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
           if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
             print("Try to grab from previouse matchdb")
             p.id.try<-matchdb$registration_redcapid[match(disrupt$ema_studyidentifier[i],matchdb$ema_studyidentifier)]
@@ -81,7 +81,8 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
           localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
       }
   }else {print("NO DISRUPT")}
-  localmatch<-localmatch[-which(duplicated(localmatch)),]
+  localmatch<-rbind(matchdb,localmatch)
+  localmatch<-localmatch[!duplicated(localmatch),]
   rownames(localmatch)<-NULL
   assign("matchdb",localmatch,envir = envir)
   return(localmatch)
