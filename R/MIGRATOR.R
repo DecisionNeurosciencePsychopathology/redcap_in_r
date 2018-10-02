@@ -1,7 +1,7 @@
 ###
 #Title: Migrator
 #Author: Jiazhou Chen
-#Version: 0.1
+#Version: 0.2
 
 #Functions in this script will deal with migrating data between RedCap projects as well as migration from/to access database
 
@@ -211,5 +211,128 @@ dnpl.redcap2redcap.ssub<-function(ptc.from=NULL,ptc.to=NULL,online=T,idmap=NULL,
 }
 
 
+rm_noinfopt<-function(ptcs) {
+  ptcs[which(sapply(lapply(ptcs,function(x) {x$rdpath}),is.null))]<-NULL
+  return(ptcs)
+}
+
+dnpl.updatedemostatus<-function(ptc_demo=NULL){
+  masterdemo<-bsrc.conredcap2(protocol = ptc_demo,updaterd = T,output = T,returnas="list")$data
+  masterdemo<-bsrc.checkbox(masterdemo,variablename = "registration_ptcstat")
+  lapply(masterdemo$registration_redcapid, function(id) {
+      
+  })
+}
+
+proc_iddf<-function(iddf=NULL,patterns=c("SON2_","SON1_","NOP3_"),preserve=c("record_id")){
+  iddf<-iddf[apply(iddf,1,function(x) {length(which(is.empty(x)))}) < length(iddf)-1,]
+  dfx<-as.data.frame(lapply(patterns,function(pd) {
+    apply(iddf,1, function(d) {
+      ld<-d[grep(x = d, pattern=pd)] 
+      names(ld)<-NULL
+      if (length(ld)>0) {return(ld)} else {return(NA)}
+    })
+  }))
+  names(dfx)<-paste0(patterns,"ID")
+  dfz<-cbind(iddf[preserve],dfx)
+  return(dfz)  
+}
+
+dnpl.sync.ptcstatus<-function(...) {
+  ptcx<-rm_noinfopt(list(...))
+  mtt<-lapply(ptcx,function(ptc) {
+    dtt<-bsrc.conredcap2(protocol = ptc,returnas = "envir",fullupdate = F, output = T, updaterd = F)
+    dtx<-data.frame(ID=REDCapR::redcap_read(fields = dtt$metadata$field_name[1],redcap_uri = ptc$redcap_uri,token = ptc$token)$data,
+                    name=ptc$name)
+    return(dtx)
+  })
+  names(mtt)<-sapply(mtt,function(dtx){return(unique(dtx$name))})
+  
+  
+}
 
 
+dnpl.sync<-function(...,syncform=c("record_registration","registration_and_termination","progress_check")){ 
+  #We clean up first, functionalized this in case this turn into something crazy
+  ptcx<-rm_noinfopt(list(...))
+  dt<-lapply(ptcx,function(ptc) {
+    dtt<-bsrc.checkdatabase2(protocol = ptc,returnas = "envir",expiration = 4)
+    dtt$name<-ptc$name
+    return(dtt)
+    })
+  names(dt)<-sapply(dt,function(dtx){return(dtx$name)})
+  allmeta<-do.call(rbind,lapply(dt,function(x1){
+    x1x<-x1$metadata[which(x1$metadata$form_name %in% syncform),]
+    x1x$study<-x1$name
+    return(x1x)
+    }))
+  # allevent<-do.call(rbind,lapply(dt,function(x2){
+  #   x2x<-x2$eventmap[which(x2$eventmap$form %in% syncform),]
+  #   if (is.null(x2x)) {x2x<-data.frame(arm_num=NA,unique_event_name=NA,form=NA)}
+  #   x2x$study<-x2$name
+  #   return(x2x)
+  # }))
+  metamap<-do.call(rbind,lapply(allmeta$field_note[duplicated(allmeta$field_note) & nchar(allmeta$field_note)>0],function(x2) {
+    return(allmeta[which(allmeta$field_note==x2),c("field_note","field_name","form_name","study")])
+  }))
+  
+  dt_sub<-lapply(unique(metamap$form_name), function(x3) {
+    x3r<-lapply(unique(metamap$study[metamap$form_name==x3]), function(x3a) {bsrc.getform(formname = x3,curdb = dt[[x3a]])})
+    names(x3r)<-unique(metamap$study[metamap$form_name==x3])
+    return(x3r)
+    })
+  names(dt_sub)<-unique(metamap$form_name)
+  
+  
+  
+  return(dt)
+  }
+
+dnpl.reworkdemo<-function(curdb,syncform=c("record_registration","registration_and_termination","progress_check")){
+  metax<-curdb$metadata[which(curdb$metadata$form_name %in% syncform),]
+  map<-bsrc.getchoicemapping(variablenames = metax[grep("group",metax$field_note),]$field_name,metadata = curdb$metadata)
+  curdb$data[metax[grep("group",metax$field_note),]$field_name]<-plyr::mapvalues(x=curdb$data[[metax[grep("group",metax$field_note),]$field_name]],
+                                                                                 from = map$choice.code,to = as.character(map$choice.string))
+  curdb$data[[metax[grep("group",metax$field_note),]$field_name]]->groupvar
+  groupvar[grep(paste("healthy control","hc",sep = "|"),groupvar,ignore.case = T)]<-"HC"
+  groupvar[grep(paste("not sure yet","nsy","88",sep = "|"),groupvar,ignore.case = T)]<-"88"
+  groupvar[grep(paste("Ineligible / Not Applicable","Ineligible","Not Applicable","89",sep = "|"),groupvar,ignore.case = T)]<-"89" 
+  groupvar[grep(paste("Non-suicidal","Non-suicidal/Non-depressed patient","Non-depressed","non",sep = "|"),groupvar,ignore.case = T)]<-"NON"
+  groupvar[grep(paste("High Lethality","HL",sep = "|"),groupvar,ignore.case = T)]<-"HL"
+  groupvar[grep(paste("Low Lethality","LL",sep = "|"),groupvar,ignore.case = T)]<-"LL"
+  groupvar[grep(paste("Attempter","att",sep = "|"),groupvar,ignore.case = T)]<-"ATT"
+  groupvar[grep(paste("Ideator","ide",sep = "|"),groupvar,ignore.case = T)]<-"IDE"
+  groupvar[grep(paste("Depressed Control","dep",sep = "|"),groupvar,ignore.case = T)]<-"IDE"
+  
+  curdb$data$lethality<-NA
+  
+  
+  
+  
+  }
+
+
+
+
+
+
+
+
+
+
+if (F) {
+
+metareshape<-reshape(metamap,timevar = "study",idvar = "field_note",direction = "wide",sep = "/_|")
+dt_sub$record_registration$bsocial
+dt_xj<-dt_sub$record_registration$bsocial[which(!is.na(dt_sub$record_registration$bsocial[metamap$field_name[metamap$study=="bsocial" & metamap$field_note=="dnplid"]])),]
+dt_xk<-dt_xj[grep(paste(toget,collapse = "|"),names(dt_xj))]
+for (i in 1:length(metareshape[[1]])) {
+  names(dt_xk)<-gsub(pattern = metareshape[i,paste("field_name","bsocial",sep = "/_|")],
+       replacement = metareshape[i,paste("field_name","masterdemo",sep = "/_|")],
+       names(dt_xk))
+  
+  }
+dt_xk$registration_ptcstat___bsocial<-1
+
+dt<-dnpl.sync(ptcs$masterdemo,ptcs$bsocial,ptcs$ksocial)
+}
