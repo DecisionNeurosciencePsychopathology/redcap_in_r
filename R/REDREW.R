@@ -397,13 +397,18 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   return(ifrun)
 }
 ###############################
-bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,protocol=protocol.cur,...){
+bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,protocol=protocol.cur,addgroupstatus=T,...){
   if (is.null(idmap)) {
     if (is.null(curdb)) {curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
-    idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
+    if(addgroupstatus) {varitoget<-c("registration_id","registration_redcapid","registration_soloffid","registration_group","registration_status")
+    } else {varitoget<-c("registration_id","registration_redcapid","registration_soloffid")}
+    idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[varitoget]
+    rownames(idmap)<-NULL
   }
+  if (!missing(df)){
   t<-lapply(df[[id.var]],function(id) {
-    pos<-as.data.frame(which(idmap==id,arr.ind = T))
+    cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
+    pos<-as.data.frame(which(cleanmap==id,arr.ind = T))
     dx<-idmap[unique(pos$row),]
     if(length(dx[[1]])>0) {
       dx$ogid<-id
@@ -421,6 +426,7 @@ bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,proto
   if (!is.null(onlyoutput)){tx<-tx[c(onlyoutput)]}
   lx<-cbind(df,tx)
   return(lx)
+  } else {return(idmap)}
 }
 #############
 bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="redcap",curdb=NULL,onlyrc=T){
