@@ -602,7 +602,7 @@ bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T,protocol
   
 }
 #####################
-dnpl.bso.getsahx<-function(curdb) {
+dnpl.bso.getsahx<-function(curdb=NULL) {
   metd<-curdb$metadata
   sahx<-bsrc.getform(formname = "suicide_history",curdb = curdb)
   cbvars<-metd$field_name[which(metd$form_name=="suicide_history" & metd$field_type=="checkbox")]
