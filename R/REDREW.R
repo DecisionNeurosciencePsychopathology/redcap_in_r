@@ -70,6 +70,7 @@ cleanuplist<-function(listx){
 is.empty<-function(...) {
   return(...=="")
 }
+
 ###############Get Event Mapping from RedCap:
 redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
   start_time <- Sys.time()
