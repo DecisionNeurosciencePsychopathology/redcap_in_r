@@ -72,6 +72,7 @@ son.whichvisit<-function(ptc.from=son2,data.from=NULL){
   idmatch<-data.from$data[,c("record_id","subject_id")]
   idmatch[idmatch==""]<-NA
   na.omit(idmatch)->idmatch
+  idmatch<-idmatch[!duplicated(idmatch),]
   data.from$data[,c("record_id","redcap_event_name","med_type")]->working
   working[grep("Plac",working$med_type),]->working.f
   working.f[working.f==""]<-NA
