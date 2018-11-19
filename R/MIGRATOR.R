@@ -84,7 +84,7 @@ son.getideventmap<-function(ptc.from=NULL,data.from=NULL,naomit=T,...){
     data.from<-bsrc.checkdatabase2(protocol = ptc.from,online = T)
   }
   id<-son.getidmap(data.from = data.from,...)
-  working.f<-son.whichvisit(data.from = data.from,...)
+  working.f<-son.whichvisit(data.from = data.from)
   merge(id,working.f,all = T,by.x = "idfield.from", by.y = "subject_id")->id.map
   if(naomit){
   f.id.map<-na.omit(id.map)} else {f.id.map<-id.map}
