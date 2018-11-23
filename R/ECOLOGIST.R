@@ -45,34 +45,34 @@
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
-  localmatch<-ema3[which(!is.na(ema3$ema_id)),grep(paste("User_Id","ema_id",sep = "|"),names(ema3))]
+  localmatch<-ema3[which(!is.na(ema3$ema_id)),c("User_Id","ema_id")]
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   localmatch<-localmatch[!duplicated(localmatch),]
   if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
   if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
   disrupt<-localmatch[which(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))),]
   if (length(disrupt$ema_studyidentifier)>0){
-  print("ARGH,THESE PAIRS DON'T MATCH")
+  message("ARGH,THESE PAIRS DON'T MATCH")
   print(disrupt)
       for (i in 1:length(disrupt$ema_studyidentifier)) {
           if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
-            print("Try to grab from previouse matchdb")
+            message("Try to grab from previouse matchdb")
             p.id.try<-matchdb$registration_redcapid[match(disrupt$ema_studyidentifier[i],matchdb$ema_studyidentifier)]
             if (length(p.id.try)==1){p.id.try->actualid}
           } else if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
             actualid.try<-NULL
             if (length(which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])) > 1) { #if more than 1 match in localmatch, try localmatch duplicate
               actualid.try<-localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])][which(!localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])] %in% disrupt$registration_redcapid[i])]
-              print("Try to grab from localmatch duplicates")
-              print(actualid.try)
+              message("Try to grab from localmatch duplicates")
+              message(actualid.try)
               if (length(actualid.try)==1){
               stepone<-TRUE
               actualid.try->actualid
-              print("success!")}
+              message("success!")}
             }else {stepone<-FALSE}
             
           if (!stepone){
-          print("Try to grab it from RedCap.")
+            message("Try to grab it from RedCap.")
           maybeid<-funema$registration_redcapid[match(disrupt$ema_studyidentifier[i],funema$ema_studyidentifier)]  
           idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for", disrupt$ema_studyidentifier[i] ,"y/n?   :"))
           if (idq=="y"){idq<-TRUE} else (idq<-FALSE)
@@ -80,7 +80,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
           } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))}
           localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
       }
-  }else {print("NO DISRUPT")}
+  }else {message("NO DISRUPT")}
   localmatch<-rbind(matchdb,localmatch)
   localmatch<-localmatch[!duplicated(localmatch),]
   rownames(localmatch)<-NULL
@@ -91,7 +91,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
 ############### General Get File
 bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
   if (missing(filename)) {
-    print("No file specified, please choose the target file")  
+    message("No file specified, please choose the target file")  
     filename<-file.choose()
   }
   tryCatch({
@@ -133,7 +133,8 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
     lRedcapID<-unique(emadata.raw$RedcapID)
     emadata.raw$Survey_Started_Date<-as.Date(emadata.raw$Survey_Started_Date)
     emadata.raw$Survey_Submitted_Date<-as.Date(emadata.raw$Survey_Submitted_Date)
-    emadata.raw$TriggerDate<-as.Date(emadata.raw$TriggerDate)}
+    emadata.raw$TriggerDate<-as.Date(emadata.raw$TriggerDate)
+    }
   return(emadata.raw)
 }
 ############### EMA2 Main function:
@@ -153,6 +154,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
   #Here is where you can do multiple ID processing loop: However, it might not be even useful bc individual files
   #Currently take out nas, should only be one item:
   RedcapID<-as.character(unique(emadata.raw$RedcapID))
+  print(RedcapID)
   Initial<-as.character(unique(subreg$registration_initials[match(RedcapID,subreg$registration_redcapid)]))
   DeviceOS<-as.character(unique(emadata.raw$DeviceOS))
   if ("J WOO" %in% Initial) {
@@ -388,6 +390,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
   }
 ################ Get certrain part of EMA data
 bsrc.ema.getevent<-function(emadata.raw,pick.input,additional=NA, vers="3") {
+  stop("This function will be depreciated, and the function call will be replaced by a different function in future updates")
   if (missing(emadata.raw)) {
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile()
@@ -431,19 +434,19 @@ bsrc.ema.patch<-function(emadata.raw,vers="3",skipgetevent=F){
   emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
   dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick.input = ltrigger[2], vers = vers)
   }else{emadata.raw->dodonly}
-  negnum<-grep(paste("angry","nervous","sad","irritated",sep = "|",collapse = "|"),names(dodonly))
-  negnum<-negnum[negnum >20]
+  negnumx<-grep(paste("angry","nervous","sad","irritated",sep = "|",collapse = "|"),names(dodonly))
+  negnum<-names(dodonly)[intersect(negnumx,grep(pattern = "rp_",names(dodonly)))]
   dodonly$ifnegative<-rowSums(dodonly[,negnum] >= 2)>0
   dodonly$ifintime<-dodonly$rp_time %in% c("Just happened","15 minutes","30 minutes","45 minutes")
   rownum<-as.numeric(rownames(dodonly[which(dodonly$ifintime & dodonly$ifnegative),]))
   
-  emadata.raw$MBYES<-FALSE
-  emadata.raw$MBCount<-NA
-  emadata.raw$MBYES[rownum]<-TRUE
-  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "Just happened")]<-4
-  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "15 minutes")]<-3
-  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "30 minutes")]<-2
-  emadata.raw$MBCount[which(emadata.raw$MBYES & emadata.raw$rp_time == "45 minutes")]<-1
+  emadata.raw$MB_YES<-FALSE
+  emadata.raw$MB_Timepoint<-NA
+  emadata.raw$MB_YES[rownum]<-TRUE
+  emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "Just happened")]<-4
+  emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "15 minutes")]<-3
+  emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "30 minutes")]<-2
+  emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "45 minutes")]<-1
   
   return(emadata.raw)
   }
@@ -820,4 +823,157 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
 #####################
 ########END##########
 #####################
+if(FALSE){
+  #Construction:
+  
+  #New orgnization and looping:
+  #input:
+  raw_fpath=file.choose()
+  protocol=protocol.cur
+  emardpath=rdpaths$ema
+  local=F
+  excludeid=c("")
+  #Functions:
+  
+  rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
+  envir_ema<-bsrc.attachngrab(emardpath)
+
+  ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)
+  ema_raw<-ema_raw[which(ema_raw$User_Id!=""),]
+  
+  ema_raw[ema_raw==""]<-NA
+  ema_raw[grep("Date",names(ema_raw))]<-as.data.frame(lapply(ema_raw[grep("Date",names(ema_raw))],as.Date))
+  ema_raw$Survey_Class<-gsub("_U","",ema_raw$TriggerName)
+  ema_raw$Survey_Class[which(!ema_raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
+  
+  ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema)
+  ema_raw$RedcapID<-ema_idmatch$registration_redcapid[match(x = ema_raw$User_Id,table = ema_idmatch$ema_studyidentifier)]
+  ema_raw<-bsrc.ema.patch(emadata.raw = ema_raw,vers = "2",skipgetevent = T)
+  ema_raw$DateTime<-strptime(paste(ema_raw$Survey_Submitted_Date,ema_raw$Survey_Submitted_Time,sep = " "),format = "%Y-%m-%d %H:%M")
+  
+  ema_raw<-ema_raw[order(ema_raw$RedcapID),]
+  ema_split<-split(ema_raw,ema_raw$RedcapID)
+  names(ema_split)->ls_rcid
+  
+  pema_allsub<-lapply(ema_split,function(ema_ss){
+    message(unique(ema_ss$RedcapID))
+    ema_ss<-ema_ss[order(ema_ss$Survey_Class),]
+    ema_ss_s<-split(ema_ss,ema_ss$Survey_Class)
+    
+    setup_ema<-ema_ss[ema_ss$DateTime==max(ema_ss$DateTime[!is.na(ema_ss$ema_waketime_u)]) & !is.na(ema_ss$ema_waketime_u),
+                      c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
+    names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
+    
+    
+    
+    seqDate<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
+    seqDate<-seqDate[seqDate<as.Date(Sys.Date())]
+    message(length(seqDate))
+    lpData<-lapply(seqDate,function(xdate){
+      
+      #new way:
+      todayls<-lapply(ema_ss_s,function(ss_x){
+        StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
+        EndDateTime<-(strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
+        dfx_dj<-ss_x[which(dplyr::between(x = as.numeric(ss_x$DateTime),
+                                             left = as.numeric(StartDateTime),
+                                             right = as.numeric(EndDateTime))),]
+      })
+      todayls$SetUp<-NULL
+      expectls<-list(BoD=1,EoD=1,DoD=6,MB=sum(todayls$DoD$MB_Timepoint,na.rm = T))
+      expectls$Total<-sum(unlist(expectls[c("BoD","DoD","EoD")]),na.rm = T)
+      actual<-lapply(todayls,nrow)
+      actual$Total<-sum(unlist(actual[c("BoD","DoD","EoD")]),na.rm = T)
+      
+      finaldf<-do.call(rbind,lapply(c(names(todayls),"Total"),function(gx){
+        data.frame(Type=gx,Actual=actual[[gx]],Expectation=expectls[[gx]])
+      }))
+      finaldf$Date<-xdate
+      finaldf$DaysInStudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
+      return(finaldf)
+    })
+    
+    pData<-do.call(rbind,lpData)
+    rownames(pData)<-NULL
+    pData$redcapID<-unique(ema_ss$RedcapID)
+    
+    message("#####DONE#####")
+    return(pData)
+  })
+
+  
+  ##################################
+  #BoD
+  whichgl<-"BoD"
+  subdf<-ema_ss_s[[whichgl]]
+  StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
+  EndDateTime<-(StartDateTime+2*60*60)
+  expect<-1
+  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
+                                         left = as.numeric(StartDateTime),
+                                         right = as.numeric(EndDateTime))))
+  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
+  rm("StartDateTime","EndDateTime","numactual","subdf")
+  
+  #EoD
+  whichgl<-"EoD"
+  subdf<-ema_ss_s[[whichgl]]
+  StartDateTime<-strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")
+  EndDateTime<-(StartDateTime+2*60*60)
+  expect<-1
+  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
+                                         left = as.numeric(StartDateTime),
+                                         right = as.numeric(EndDateTime))))
+  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
+  rm("StartDateTime","EndDateTime","numactual","subdf")
+  #DoD
+  whichgl<-"DoD"
+  subdf<-ema_ss_s[[whichgl]]
+  StartDateTime_DoD<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
+  EndDateTime_DoD<-((strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M"))+2*60*60)
+  expect<-6
+  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
+                                         left = as.numeric(StartDateTime_DoD),
+                                         right = as.numeric(EndDateTime_DoD))))
+  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
+  
+  #MB
+  whichgl<-"MB"
+  subdf_dod<-ema_ss_s[["DoD"]]
+  subdf_mb<-ema_ss_s[["MB"]]
+  df_expect<-subdf_dod[which(dplyr::between(x = as.numeric(subdf_dod$DateTime),
+                                            left = as.numeric(StartDateTime_DoD),
+                                            right = as.numeric(EndDateTime_DoD)) & subdf_dod$MB_YES),]
+  df_mb<-subdf_mb[which(dplyr::between(x = as.numeric(subdf_mb$DateTime),
+                                       left = as.numeric(StartDateTime_DoD),
+                                       right = as.numeric(EndDateTime_DoD))),]
+  if(nrow(df_expect)>0){
+    expect<-sum(df_expect$MB_Timepoint)
+    numactual<-sum(sapply(df_expect$DateTime,function(xjdate){
+      length(which(dplyr::between(x = as.numeric(subdf_mb$DateTime),
+                                  left = as.numeric(xjdate),
+                                  right = as.numeric(xjdate+1.5*60*60))))
+    }))
+    lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
+  } else if (nrow(df_mb)>0) {
+    expect<-0
+    numactual<-length(which(dplyr::between(x = as.numeric(df_mb$DateTime),
+                                           left = as.numeric(StartDateTime_DoD),
+                                           right = as.numeric(EndDateTime_DoD))))
+    lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
+  }
+  #Total (Exclude MB)
+  lsall$Total<-data.frame(Type="Total",actual=sum(sapply(lsall[c("BoD","DoD","EoD")],function(xj){xj$actual})),
+                          expectation=sum(sapply(lsall[c("BoD","DoD","EoD")],function(xj){xj$expectation})))  
+  ##########################
+  
+  
+  
+}
+
+
+
+
+
+
 
