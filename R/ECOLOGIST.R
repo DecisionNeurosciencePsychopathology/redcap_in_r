@@ -140,6 +140,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
 ############### EMA2 Main function:
 ##### urrently hard fixed for EMA 3; new main function needed:
 bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,funema=NULL,protocol=protocol.cur,...){
+  message("BE READY! THIS FUNCTION IS GETTING DEPRECIATED AND A NEW FUNCTION WILL TAKE THE NAME SOON.")
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile(curver = "2")
@@ -246,6 +247,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
       }
     #basic info
     info<-data.frame(RedcapID,Initial,startdate,enddate,mwuserid,DeviceOS)
+    
     if (any(emadata.raw$MBYES)) {
     mbonly<-data.table::as.data.table(emadata.raw[which(emadata.raw$MBYES),c("Survey_Submitted_Date","MBCount")])
     mbonly<-mbonly[, sum(MBCount), by = Survey_Submitted_Date]
@@ -285,6 +287,8 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
 #########Graphing function:
 bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
   require('ggplot2')
+  #Safe guard the function:
+  if(is.data.frame(emamelt.merge) && nrow(emamelt.merge)>0){
   #Safe guard the plot:
   emamelt.merge<-emamelt.merge[emamelt.merge$Type!="MB",]
   
@@ -299,7 +303,7 @@ bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=
     ggrepel::geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)))),], aes(x=date, y=porp,label=per))
   if (output){
   ggsave(paste(Initial,"_EMAProg_PercentPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.percent,dpi = 300,path = path, height = 8.3, width = 11.7)
-  print("Percentage Plot Saved to Working Directory")}
+  message("Percentage Plot Saved to Working Directory")}
   
   #Completion Plot
   emaplot.count<-ggplot(data = emamelt.merge, aes(x=date, y=actual, color=Type, group=Type, shape=Type)) +
@@ -313,9 +317,10 @@ bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=
     ggrepel::geom_label_repel(data = emamelt.merge[(which(emamelt.merge$date %in% c(startdate+7,startdate+14,ifelse(enddate>Sys.Date(),Sys.Date(),enddate)) & emamelt.merge$Type %in% c("BoD","DoD","Total"))),], aes(x=date, y=expectation,label=expectation),color="black")
   if (output){ 
   ggsave(paste(Initial,"_EMAProg_CountPlot.jpeg",sep = ""),device = "jpeg",plot = emaplot.count,dpi = 300,path = path, height = 8.3, width = 11.7)
-  print("Completion (count) Plot Saved to Working Directory")}
+  message("Completion (count) Plot Saved to Working Directory")}
   
   if(codeout){return(list(percentgraph=emaplot.percent,countgraph=emaplot.count))}
+  } else {message("Skipping Graphing: Input data not compatible, possibly because no entry yet.")}
 }
 ############### EMA 2 RedCap update function: 
 bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,protocol=protocol.cur,funema=NULL,output=T,ifupload=T,curver="2",...){
@@ -474,6 +479,8 @@ bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath
                           graphic=T,updatedata=T,forcerun=F,ifupload.e=T, 
                           local=F,curver.e="3",protocol=protocol.cur,
                           envir.load=NULL,...) {
+  message("BE READY! THIS FUNCTION IS GETTING DEPRECIATED AND A NEW FUNCTION WILL TAKE THE NAME SOON.")
+  Sys.sleep(20)
   if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
   if(curver.e=="3" & is.null(file)){filename<-file.choose()}
   if(missing(gpath)) {
@@ -831,6 +838,7 @@ if(FALSE){
   raw_fpath=file.choose()
   protocol=protocol.cur
   emardpath=rdpaths$ema
+  graph_path=ema.graph.path
   local=F
   excludeid=c("")
   #Functions:
@@ -848,6 +856,8 @@ if(FALSE){
   
   ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema)
   ema_raw$RedcapID<-ema_idmatch$registration_redcapid[match(x = ema_raw$User_Id,table = ema_idmatch$ema_studyidentifier)]
+  ema_raw$Initial<-rc_ema$registration_initials[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
+  ema_raw$TermDate<-rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$ema_termdate[match(x = ema_raw$RedcapID,table = rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$registration_redcapid)]
   ema_raw<-bsrc.ema.patch(emadata.raw = ema_raw,vers = "2",skipgetevent = T)
   ema_raw$DateTime<-strptime(paste(ema_raw$Survey_Submitted_Date,ema_raw$Survey_Submitted_Time,sep = " "),format = "%Y-%m-%d %H:%M")
   
@@ -855,8 +865,13 @@ if(FALSE){
   ema_split<-split(ema_raw,ema_raw$RedcapID)
   names(ema_split)->ls_rcid
   
+  #Main function Here: #Additional Input->rc_ema
   pema_allsub<-lapply(ema_split,function(ema_ss){
-    message(unique(ema_ss$RedcapID))
+    message("This function is made for data collected after Version 3a. For any previous data, use older versions of the pipeline.")
+    Sys.sleep(1)
+    message("")
+    message("##############")
+    message("Processing participant...ID: [",unique(ema_ss$RedcapID),"]...Initial: [",unique(ema_ss$Initial),"]")
     ema_ss<-ema_ss[order(ema_ss$Survey_Class),]
     ema_ss_s<-split(ema_ss,ema_ss$Survey_Class)
     
@@ -864,20 +879,22 @@ if(FALSE){
                       c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
     names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
     
+    seqDate_og<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
+    seqDate<-seqDate_og[seqDate_og<as.Date(Sys.Date())]
+    message("Days into the study: [",length(seqDate),"]")
     
+    #Didn't use lapply because accumulation complications;
+    lpData<-list()
     
-    seqDate<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
-    seqDate<-seqDate[seqDate<as.Date(Sys.Date())]
-    message(length(seqDate))
-    lpData<-lapply(seqDate,function(xdate){
-      
-      #new way:
+    for(inj in 0:length(seqDate)) {
+      if(inj>0){
+      xdate<-seqDate[[inj]]
       todayls<-lapply(ema_ss_s,function(ss_x){
         StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
         EndDateTime<-(strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
         dfx_dj<-ss_x[which(dplyr::between(x = as.numeric(ss_x$DateTime),
-                                             left = as.numeric(StartDateTime),
-                                             right = as.numeric(EndDateTime))),]
+                                          left = as.numeric(StartDateTime),
+                                          right = as.numeric(EndDateTime))),]
       })
       todayls$SetUp<-NULL
       expectls<-list(BoD=1,EoD=1,DoD=6,MB=sum(todayls$DoD$MB_Timepoint,na.rm = T))
@@ -886,86 +903,39 @@ if(FALSE){
       actual$Total<-sum(unlist(actual[c("BoD","DoD","EoD")]),na.rm = T)
       
       finaldf<-do.call(rbind,lapply(c(names(todayls),"Total"),function(gx){
-        data.frame(Type=gx,Actual=actual[[gx]],Expectation=expectls[[gx]])
+        if(inj>1){
+        pdfx<-lpData[[inj-1]]
+        init_actual<-pdfx$actual[pdfx$Type==gx]
+        init_expect<-pdfx$expectation[pdfx$Type==gx]} else {
+          init_actual<-0
+        init_expect<-0}
+        data.frame(Type=gx,actual=(actual[[gx]]+init_actual),expectation=(expectls[[gx]]+init_expect))
       }))
-      finaldf$Date<-xdate
-      finaldf$DaysInStudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
-      return(finaldf)
-    })
-    
+      finaldf$date<-xdate
+      finaldf$daysinstudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
+      lpData[[inj]]<-finaldf
+      }
+    }
+  
     pData<-do.call(rbind,lpData)
     rownames(pData)<-NULL
+    pData<-pData[which(!(pData$actual==0 & pData$expectation==0)),]
     pData$redcapID<-unique(ema_ss$RedcapID)
+    pData$diff<-pData$actual - pData$expectation
+    pData$porp<-pData$actual / pData$expectation
+    pData$per <-paste0(round(pData$porp*100,2)," %")
+    
+    
+    if (graphic){ 
+      bsrc.ema.progress.graph(emamelt.merge = pData, path = graph_path, startdate = min(seqDate_og), enddate = max(seqDate_og), 
+                              output = T, Initial = unique(ema_ss$Initial))
+    }
     
     message("#####DONE#####")
+    message("")
     return(pData)
   })
 
-  
-  ##################################
-  #BoD
-  whichgl<-"BoD"
-  subdf<-ema_ss_s[[whichgl]]
-  StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
-  EndDateTime<-(StartDateTime+2*60*60)
-  expect<-1
-  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
-                                         left = as.numeric(StartDateTime),
-                                         right = as.numeric(EndDateTime))))
-  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
-  rm("StartDateTime","EndDateTime","numactual","subdf")
-  
-  #EoD
-  whichgl<-"EoD"
-  subdf<-ema_ss_s[[whichgl]]
-  StartDateTime<-strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")
-  EndDateTime<-(StartDateTime+2*60*60)
-  expect<-1
-  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
-                                         left = as.numeric(StartDateTime),
-                                         right = as.numeric(EndDateTime))))
-  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
-  rm("StartDateTime","EndDateTime","numactual","subdf")
-  #DoD
-  whichgl<-"DoD"
-  subdf<-ema_ss_s[[whichgl]]
-  StartDateTime_DoD<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
-  EndDateTime_DoD<-((strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M"))+2*60*60)
-  expect<-6
-  numactual<-length(which(dplyr::between(x = as.numeric(subdf$DateTime),
-                                         left = as.numeric(StartDateTime_DoD),
-                                         right = as.numeric(EndDateTime_DoD))))
-  lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
-  
-  #MB
-  whichgl<-"MB"
-  subdf_dod<-ema_ss_s[["DoD"]]
-  subdf_mb<-ema_ss_s[["MB"]]
-  df_expect<-subdf_dod[which(dplyr::between(x = as.numeric(subdf_dod$DateTime),
-                                            left = as.numeric(StartDateTime_DoD),
-                                            right = as.numeric(EndDateTime_DoD)) & subdf_dod$MB_YES),]
-  df_mb<-subdf_mb[which(dplyr::between(x = as.numeric(subdf_mb$DateTime),
-                                       left = as.numeric(StartDateTime_DoD),
-                                       right = as.numeric(EndDateTime_DoD))),]
-  if(nrow(df_expect)>0){
-    expect<-sum(df_expect$MB_Timepoint)
-    numactual<-sum(sapply(df_expect$DateTime,function(xjdate){
-      length(which(dplyr::between(x = as.numeric(subdf_mb$DateTime),
-                                  left = as.numeric(xjdate),
-                                  right = as.numeric(xjdate+1.5*60*60))))
-    }))
-    lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
-  } else if (nrow(df_mb)>0) {
-    expect<-0
-    numactual<-length(which(dplyr::between(x = as.numeric(df_mb$DateTime),
-                                           left = as.numeric(StartDateTime_DoD),
-                                           right = as.numeric(EndDateTime_DoD))))
-    lsall[[whichgl]]<-data.frame(Type=whichgl,actual=numactual,expectation=expect)
-  }
-  #Total (Exclude MB)
-  lsall$Total<-data.frame(Type="Total",actual=sum(sapply(lsall[c("BoD","DoD","EoD")],function(xj){xj$actual})),
-                          expectation=sum(sapply(lsall[c("BoD","DoD","EoD")],function(xj){xj$expectation})))  
-  ##########################
   
   
   
