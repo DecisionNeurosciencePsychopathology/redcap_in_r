@@ -243,6 +243,143 @@ bsrc.admin.rppr<-function(){
   totaln<-length(newconsent$registration_redcapid)
 }
 
+
+library(ggplot2)
+prep_bsocial_datameet<-function(protocol=protocol.cur,curdb=NULL,idvar="registration_redcapid",groupvar="registration_group",...){
+  if(is.null(curdb)){
+  curdb<-bsrc.checkdatabase2(protocol = protocol,...)
+  }
+  
+  olddemopath<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/pj_migration/raw_csv/Bdemo_PG1_raw.csv"
+  BLDEMO_OLD<-read.csv(olddemopath,stringsAsFactors = F)
+  BLDEMO_OLD[BLDEMO_OLD==999 | BLDEMO_OLD=="999"]<-NA
+  
+  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,...)
+  
+  subreg[subreg==""]<-NA
+  groupmap<-bsrc.getchoicemapping(groupvar,metadata = curdb$metadata)
+  basedf<-data.frame(ID=subreg[[idvar]],
+                     Group= plyr::mapvalues(x = subreg[[groupvar]], from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = F))
+  #Gender
+  subreg$Gender<-plyr::mapvalues(x = subreg$registration_gender, from = c("M","F","F2M","M2F"), to = c("M","F","F","M"),warn_missing = F)
+  genderdf<-cbind(basedf,subreg["Gender"])
+  #Race
+  #subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,...)
+  subreg<-bsrc.checkbox(variablename = "registration_race", dfx = subreg,cleandf = F)
+  subreg$registration_race__string->subreg$race
+  subreg$race[subreg$registration_race__ifmultiple]<-"Multi-Race"
+  bsrc.getchoicemapping("registration_race",metadata = curdb$metadata)->racemap
+  racemap$choice.string<-c("AmerIndi","Asian","AfriAmer","PaciIslander","White","Refused")
+  subreg$Race<-plyr::mapvalues(x = subreg$race, from = racemap$choice.code, to = as.character(racemap$choice.string),warn_missing = F)
+  subreg$Race[subreg$Race==""]<-"Refused"
+  racedf<-cbind(genderdf,subreg["Race"])
+  #age
+  subreg$ageyrs<-lubridate::as.period(lubridate::interval(as.Date(subreg$registration_dob),as.Date(subreg$registration_consentdate)))$year
+  agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
+  subreg$`Age`<-as.character(agemap$yrlable[findInterval(subreg$ageyrs,agemap$yrstar)])
+  agedf<-cbind(racedf,subreg["Age"])
+  #Educ
+  bldemo<-bsrc.getform(curdb = curdb,formname = "bldemo")
+  subreg$eduyrs<-bldemo$demo_eduyears[match(subreg$registration_redcapid,bldemo$registration_redcapid)]
+  subreg$eduyrs[is.na(subreg$eduyrs)]<-BLDEMO_OLD$TOTEDUC[match(subreg$registration_soloffid[is.na(subreg$eduyrs)],BLDEMO_OLD$ID)]
+  edumap<-data.frame(yrlable=c("0-12","13-14","15-16","17-18","18+"),yrstar=c(0,13,15,17,19))
+  subreg$Edu<-as.character(edumap$yrlable[findInterval(subreg$eduyrs,edumap$yrstar)])
+  edudf<-cbind(agedf,subreg["Edu"])
+  
+
+  edudf$ifNewConsent <- as.Date(subreg$registration_consentdate)>startdate & !subreg$registration_group %in% c(88,89)
+  edudf$iffMRI <- grepl(paste("Scanned","2016 Pilot",sep = "|"), subreg$prog_fmristatus)
+  edudf$ifEMA <- grepl("Completed",subreg$prog_emastatus)
+  edudf$ifOverall<-T
+  
+  edudf<-edudf[which(!edudf$Group %in% c("Not Sure Yet","Ineligible / Not Applicable")),]
+  edudf$Group<-droplevels(edudf$Group)
+  xcList<-lapply(c("NewConsent","fMRI","EMA","Overall"),function(xc){
+    txc<-edudf[which(edudf[[paste0("if",xc)]]),]
+    txc$Study<-paste0("B-Social ",xc)
+    return(txc)
+  })
+  names(xcList)<-c("NewConsent","fMRI","EMA","Overall")
+  return(list(list=xcList,df=edudf))
+}
+
+dofostudy<-function(xcDF){
+lsxc<-lapply(c("Edu","Age","Race","Gender",NA), function(typexc){
+  if(is.na(typexc)) {
+    x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste("Group","Study",sep = "+")))))
+    x2<-aes(x=Group,y=Freq)
+    x3<-""
+    } else {
+  x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste(typexc,"Group","Study",sep = "+")))))
+  x2<-eval(parse(text = paste0("aes(x=Group,fill=",typexc,",y=Freq)")))
+  x3<-typexc
+  }
+  return(list(df=x1,aes=x2,type=x3))
+})
+
+plotxc<-lapply(lsxc,function(txc){
+    pltx<-ggplot(data=txc$df, txc$aes)+
+    geom_bar(position = "dodge",stat = "identity",color = "black")+
+    geom_text(stat = "identity",aes(label=Freq), size=5, position=position_dodge(width=0.9), vjust=-0.2)+
+    ggtitle(paste(txc$type,"by Group")) +
+    xlab(txc$type) + ylab("Frequency Count")+
+    scale_fill_brewer(palette="OrRd") + facet_wrap(~Study) +theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=14,face="bold"))
+    return(list(plot=pltx,type=txc$type))
+})
+return(plotxc)
+}
+getdemofromp2<-function(idcdate=NULL,P2_ALLDEMO=NULL,studyname=NULL){
+  dfxt<-P2_ALLDEMO[match(idcdate$ID,P2_ALLDEMO$ID),c("ID","GENDER TEXT","RACE TEXT","EDUCATION","DOB","GROUP1245")]
+  names(dfxt)<-c("ID","Gender","Race","Edu","DoB","GROUPNUM")
+  dfxt<-dfxt[!is.na(dfxt$ID),]
+  AGEYRS<-lubridate::as.period(lubridate::interval(as.Date(dfxt$DoB),as.Date(idcdate$cDate[match(dfxt$ID,idcdate$ID)])))$year
+  agemap<-data.frame(yrlable=c("21-29","30-39","40-49","50-59","60-69","70-79","80+"),yrstar=c(0,30,40,50,60,70,80))
+  dfxt$Age<-as.character(agemap$yrlable[findInterval(AGEYRS,agemap$yrstar)])
+  edumap<-data.frame(yrlable=c("0-12","13-14","15-16","17-18","19+"),yrstar=c(0,13,15,17,19))
+  dfxt$Edu<-as.character(edumap$yrlable[findInterval(dfxt$Edu,edumap$yrstar)])
+  dfxt$Race[dfxt$Race=="MORE THAN ONE RACE"]<-"MULTI-RACE"
+  dfxt$Group<-plyr::mapvalues(x = dfxt$GROUPNUM,from = c(1:5),to = c("HC","DEP","SHOULD NOT EXIST","IDE","ATT"),warn_missing = F)
+  dfxt$Study<-studyname
+  dfxt<-dfxt[c("ID","Group","Gender","Race","Age","Edu","Study")]
+  return(dfxt)
+}
+
+
+#START 
+if(F){
+bsocial<-dofostudy(do.call(rbind,prep_bsocial_datameet()$list))
+p2raw<-read.csv("all_in_one.csv",stringsAsFactors = F)
+
+
+P2_ALLDEMO <- readxl::read_excel("~/Documents/UPMC/RStation/Behaviroal/ALL_SUBJECTS_DEMO.xlsx")
+load("~/Documents/UPMC/RStation/pie/pie_data.rdata")
+pierawid<-unique(piedata_raw$df[piedata_raw$df$Source!="PSU",]$ID)
+consentdate<-piedata_raw_dm$df$mdate[match(pierawid,piedata_raw_dm$df$ID)]
+idcdate<-data.frame(ID=pierawid,cDate=consentdate)
+
+piep2<-getdemofromp2(idcdate = idcdate,P2_ALLDEMO = P2_ALLDEMO,studyname = "PIE")
+
+exploreraw<-P2_ALLDEMO[which(!is.na(P2_ALLDEMO$EXPLORE)),c("ID","EXPLORE")]
+names(exploreraw)<-c("ID","cDate")
+explorep2<-getdemofromp2(idcdate = exploreraw,P2_ALLDEMO = P2_ALLDEMO,studyname = "EXPLORE")
+p2all<-rbind(p2raw,piep2,explorep2)
+
+p2<-dofostudy(p2all)
+
+studycluster="P2"
+for (xlxz in p2) {
+  ggsave(plot = xlxz$plot,
+         filename = paste0(studycluster,"_",xlxz$type,".jpeg"),device = "jpeg",dpi = 300,path = getwd(),width = 16,height = 12)
+}
+studycluster="BSOCIAL"
+for (xlxz in bsocial) {
+  ggsave(plot = xlxz$plot,
+         filename = paste0(studycluster,"_",xlxz$type,".jpeg"),device = "jpeg",dpi = 300,path = getwd(),width = 16,height = 12)
+}
+}
+###########STOP
+
 #####Utility function:
 do_for_asub<-function(xdata=NULL,lxyz=c("gender","race","edu","age"),tit="B-Social New Consent",plotpath=NULL,filename=NULL){
   for (xyz in lxyz) {
@@ -278,7 +415,8 @@ graph_data_meet<-function(datalist=NULL,xdata=NULL,title=NULL,save=F,savepath=NU
 ###########################Data Meeting:
 bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
   if (is.null(curdb)){
-  curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
+  curdb<-bsrc.checkdatabase2(protocol = protocol,...)
+  }
   funbsrc<-curdb$data
   subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,...)
   
@@ -292,7 +430,7 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
             enddate<-as.Date("2021-08-01") 
             startdate<-as.Date("2017-08-01")
           })
-
+  subreg[subreg==""]<-NA
   #ADD GROUP TO IT
   bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)->groupmap
   subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = F)
@@ -349,12 +487,13 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
     
     
     newconsent$date<-as.Date(newconsent$registration_consentdate)
-    
     sortedpos<-sort.int(newconsent$date,index.return=T)$ix
     newconsent<-newconsent[sortedpos,]
     newconsent$Actual<-1:length(newconsent$date)
-
-    
+    newconsent$month<-month(newconsent$date)
+    #newconsent$year<-year(newconsent$date)
+    newconsent<-newconsent[which(lubridate::as.period(lubridate::interval(as.Date(Sys.Date()),as.Date(newconsent$date)))$year >= 0),]
+    newconsent<-newconsent[which(!duplicated(newconsent$month,fromLast=T)),]
     #IDENTICAL
     seqdate<-seq.Date(from=startdate,to=enddate,by="days")
     totalseq<-seq(from=0,to=projection$totaln,length.out = length(seqdate))
@@ -365,15 +504,16 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
     new.end<-newconsent$date[length(newconsent$date)]
     new.plan<-total[which(total$seqdate %in% new.start):which(total$seqdate %in% new.end),]
     names(new.plan)<-c("date","Projection")
+    
     subconsen<-data.frame(date=newconsent$date,Actual=newconsent$Actual)
     merged.new<-merge(subconsen,new.plan,by=1,all = T)
     merged.new.melt <- na.omit(reshape2::melt(merged.new, id.var='date'))
     names(merged.new.melt)<-c("date","Number Type","count")
-    merged.new.melt$label<-merged.new.melt$count
     #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
     
+    
     new.plot<- ggplot(merged.new.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
-      ggtitle(paste("New BPD Participant, current total:", length(newconsent$date)))+
+      ggtitle("New BPD Participant")+
       theme(plot.title = element_text(hjust = 0.5))+
       geom_line() +
       geom_point(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),])+
@@ -400,7 +540,10 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
     emaconsent$noappli<-funbsrc$ema_completed___999[which(!is.na(funbsrc$ema_setuptime))]
     emaconsent.f<-emaconsent
     emaconsent<-emaconsent[1:2]
-    
+    emaconsent$month<-month(emaconsent$date)
+    emaconsent<-emaconsent[which(lubridate::as.period(lubridate::interval(as.Date(Sys.Date()),as.Date(emaconsent$date)))$year >= 0),]
+    emaconsent<-emaconsent[which(!duplicated(emaconsent$month,fromLast=T)),]
+    emaconsent$month<-NULL
     #Identical
     totaln.ema<-200
     seqdate<-seq.Date(from=startdate,to=enddate,by="days")
@@ -417,16 +560,12 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
     ema.newprojection$accu<-seq(from=0,to=totaln.ema,length.out = length(seqdate.new))
     ema.newplan<-ema.newprojection[which(ema.newprojection$seqdate %in% ema.start):which(ema.newprojection$seqdate %in% ema.end),]
     names(ema.newplan)<-c("date","New Projection")
-    
-    
+
     merged.ema<-merge(emaconsent,ema.plan,by=1,all = T)
     merged.ema<-merge(merged.ema,ema.newplan,by=1,all = T)
-    merged.ema.melt <- na.omit(melt(merged.ema, id.var='date'))
+    merged.ema.melt <- na.omit(reshape2::melt(merged.ema, id.var='date'))
     names(merged.ema.melt)<-c("date","Number Type","count")
-    
-    
-    
-    
+
     ema.plot<-ggplot(merged.ema.melt, aes(x=date, y=count, color=`Number Type`)) +
       ggtitle(paste("EMA Participants, total:", length(emaconsent$date), ", in progress: ", length(emaconsent.f$date[emaconsent.f$ip==1]), ", completed: ", length(emaconsent.f$date[emaconsent.f$v2==1])+length(emaconsent.f$date[emaconsent.f$v3==1])))+
       theme(plot.title = element_text(hjust = 0.5))+
@@ -438,19 +577,133 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
       geom_label(data = merged.ema.melt[which(merged.ema.melt$`Number Type` == "Actual"),], aes(label=count))+
       geom_label(data = merged.ema.melt[max(which(merged.ema.melt$`Number Type` == "Projection")),], aes(label=round(count)))+
       geom_label(data = merged.ema.melt[max(which(merged.ema.melt$`Number Type` == "New Projection")),], aes(label=round(count)))
+ 
+    ######fMRI
+    funbsrc$mricheck_scanneddate[funbsrc$mricheck_scanneddate==""]<-NA
+    fmriconsent<-as.data.frame(funbsrc$mricheck_scanneddate[which(!is.na(funbsrc$mricheck_scanneddate))])
+    names(fmriconsent)<-c("date")
     
-  tz<-gridExtra::arrangeGrob(new.plot,ema.plot)
-  ggsave(plot = tz,filename = "recurt.jpeg",device = "jpeg",dpi = 300,path = plotpath,width = 11.69,height = 8.27)  
+    fmriraw<-rbind(funbsrc[which(funbsrc$mricheck_mricomplete___0118==1),c("registration_redcapid","mricheck_scanneddate")],
+                   funbsrc[which(funbsrc$mricheck_mricomplete___p16==1),c("registration_redcapid","mricheck_scanneddate")],
+                   funbsrc[which(!is.na(funbsrc$mricheck_scanneddate)),c("registration_redcapid","mricheck_scanneddate")])
+    fmriraw<-fmriraw[!duplicated(fmriraw$registration_redcapid),]
+    fmriraw$mricheck_scanneddate[is.na(fmriraw$mricheck_scanneddate)]<-"2016-07-01"
+    fmriconsent<-data.frame(date=fmriraw$mricheck_scanneddate)
+    fmriconsent$date<-as.Date(sort(fmriconsent$date))
+    fmriconsent$Actual<-1:length(fmriconsent$date)
+
+    fmriconsent$month<-month(fmriconsent$date)
+    fmriconsent<-fmriconsent[which(lubridate::as.period(lubridate::interval(as.Date(Sys.Date()),as.Date(fmriconsent$date)))$year >= 0),]
+    fmriconsent<-fmriconsent[which(!duplicated(fmriconsent$month,fromLast=T)),]
+    fmriconsent<-fmriconsent[1:2]
+    
+    seqdate<-seq.Date(from=startdate,to=enddate,by="days")
+    totalseq<-seq(from=0,to=130,length.out = length(seqdate))
+    total<-as.data.frame(seqdate)
+    total$accu<-totalseq
+    
+    new.start<-fmriconsent$date[1]
+    new.end<-fmriconsent$date[length(fmriconsent$date)]
+    new.plan<-total[which(total$seqdate %in% new.start):which(total$seqdate %in% new.end),]
+    names(new.plan)<-c("date","Projection")
+    
+    subconsen<-data.frame(date=fmriconsent$date,Actual=fmriconsent$Actual)
+    merged.new<-merge(subconsen,new.plan,by=1,all = T)
+    merged.fmri.melt <- na.omit(reshape2::melt(merged.new, id.var='date'))
+    names(merged.fmri.melt)<-c("date","Number Type","count")
+    #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
+    
+    
+    fmri.plot<- ggplot(merged.fmri.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
+      ggtitle("BPD fMRI")+
+      theme(plot.title = element_text(hjust = 0.5))+
+      geom_line() +
+      geom_point(data = merged.fmri.melt[which(merged.fmri.melt$`Number Type` == "Actual"),])+
+      scale_color_manual(values=c('red', 'gray')) +
+      xlab(paste("Current Difference: ",round(merged.new$Actual[length(merged.new$date)]-merged.new$Projection[length(merged.new$date)]))) + 
+      ylab("Number of Participants") +
+      scale_x_date(date_labels = "%B", date_breaks = "1 month") +
+      geom_label(data = merged.fmri.melt[which(merged.fmri.melt$`Number Type` == "Actual"),], aes(label=count))+
+      geom_label(data = merged.fmri.melt[max(which(merged.fmri.melt$`Number Type` == "Projection")),], aes(label=round(count)))
+    
+       
+  tz<-gridExtra::arrangeGrob(new.plot,ema.plot,fmri.plot)
+  ggsave(plot = tz,filename = "b_socialrecurt.jpeg",device = "jpeg",dpi = 300,path = getwd(),width = 11.69,height = 8.27)  
   
+  
+  ###P2s:
+  consentdates<-readxl::read_excel("consent_dates.xlsx")
+  consensends<-split(consentdates,consentdates$Study)
+  exploreraw<-P2_ALLDEMO[which(!is.na(P2_ALLDEMO$EXPLORE)),c("ID","EXPLORE")]
+  names(exploreraw)<-c("ID","Date")
+  exploreraw$Study<-"EXPLORE"
+  exploreraw$Actual<-seq(exploreraw$ID)
+  consensends$EXPLORE<-exploreraw[c("Date","Actual","Study")]
+  
+  allstuinfo<-list(
+  `I-DECIDE`=list(pjc=80,sdate=as.Date("2017-02-01"),edate=as.Date("2019-04-01")),
+  `K-SOCIAL`=list(pjc=120,sdate=as.Date("2017-10-01"),edate=as.Date("2021-10-01")),
+  `PROTECT2`=list(pjc=260,sdate=as.Date("2014-08-01"),edate=as.Date("2019-08-31")),
+  `SNAKE`=list(pjc=100,sdate=as.Date("2017-08-01"),edate=as.Date("2019-05-01")),
+  `EXPLORE`=list(pjc=60,sdate=as.Date("2016-04-01"),edate=as.Date("2018-12-30"))
+  )
+  
+  trynowstudies<-lapply(consensends, function(dfxt) {
+    studyx<-unique(dfxt$Study)
+    dfxt$Study<-NULL
+    projectionx<-allstuinfo[[studyx]]
+    names(dfxt)<-c("date","Actual")
+    dfxt->newconsent
+    newconsent$date<-as.Date(newconsent$date)
+    newconsent$date<-newconsent$date[order(newconsent$date)]
+    newconsent$month<-month(newconsent$date)
+    #newconsent$year<-year(newconsent$date)
+    newconsent<-newconsent[which(lubridate::as.period(lubridate::interval(as.Date(Sys.Date()),as.Date(newconsent$date)))$year >= 0),]
+    newconsent<-newconsent[which(!duplicated(newconsent$month,fromLast=T)),]
+    #IDENTICAL
+    seqdate<-seq.Date(from=projectionx$sdate,to=projectionx$edate,by="days")
+    totalseq<-seq(from=0,to=projectionx$pjc,length.out = length(seqdate))
+    total<-as.data.frame(seqdate)
+    total$accu<-totalseq
     
+    new.start<-newconsent$date[1]
+    new.end<-newconsent$date[length(newconsent$date)]
+    new.plan<-total[which(total$seqdate %in% new.start):which(total$seqdate %in% new.end),]
+    names(new.plan)<-c("date","Projection")
+    
+    subconsen<-data.frame(date=newconsent$date,Actual=newconsent$Actual)
+    merged.new<-merge(subconsen,new.plan,by=1,all = T)
+    merged.new.melt <- na.omit(reshape2::melt(merged.new, id.var='date'))
+    names(merged.new.melt)<-c("date","Number Type","count")
+    #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
+    
+    
+    new.plot<- ggplot(merged.new.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
+      ggtitle(paste0(studyx," Participant"))+
+      theme(plot.title = element_text(hjust = 0.5))+
+      geom_line() +
+      geom_point(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),])+
+      scale_color_manual(values=c('red', 'gray')) +
+      xlab(paste("Current Difference: ",round(merged.new$Actual[length(merged.new$date)]-merged.new$Projection[length(merged.new$date)]))) + 
+      ylab("Number of Participants") +
+      scale_x_date(date_labels = "%B", date_breaks = "1 month") +
+      geom_label(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),], aes(label=count))+
+      geom_label(data = merged.new.melt[max(which(merged.new.melt$`Number Type` == "Projection")),], aes(label=round(count)))
+    return(new.plot)
+  })
+  for(i in 1:length(trynowstudies)){
+    ggsave(plot = trynowstudies[[i]],filename = paste0(i,".jpeg"),device = "jpeg",dpi = 300,path = getwd(),width = 11.69,height = 8.27)  
   }
   
+  
+  
+  }
 }
 ##########################IRB NUMBER:
 bsrc.irb.numsum<-function() {
-  ID_SUPREME <- read_excel("Box Sync/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
+  ID_SUPREME <-  readxl::read_excel("~/Box/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
   ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.getidmatchdb(ID_SUPREME)
+  tkj<-bsrc.findid(df = ID_SUPREME,curdb = bsocial)
   tkj<-as.data.frame(tkj)
   newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
   names(newid)<-c("registration_redcapid")

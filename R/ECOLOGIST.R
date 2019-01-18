@@ -45,9 +45,12 @@
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
-  localmatch<-ema3[which(!is.na(ema3$ema_id)),c("User_Id","ema_id")]
+  ema3a<-ema3[!duplicated(ema3[c("User_Id","ema_id")]),c("User_Id","ema_id")]
+  ema3a<-ema3a[order(ema3a$ema_id),]
+  localmatch<-ema3a[!(duplicated(ema3a$User_Id) & is.na(ema3a$ema_id)),]
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   localmatch<-localmatch[!duplicated(localmatch),]
+  localmatch$registration_redcapid[is.na(localmatch$registration_redcapid)]<-"UNKNOWN"
   if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
   if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
   disrupt<-localmatch[which(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))),]
@@ -77,7 +80,7 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
           idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for", disrupt$ema_studyidentifier[i] ,"y/n?   :"))
           if (idq=="y"){idq<-TRUE} else (idq<-FALSE)
           if (idq) {maybeid->actualid} else {actualid<-readline(prompt = "What's their actual RedCap ID? : ")}}
-          } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"]: "))}
+          } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"] (type 'REMOVE' if wish to remove from db): "))}
           localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
       }
   }else {message("NO DISRUPT")}
@@ -137,10 +140,39 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
     }
   return(emadata.raw)
 }
+###############Updated Get file function for list:
+bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL){
+  message("bsrc.ema.rawtolist only works with data collected post version 3a update. Previous Data please manually laod them as list and rbind.")
+  #Clean Up
+  ema_raw<-ema_raw[which(ema_raw$User_Id!=""),]
+  ema_raw[ema_raw==""]<-NA
+  ema_raw[grep("Date",names(ema_raw))]<-as.data.frame(lapply(ema_raw[grep("Date",names(ema_raw))],as.Date))
+  ema_raw$Survey_Class<-gsub("_U","",ema_raw$TriggerName)
+  ema_raw$Survey_Class[which(!ema_raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
+  ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema)
+  ema_raw<-bsrc.ema.scaletonum(ema_raw)
+  #Get Info From REDCAP
+  ema_raw$RedcapID<-ema_idmatch$registration_redcapid[match(x = ema_raw$User_Id,table = ema_idmatch$ema_studyidentifier)]
+  ema_raw<-ema_raw[ema_raw$RedcapID!="REMOVE",]
+  ema_raw$Initial<-rc_ema$registration_initials[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
+  ema_raw$Group<-rc_ema$registration_group[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
+  group_valuemap<-bsrc.getchoicemapping(variablenames = "registration_group",protocol = protocol)
+  ema_raw$Group<-plyr::mapvalues(ema_raw$Group,from = group_valuemap$choice.code,to = group_valuemap$choice.string,warn_missing = F)
+  ema_raw$TermDate<-rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$ema_termdate[match(x = ema_raw$RedcapID,table = rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$registration_redcapid)]
+  ema_raw$SetUpDate<-rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$ema_setuptime[match(x = ema_raw$RedcapID,table = rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$registration_redcapid)]
+  
+  #Proc Date Time
+  ema_raw<-bsrc.ema.patch(emadata.raw = ema_raw,vers = "2",skipgetevent = T)
+  ema_raw$DateTime<-strptime(paste(ema_raw$Survey_Submitted_Date,ema_raw$Survey_Submitted_Time,sep = " "),format = "%Y-%m-%d %H:%M")
+  ema_raw<-ema_raw[order(ema_raw$RedcapID),]
+  ema_split<-split(ema_raw,ema_raw$RedcapID)
+  names(ema_split)->ls_rcid
+  return(ema_split)
+}
 ############### EMA2 Main function:
 ##### urrently hard fixed for EMA 3; new main function needed:
 bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,funema=NULL,protocol=protocol.cur,...){
-  message("BE READY! THIS FUNCTION IS GETTING DEPRECIATED AND A NEW FUNCTION WILL TAKE THE NAME SOON.")
+  message("BE AWARE! THIS FUNCTION IS GETTING DEPRECIATED AND A NEW FUNCTION WILL TAKE ITS PLACE SOON.")
   if (missing(emadata.raw)){
     print("Using bsrc.ema.getfile() for data")
     emadata.raw<-bsrc.ema.getfile(curver = "2")
@@ -284,6 +316,129 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     return(list(data=emamelt.merge,info=info))
     
 }
+###############Universal EMA Main function: Single Subject:
+bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path){
+  if(is.null(graph_path)){graphic<-F}
+  message("")
+  message("##############")
+  message("Processing participant...ID: [",unique(ema_ss$RedcapID),"]...Initial: [",unique(ema_ss$Initial),"]")
+  ema_ss<-ema_ss[order(ema_ss$Survey_Class),]
+  ema_ss_s<-split(ema_ss,ema_ss$Survey_Class)
+  #Get the SetUp
+  setup_ema<-ema_ss[ema_ss$DateTime==max(ema_ss$DateTime[!is.na(ema_ss$ema_waketime_u)]) & !is.na(ema_ss$ema_waketime_u),
+                    c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
+  names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
+  #Get the SetUp for version 2
+  if(nrow(setup_ema)<1){
+    message("This is probably a version 2 participant...we have to make it up on the fly!")
+    setup_ema<-data.frame(RedcapID=unique(ema_ss$RedcapID),
+                          StartDate=unique(as.Date(ema_ss$SetUpDate))+1,
+                          WakeTime="01:00",BedTime="23:59",stringsAsFactors = F)
+  }
+  
+  #Do correction:
+  if(setup_ema$StartDate!=unique(as.Date(ema_ss$SetUpDate))+1){
+    message("This person's SetUp date is incongruent with their redcap setup date. Will use the redcap one.")
+    setup_ema$StartDate<-unique(as.Date(ema_ss$SetUpDate))+1
+  }
+  
+  seqDate_og<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
+  #Check for outside of the window:
+  minDateTime<-strptime(paste(min(seqDate_og),setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
+  maxDateTime<-(strptime(paste(max(seqDate_og),setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
+  logicDateTime<-dplyr::between(as.numeric(ema_ss$DateTime),left = as.numeric(minDateTime),right = as.numeric(maxDateTime)) | ema_ss$Survey_Class=="SetUp"
+  
+  if(any(!logicDateTime)){
+    message("This subject has data outside of the 21 days window.")
+    if(restricData) {
+      message("restricData argument is on, therefore will omit any data outside of the 21 days window! But we will keep the raw data.")
+    } else {
+      message("restricData argument is off, will keep all data.")
+      seqDate_og<-unique(c(unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date)[!unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date) %in% seqDate_og],seqDate_og))
+    }
+  }
+  if(!is.na(unique(ema_ss$TermDate))){seqDate_og<-seqDate_og[seqDate_og<=as.Date(unique(ema_ss$TermDate))]}
+  
+  seqDate<-seqDate_og[seqDate_og<as.Date(Sys.Date())]
+  message("Days in the study: [",length(seqDate),"]")
+  
+  #Didn't use lapply because accumulation complications;
+  lpData<-list()
+  
+  for(inj in 0:length(seqDate)) {
+    if(inj>0){
+      xdate<-seqDate[[inj]]
+      todayls<-lapply(ema_ss_s,function(ss_x){
+        StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
+        EndDateTime<-(strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
+        dfx_dj<-ss_x[which(dplyr::between(x = as.numeric(ss_x$DateTime),
+                                          left = as.numeric(StartDateTime),
+                                          right = as.numeric(EndDateTime))),]
+      })
+      todayls$SetUp<-NULL
+      expectls<-list(BoD=1,EoD=1,DoD=6,MB=sum(todayls$DoD$MB_Timepoint,na.rm = T))
+      expectls$Total<-sum(unlist(expectls[c("BoD","DoD","EoD")]),na.rm = T)
+      actual<-lapply(todayls,nrow)
+      actual$Total<-sum(unlist(actual[c("BoD","DoD","EoD")]),na.rm = T)
+      
+      finaldf<-do.call(rbind,lapply(c(names(todayls),"Total"),function(gx){
+        if(inj>1){
+          pdfx<-lpData[[inj-1]]
+          init_actual<-pdfx$actual[pdfx$Type==gx]
+          init_expect<-pdfx$expectation[pdfx$Type==gx]} else {
+            init_actual<-0
+            init_expect<-0}
+        data.frame(Type=gx,actual=(actual[[gx]]+init_actual),expectation=(expectls[[gx]]+init_expect))
+      }))
+      finaldf$date<-xdate
+      finaldf$daysinstudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
+      lpData[[inj]]<-finaldf
+    }
+  }
+  
+  pData<-do.call(rbind,lpData)
+  rownames(pData)<-NULL
+  pData<-pData[which(!(pData$actual==0 & pData$expectation==0)),]
+  pData$RedCapID<-unique(ema_ss$RedcapID)
+  pData$diff<-pData$actual - pData$expectation
+  pData$porp<-pData$actual / pData$expectation
+  pData$per <-paste0(round(pData$porp*100,2)," %")
+  
+  info_ss<-data.frame(RedcapID=unique(ema_ss$RedcapID),Initial=unique(ema_ss$Initial), Group=unique(ema_ss$Group),
+                      StartDate=min(seqDate_og),EndDate=max(seqDate_og),MWUserID=paste(unique(ema_ss$User_Id),collapse = "/"),
+                      DeviceOS=paste(unique(ema_ss$DeviceOS),collapse = "/"))
+  info_ss$Status<-"UNKNOWN"
+  info_ss$Status[info_ss$StartDate<=Sys.Date()]<-"IN-PROGRESS"
+  info_ss$Status[info_ss$StartDate>Sys.Date()]<-"HAVEN'T STARTED"
+  info_ss$Status[info_ss$EndDate<Sys.Date() & length(seqDate)==21]<-"COMPLETED"
+  info_ss$Status[info_ss$EndDate<Sys.Date() & length(seqDate)<21]<-"EARLY-TERMINATION"
+  info_ss$Status[info_ss$EndDate<Sys.Date() & length(seqDate)>21]<-"EXCESSIVE"
+  info_ss$Duration<-length(seqDate)
+  
+  if(is.data.frame(pData) && nrow(pData)>0){
+    if (graphic){ 
+      bsrc.ema.progress.graph(emamelt.merge = pData, path = graph_path, startdate = min(seqDate_og), enddate = max(seqDate_og), 
+                              output = T, Initial = unique(ema_ss$Initial))
+    }
+    info_ss$CompletionRate<-pData$porp[pData$Type=="Total" & (pData$daysinstudy==max(pData$daysinstudy))]
+    if(any(pData$Type=="MB")){
+      info_ss$MBCount<-pData$expectation[pData$Type=="MB" & (pData$daysinstudy==max(pData$daysinstudy))]
+      info_ss$MBProp<-pData$porp[pData$Type=="MB" & (pData$daysinstudy==max(pData$daysinstudy))]
+    } else {
+      info_ss$MBCount<-0
+      info_ss$MBProp<-NA
+    }
+  } else {
+    message("No data yet. Skipping")
+    pData<-NULL
+    info_ss$CompletionRate<-NA
+    info_ss$MBCount<-0
+    info_ss$MBProp<-NA
+  } 
+  message("#####DONE#####")
+  message("")
+  return(list(data=pData,info=info_ss))
+}
 #########Graphing function:
 bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
   require('ggplot2')
@@ -323,7 +478,7 @@ bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=
   } else {message("Skipping Graphing: Input data not compatible, possibly because no entry yet.")}
 }
 ############### EMA 2 RedCap update function: 
-bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,protocol=protocol.cur,funema=NULL,output=T,ifupload=T,curver="2",...){
+bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,protocol=protocol.cur,funema=NULL,output=T,ifupload=T,curver="2",idvar="redcapID",...){
   #unpack protocol
   input.token<-protocol$token
   input.uri<-protocol$redcap_uri
@@ -332,26 +487,39 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
   #safe gurad the function:
   if (is.null(funema)){funema<-bsrc.getform("ema_session_checklist",grabnewinfo = T, protocol=protocol,... = ...)}
   #Pre-check
-  redcapID<-unique(emamelt.merge$redcapID)
-  originaldata<-funema[which(funema$registration_redcapid==redcapID),c("registration_redcapid","ema_completed___3","ema_completed___2","ema_completed___999","ema_termdate")]
+  redcapID<-unique(emamelt.merge[[idvar]])
+  emamelt.merge$redcapID<-unique(emamelt.merge[[idvar]])
+  emamelt.merge[[idvar]]<-NULL
+  
+  originaldata<-funema[which(funema$registration_redcapid==redcapID & funema$redcap_event_name=="ema_arm_1"),c("registration_redcapid","ema_completed___3","ema_completed___2","ema_completed___999","ema_termdate")]
   originaldata$ema_completed___999->ninenineninestatus
   originaldata$ema_termdate->termdatestatus
   originaldata$ema_completed___2->twostatus
   originaldata$ema_completed___3->threestatus
+  
   emamelt.merge<-emamelt.merge[which(!emamelt.merge$Type %in% c("MB","SetUp")),]
   emamelt.merge$check<-NA
   #emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"3Days"
+  if(is.null(emamelt.merge$daysinstudy)){
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+7))]<-"7Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+14))]<-"14Days"
   emamelt.merge$check[which(emamelt.merge$date %in% c(startdate+21))]<-"21Days"
+  } else {
+    emamelt.merge$check[emamelt.merge$daysinstudy %in% c(7,14,21)]<-paste0(emamelt.merge$daysinstudy[emamelt.merge$daysinstudy %in% c(7,14,21)],"Days")
+    emamelt.merge$daysinstudy<-NULL
+  }
+  
   if (length(which(is.na(emamelt.merge$check))) != length(emamelt.merge$date)) {
     test1<-reshape(emamelt.merge[!is.na(emamelt.merge$check),],idvar = "check",timevar = "Type",direction = "wide", v.names = c("actual","per"),drop = c("porp","expectation","diff"))
     test1[which(test1$date>=Sys.Date()),grep("actual",names(test1))[1]:length(test1)]<-"NOT FINISH"
+    test1$date<-as.character(test1$date)
     test2<-reshape(test1,idvar = "redcapID",timevar = "check",direction = "wide", v.names = names(test1)[-c(2,3)])
     test3<-test2
-    names(test3)[1]<-"registration_redcapid"
-    names(test3)[2:length(names(test3))]<-paste("emapg_",names(test3)[2:length(names(test3))],sep = "")
+    names(test3)[!grepl("redcapID",names(test3))]<-paste("emapg_",names(test3)[!grepl("redcapID",names(test3))],sep = "")
+    names(test3)[grepl("redcapID",names(test3))]<-"registration_redcapid"
     names(test3)<-tolower(gsub("[.]","_",names(test3)))
+    
+    
     if (is.na(termdatestatus) | is.na(ninenineninestatus)){
      if(Sys.Date()<enddate+1) { 
       test3$ema_completed___ip<-1
@@ -364,7 +532,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       currentexp<-paste("test3$ema_completed___",curver,"<-1", sep = "")
       eval(parse(text=currentexp))
       test3$ema_completed___999<-0
-      test3$ema_termdate<-enddate
+      test3$ema_termdate<-as.character(enddate)
       test3$redcap_event_name<-"ema_arm_1"
       test3$prog_emastatus_di<-NA
       }
@@ -376,7 +544,7 @@ bsrc.ema.redcapupload<-function(emamelt.merge=NULL,startdate=NULL, enddate=NULL,
       test3$ema_completed___2<-twostatus
       test3$ema_completed___3<-threestatus
     }
-    }else {print(paste("Nothing to upload yet, come back after: ", startdate+7))
+    }else {message(paste("Nothing to upload for",redcapID,"yet, come back after: ", startdate+7))
     test3<-data.frame(registration_redcapid=unique(emamelt.merge$redcapID),ema_completed___ip="1")
     #names(test3)<-c("registration_redcapid","ema_completed___ip")
     test3$redcap_event_name<-"ema_arm_1"
@@ -435,19 +603,21 @@ bsrc.ema.patch<-function(emadata.raw,vers="3",skipgetevent=F){
   )
   
   rownames(emadata.raw)<-NULL
-  if (!skipgetevent){
   emadata.raw<-bsrc.ema.scaletonum(emadata.raw = emadata.raw)  
+  if (!skipgetevent){
   dodonly<-bsrc.ema.getevent(emadata.raw = emadata.raw, pick.input = ltrigger[2], vers = vers)
-  }else{emadata.raw->dodonly}
+  }else{
+    emadata.raw->dodonly
+    }
   negnumx<-grep(paste("angry","nervous","sad","irritated",sep = "|",collapse = "|"),names(dodonly))
   negnum<-names(dodonly)[intersect(negnumx,grep(pattern = "rp_",names(dodonly)))]
+  negnum<-negnum[!grepl("_rn",negnum)]
   dodonly$ifnegative<-rowSums(dodonly[,negnum] >= 2)>0
   dodonly$ifintime<-dodonly$rp_time %in% c("Just happened","15 minutes","30 minutes","45 minutes")
-  rownum<-as.numeric(rownames(dodonly[which(dodonly$ifintime & dodonly$ifnegative),]))
   
   emadata.raw$MB_YES<-FALSE
   emadata.raw$MB_Timepoint<-NA
-  emadata.raw$MB_YES[rownum]<-TRUE
+  emadata.raw$MB_YES[which(dodonly$ifintime & dodonly$ifnegative)]<-TRUE
   emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "Just happened")]<-4
   emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "15 minutes")]<-3
   emadata.raw$MB_Timepoint[which(emadata.raw$MB_YES & emadata.raw$rp_time == "30 minutes")]<-2
@@ -470,6 +640,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   emadata.nodate[emadata.nodate == "Quite a Bit"]<-4
   emadata.nodate[emadata.nodate == "A great deal"]<-5
   emadata.nodate[emadata.nodate == ""]<-NA
+  emadata.nodate[emadata.nodate == "CONDITION_SKIPPED"]<-NA
   emadata.nums<-cbind(emadata.nodate,emadata.onlydate)
   
   return(emadata.nums)
@@ -688,7 +859,8 @@ dnpl.ema.addmorestuff<-function(fulldata.ema) {
   return(fulldata.ema)
 }
 ############################
-dnpl.ema.infochange<-function(fulldata.ema=fulldata.ema){
+dnpl.ema.infochange<-function(fulldata.ema=NULL,info_ss=NULL){
+  if(!is.null(fulldata.ema)){
   fulldata.ema$info$status<-"UNKNOWN"
   fulldata.ema$info$duration<-fulldata.ema$info$enddate-fulldata.ema$info$startdate
   fulldata.ema$info$status[fulldata.ema$info$duration==21]<-"COMPLETED"
@@ -696,6 +868,10 @@ dnpl.ema.infochange<-function(fulldata.ema=fulldata.ema){
   fulldata.ema$info$status[fulldata.ema$info$duration<21]<-"EARLY-TERMINATION"
   endtarget<-merge(aggregate(date ~ redcapID + Type,data=fulldata.ema$pdata[which(fulldata.ema$pdata$Type=="Total"),], max),fulldata.ema$pdata,all.x=TRUE)
   fulldata.ema$info$completion_rate<-endtarget$per[match(fulldata.ema$info$RedcapID,endtarget$redcapID)]
+  returnwhat<-fulldata.ema
+  } else if (!is.null(info_ss)){
+    message("Function is depreciated for this use.")
+  }
   return(fulldata.ema)
 }
 ############################
@@ -734,6 +910,12 @@ if(FALSE){
 groupstat<-na.omit(subset(bsocial$data,select = c("registration_redcapid","fudemo_incomelevel")))
 
 ema$fulldata.ema$pdata$income_b<-groupstat$fudemo_incomelevel[match(ema$fulldata.ema$pdata$redcapID,groupstat$registration_redcapid)]
+
+ggplot(data = info_all,aes(x=StartDate,y=MBCount,color=Group)) + geom_point()
+info_all$month<-factor(month.name[month(info_all$StartDate)],levels = month.name)
+library(lme4)
+summary(lm(scale(MBCount)~as.factor(Group)+month+scale(CompletionRate)+as.factor(DeviceOS),data = info_all))
+summary(lm(scale(CompletionRate)~as.factor(Group)+month+scale(CompletionRate)+as.factor(DeviceOS),data = info_all))
 }
 
 
@@ -835,111 +1017,57 @@ if(FALSE){
   
   #New orgnization and looping:
   #input:
-  raw_fpath=file.choose()
-  protocol=protocol.cur
-  emardpath=rdpaths$ema
-  graph_path=ema.graph.path
-  local=F
-  excludeid=c("")
-  #Functions:
+  function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,
+  local=F,restricData=T, forceRerun=F, updateRC=T, excludeID=c("")){}
   
+  #Initialization:
+  if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
   rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
-  envir_ema<-bsrc.attachngrab(emardpath)
-
-  ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)
-  ema_raw<-ema_raw[which(ema_raw$User_Id!=""),]
+  if(file.exists(emardpath)){
+    envir_ema<-bsrc.attachngrab(emardpath)} else {envir_ema<-as.environment(list())}
   
-  ema_raw[ema_raw==""]<-NA
-  ema_raw[grep("Date",names(ema_raw))]<-as.data.frame(lapply(ema_raw[grep("Date",names(ema_raw))],as.Date))
-  ema_raw$Survey_Class<-gsub("_U","",ema_raw$TriggerName)
-  ema_raw$Survey_Class[which(!ema_raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
+  ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema)
+  completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
   
-  ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema)
-  ema_raw$RedcapID<-ema_idmatch$registration_redcapid[match(x = ema_raw$User_Id,table = ema_idmatch$ema_studyidentifier)]
-  ema_raw$Initial<-rc_ema$registration_initials[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
-  ema_raw$TermDate<-rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$ema_termdate[match(x = ema_raw$RedcapID,table = rc_ema[rc_ema$redcap_event_name=="ema_arm_1",]$registration_redcapid)]
-  ema_raw<-bsrc.ema.patch(emadata.raw = ema_raw,vers = "2",skipgetevent = T)
-  ema_raw$DateTime<-strptime(paste(ema_raw$Survey_Submitted_Date,ema_raw$Survey_Submitted_Time,sep = " "),format = "%Y-%m-%d %H:%M")
+  if(!forceRerun){
+    message("These folks had completed, no need to reprocess: ", paste(names(completed),collapse = " "))
+    ema_split_filter<-ema_split[!names(ema_split) %in% names(completed) ]
+  } else {ema_split_filter<-ema_split}
   
-  ema_raw<-ema_raw[order(ema_raw$RedcapID),]
-  ema_split<-split(ema_raw,ema_raw$RedcapID)
-  names(ema_split)->ls_rcid
+  pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
+  completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
   
-  #Main function Here: #Additional Input->rc_ema
-  pema_allsub<-lapply(ema_split,function(ema_ss){
-    message("This function is made for data collected after Version 3a. For any previous data, use older versions of the pipeline.")
-    Sys.sleep(1)
-    message("")
-    message("##############")
-    message("Processing participant...ID: [",unique(ema_ss$RedcapID),"]...Initial: [",unique(ema_ss$Initial),"]")
-    ema_ss<-ema_ss[order(ema_ss$Survey_Class),]
-    ema_ss_s<-split(ema_ss,ema_ss$Survey_Class)
-    
-    setup_ema<-ema_ss[ema_ss$DateTime==max(ema_ss$DateTime[!is.na(ema_ss$ema_waketime_u)]) & !is.na(ema_ss$ema_waketime_u),
-                      c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
-    names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
-    
-    seqDate_og<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
-    seqDate<-seqDate_og[seqDate_og<as.Date(Sys.Date())]
-    message("Days into the study: [",length(seqDate),"]")
-    
-    #Didn't use lapply because accumulation complications;
-    lpData<-list()
-    
-    for(inj in 0:length(seqDate)) {
-      if(inj>0){
-      xdate<-seqDate[[inj]]
-      todayls<-lapply(ema_ss_s,function(ss_x){
-        StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
-        EndDateTime<-(strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
-        dfx_dj<-ss_x[which(dplyr::between(x = as.numeric(ss_x$DateTime),
-                                          left = as.numeric(StartDateTime),
-                                          right = as.numeric(EndDateTime))),]
-      })
-      todayls$SetUp<-NULL
-      expectls<-list(BoD=1,EoD=1,DoD=6,MB=sum(todayls$DoD$MB_Timepoint,na.rm = T))
-      expectls$Total<-sum(unlist(expectls[c("BoD","DoD","EoD")]),na.rm = T)
-      actual<-lapply(todayls,nrow)
-      actual$Total<-sum(unlist(actual[c("BoD","DoD","EoD")]),na.rm = T)
+  info.df<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
+  info.df<-info.df[order(info.df$EndDate),]
+  rownames(info.df)<-NULL
+  
+  ema_rc_all<-ProcApply(pData_allsub,function(ema_lss){
+    #message(ema_lss$info$RedcapID)
+    if(!is.null(ema_lss$data)){
       
-      finaldf<-do.call(rbind,lapply(c(names(todayls),"Total"),function(gx){
-        if(inj>1){
-        pdfx<-lpData[[inj-1]]
-        init_actual<-pdfx$actual[pdfx$Type==gx]
-        init_expect<-pdfx$expectation[pdfx$Type==gx]} else {
-          init_actual<-0
-        init_expect<-0}
-        data.frame(Type=gx,actual=(actual[[gx]]+init_actual),expectation=(expectls[[gx]]+init_expect))
-      }))
-      finaldf$date<-xdate
-      finaldf$daysinstudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
-      lpData[[inj]]<-finaldf
-      }
-    }
+    bsrc.ema.redcapupload(emamelt.merge = ema_lss$data,startdate = (ema_lss$info$StartDate)-1,
+                          enddate = ema_lss$info$EndDate,funema = rc_ema,output = T,
+                          ifupload = F,curver = "3",idvar = "RedCapID")
+    } else {return(NULL)}
+  })$df
+  ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
   
-    pData<-do.call(rbind,lpData)
-    rownames(pData)<-NULL
-    pData<-pData[which(!(pData$actual==0 & pData$expectation==0)),]
-    pData$redcapID<-unique(ema_ss$RedcapID)
-    pData$diff<-pData$actual - pData$expectation
-    pData$porp<-pData$actual / pData$expectation
-    pData$per <-paste0(round(pData$porp*100,2)," %")
+  if(updateRC){
+        print(ema_rc_all)
+        result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
+      if (result.rc_all$success) {message("Updated these IDs: ",paste(ema_rc_all$registration_redcapid,collapse = " "))}
+  } else {message("RedCap Update failed.")}
+  
+  #!stucture of new environment:
+  envir_ema$matchdb->newenvir_ema$matchdb #no need to worry about that
+  newenvir_ema$CompletedData$CompletionRateData<-completed_sub
     
-    
-    if (graphic){ 
-      bsrc.ema.progress.graph(emamelt.merge = pData, path = graph_path, startdate = min(seqDate_og), enddate = max(seqDate_og), 
-                              output = T, Initial = unique(ema_ss$Initial))
-    }
-    
-    message("#####DONE#####")
-    message("")
-    return(pData)
-  })
+      
 
-  
-  
-  
 }
+
+
+
 
 
 

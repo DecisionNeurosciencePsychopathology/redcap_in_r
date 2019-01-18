@@ -192,32 +192,27 @@ bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
   jzc.connection.date<<-curdb$update.date
 }
 #########################Check & Attach
-bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir"){
+bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir",envir=new.env()){
   if (is.null(rdpath)) {
   if(is.list(protocol)) {protocol.n<-protocol$name
     rdpath<-protocol$rdpath
   } else {stop("ERROR, protocol object is not a list.")}
   } else {print("when rdpath argument available, will always use that")}
   
-  lsattach<-grep(rdpath,search())
-  if (length(lsattach)>0){ #this chuck removes any active 'attach' of the same file
-    for (i in 1:length(lsattach)){
-      lsattach.s<-grep(rdpath,search())[1]
-      detach(pos = lsattach.s)
-    }}
   if(file.exists(rdpath)){
-    print("Loading RDATA file....")
-    envir.load<-attach(rdpath,warn.conflicts = F)
-    detach()
-    objectnames<-objects(envir = envir.load)
-    list.load<-as.list(envir.load)
-    
-    switch (returnas,
-      "envir" = {return(envir.load)},
-      "list"  = {return(list.load)}
-    )
+    loadrdata(rdpath=rdpath,returnas=returnas,envir=envir)
     } else {"No such file...."}
 }
+##########################
+
+loadrdata<-function(rdpath=NULL,returnas="envir",envir=new.env()) {
+  load(rdpath,envir = envir)
+  switch (returnas,
+          "envir" = {return(envir)},
+          "list"  = {return(as.list(envir))}
+  )
+}
+
 #########################New Ver in DEV
 bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
@@ -625,6 +620,21 @@ dnpl.bso.getsahx<-function(curdb=NULL) {
   dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
   return(dff)
 }
+###########################
+ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
+  proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
+  if(addNAtoNull){
+    allnames<-unique(unlist(lapply(proc_ls,names)))
+    proc_ls<-lapply(proc_ls,function(lsx){
+      lsx[allnames[which(!allnames %in% names(lsx))]]<-NA
+      return(lsx)
+    })
+  }
+  proc_ls<-cleanuplist(proc_ls)
+  return(list(list=proc_ls,
+              df=do.call(rbind,proc_ls)))
+}
+
 ##########################
 tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
   dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
