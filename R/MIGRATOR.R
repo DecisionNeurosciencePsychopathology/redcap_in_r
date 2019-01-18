@@ -86,6 +86,7 @@ son.getideventmap<-function(ptc.from=NULL,data.from=NULL,naomit=T,...){
   id<-son.getidmap(data.from = data.from,...)
   working.f<-son.whichvisit(data.from = data.from)
   merge(id,working.f,all = T,by.x = "idfield.from", by.y = "subject_id")->id.map
+  id.map<-id.map[!duplicated(id.map),]
   if(naomit){
   f.id.map<-na.omit(id.map)} else {f.id.map<-id.map}
   return(f.id.map)
