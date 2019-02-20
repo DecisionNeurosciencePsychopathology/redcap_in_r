@@ -1017,59 +1017,61 @@ if(FALSE){
   
   #New orgnization and looping:
   #input:
-  function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,
-  local=F,restricData=T, forceRerun=F, updateRC=T, excludeID=c("")){}
-  
-  #Initialization:
-  if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
-  rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
-  if(file.exists(emardpath)){
-    envir_ema<-bsrc.attachngrab(emardpath)} else {envir_ema<-as.environment(list())}
-  
-  ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema)
-  completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
-  
-  if(!forceRerun){
-    message("These folks had completed, no need to reprocess: ", paste(names(completed),collapse = " "))
-    ema_split_filter<-ema_split[!names(ema_split) %in% names(completed) ]
-  } else {ema_split_filter<-ema_split}
-  
-  pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
-  completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
-  
-  info.df<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
-  info.df<-info.df[order(info.df$EndDate),]
-  rownames(info.df)<-NULL
-  
-  ema_rc_all<-ProcApply(pData_allsub,function(ema_lss){
-    #message(ema_lss$info$RedcapID)
-    if(!is.null(ema_lss$data)){
-      
-    bsrc.ema.redcapupload(emamelt.merge = ema_lss$data,startdate = (ema_lss$info$StartDate)-1,
-                          enddate = ema_lss$info$EndDate,funema = rc_ema,output = T,
-                          ifupload = F,curver = "3",idvar = "RedCapID")
-    } else {return(NULL)}
-  })$df
-  ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
-  
-  if(updateRC){
-        print(ema_rc_all)
-        result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
+bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,
+                          emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,
+                          local=F,restricData=T, forceRerun=F, updateRC=T, excludeID=c("")){
+    #Initialization:
+    if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
+    rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
+    if(file.exists(emardpath)){
+      envir_ema<-bsrc.attachngrab(emardpath)} else {envir_ema<-as.environment(list())}
+    
+    ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema)
+    
+    
+    if(!forceRerun){
+      message("These folks had completed, no need to reprocess: ", paste(names(completed),collapse = " "))
+      ema_split_filter<-ema_split[!names(ema_split) %in% names(completed) ]
+    } else {ema_split_filter<-ema_split}
+    
+    pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
+   
+
+    ema_rc_all<-ProcApply(pData_allsub,function(ema_lss){
+      #message(ema_lss$info$RedcapID)
+      if(!is.null(ema_lss$data)){
+        
+        bsrc.ema.redcapupload(emamelt.merge = ema_lss$data,startdate = (ema_lss$info$StartDate)-1,
+                              enddate = ema_lss$info$EndDate,funema = rc_ema,output = T,
+                              ifupload = F,curver = "3",idvar = "RedCapID")
+      } else {return(NULL)}
+    })$df
+    
+    ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
+    
+    if(updateRC){
+      print(ema_rc_all)
+      result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
       if (result.rc_all$success) {message("Updated these IDs: ",paste(ema_rc_all$registration_redcapid,collapse = " "))}
-  } else {message("RedCap Update failed.")}
+    } else {message("RedCap Update failed.")}
+    
+    
+  }
   
   #!stucture of new environment:
   envir_ema$matchdb->newenvir_ema$matchdb #no need to worry about that
   newenvir_ema$CompletedData$CompletionRateData<-completed_sub
     
-      
+  fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())    
 
 }
-
-
-
-
-
+ema_raw_old_proc<-ema$fulldata.ema$raw
+ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
+completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
+completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=F,graph_path=graph_path)
+info.df<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
+info.df<-info.df[order(info.df$EndDate),]
+rownames(info.df)<-NULL
 
 
 
