@@ -1012,7 +1012,7 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
 #####################
 ########END##########
 #####################
-if(FALSE){
+
   #Construction:
   
   #New orgnization and looping:
@@ -1026,8 +1026,10 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
     if(file.exists(emardpath)){
       envir_ema<-bsrc.attachngrab(emardpath)} else {envir_ema<-as.environment(list())}
     
+    ema_raw_old_proc<-envir_ema$fulldata.ema$raw
+    ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
+    completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
     ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema)
-    
     
     if(!forceRerun){
       message("These folks had completed, no need to reprocess: ", paste(names(completed),collapse = " "))
@@ -1057,7 +1059,7 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
     
     
   }
-  
+if(FALSE){ 
   #!stucture of new environment:
   envir_ema$matchdb->newenvir_ema$matchdb #no need to worry about that
   newenvir_ema$CompletedData$CompletionRateData<-completed_sub
