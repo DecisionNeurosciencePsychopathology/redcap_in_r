@@ -1064,7 +1064,7 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
     
   fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())    
 
-}
+
 ema_raw_old_proc<-ema$fulldata.ema$raw
 ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
 completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
@@ -1072,7 +1072,7 @@ completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=F,graph
 info.df<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
 info.df<-info.df[order(info.df$EndDate),]
 rownames(info.df)<-NULL
-
+}
 
 
 

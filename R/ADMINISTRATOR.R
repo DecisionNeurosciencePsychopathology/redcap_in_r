@@ -431,6 +431,14 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
             startdate<-as.Date("2017-08-01")
           })
   subreg[subreg==""]<-NA
+  
+  newsubreg<-subreg[as.Date(subreg$registration_consentdate) > as.Date("2018-02-13"),]
+  
+  
+  bsrc.getchoicemapping("registration_status",metadata = curdb$metadata)->statusmap
+  subreg$Status<- plyr::mapvalues(x = subreg$registration_status, from = statusmap$choice.code, to = as.character(statusmap$choice.string),warn_missing = F)
+  
+  
   #ADD GROUP TO IT
   bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)->groupmap
   subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = F)
@@ -703,13 +711,13 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
 bsrc.irb.numsum<-function() {
   ID_SUPREME <-  readxl::read_excel("~/Box/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
   ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.findid(df = ID_SUPREME,curdb = bsocial)
+  tkj<-bsrc.findid(df = ID_SUPREME,curdb = curdb)
   tkj<-as.data.frame(tkj)
   newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
   names(newid)<-c("registration_redcapid")
   jrk<-merge(tkj,newid,all = T)
-  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid"))
-  nui<-merge(jrk,nui,all = T)
+  nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid","registration_consentdate"))
+  nui<-merge(jrk,nui,all = T,by = "registration_redcapid")
   if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
     #Info user the conflict:
     return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
