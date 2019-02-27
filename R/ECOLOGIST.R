@@ -1024,7 +1024,8 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
     if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
     rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
     if(file.exists(emardpath)){
-      envir_ema<-bsrc.attachngrab(emardpath)} else {envir_ema<-as.environment(list())}
+      envir_ema<-bsrc.attachngrab(emardpath)
+      } else {envir_ema<-as.environment(list())}
     
     ema_raw_old_proc<-envir_ema$fulldata.ema$raw
     ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
@@ -1062,7 +1063,9 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
 if(FALSE){ 
   #!stucture of new environment:
   envir_ema$matchdb->newenvir_ema$matchdb #no need to worry about that
-  newenvir_ema$CompletedData$CompletionRateData<-completed_sub
+  newenvir_ema$CompletedData$CompletionRateData<-lapply(completed_sub,function(sx){sx$data})
+  do.call(rbind,lapply(completed_sub,function(sx){sx$info}))
+  
     
   fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())    
 

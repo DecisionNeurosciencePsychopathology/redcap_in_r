@@ -46,7 +46,7 @@ if (finish) {status<-"_SUCCESSFUL"}
 if (whichtouse=="midnight"){
 clean<-TRUE
 expiration<-14
-xpath<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/bsrc log"
+xpath<-"/Users/jiazhouchen/Box/skinner/projects_analyses/Project BPD Longitudinal/bsrc log"
 lfile<-list.files(path=xpath,pattern="*.txt")
 yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",1)))
 delfile<-lfile[which(yur>expiration)] 

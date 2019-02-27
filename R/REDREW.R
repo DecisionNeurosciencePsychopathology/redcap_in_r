@@ -277,10 +277,11 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
   if (!anyfailed.d){
     assign("data",funbsrc,envir = cur.envir)
   }
+  assign("name",protocol$name,envir = cur.envir)
   if (updaterd & !online){
     save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
-  assign("name",protocol$name,envir = cur.envir)
+ 
   if (output | online) {
     return(cur.envir)
   }
@@ -399,11 +400,13 @@ bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,proto
     if(addgroupstatus) {varitoget<-c("registration_id","registration_redcapid","registration_soloffid","registration_group","registration_status")
     } else {varitoget<-c("registration_id","registration_redcapid","registration_soloffid")}
     idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[varitoget]
+    cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
     rownames(idmap)<-NULL
+  } else {
+    cleanmap<-idmap
   }
   if (!missing(df)){
   t<-lapply(df[[id.var]],function(id) {
-    cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
     pos<-as.data.frame(which(cleanmap==id,arr.ind = T))
     dx<-idmap[unique(pos$row),]
     if(length(dx[[1]])>0) {
