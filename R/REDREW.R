@@ -699,7 +699,9 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
       xk$choice.code<-as.character(xk$choice.code)
       xk$choice.string<-as.character(xk$choice.string)
       return(xk)
-  } else {print(paste("This variable: '",x,"' has a type of [",metasub$fieldtype[argk],"], which is not supported!",sep = ""))}
+    } else if (metasub$fieldtype[argk] %in% c("yesno")) {
+      xk<-data.frame(choice.code=c(1,0),choice.string=c("Yes","No"))
+      }else {message(paste("This variable: '",x,"' has a type of [",metasub$fieldtype[argk],"], which is not supported!",sep = ""))}
   })
   names(xzej)<-variablenames
   if (length(xzej)==1){xzej<-xzej[[1]]}
