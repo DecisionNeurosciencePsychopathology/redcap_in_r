@@ -161,9 +161,6 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
 ##########
 transfer2redcap<-function(dtx_r=NULL,idmap=NULL,metals=NULL,misscodeallowed=NULL,arm_num=NULL,ID_fieldname=NULL,protocol_name=NULL,ifupload=T,clean=T) {
   dtx_rp<-unpack(dtx_r)
-  if(any(is.numeric(dtx_rp$data$CDATE))){
-    dtx_rp$data$CDATE<-as.Date(dtx_rp$data$CDATE, origin = "1899-12-30")
-  }
   dtx_rp$data<-cbind(dtx_rp$data,do.call(rbind,lapply(1:nrow(dtx_rp$data),function(x){getevt(dtx_rp$data$ID[x],dtx_rp$data$CDATE[x],protocol_name,sp_lookup)})))
   for(evt in protocol_name){
     dtx_rp$data<-cleanup(dtx_rp$data,EVTvari = evt)
@@ -259,10 +256,11 @@ save(alloutputx,file = file.path(rootdir,"outputs","all_uploadresults.rdata"))
 
 
 
+###################
+##We want to double check what's wrong with each thing:
+##Start with error codes
 
-#Change EVT
-#Putting things aside;
-masterdemo_backup<-bsrc.checkdatabase2(protocol = ptcs$masterdemo)
+unique(do.call(rbind,lapply(alloutputx,function(rx){rx$valuemismatch$info}))[c("VariableName","TriggeredOriginalData")])
 
 
 
