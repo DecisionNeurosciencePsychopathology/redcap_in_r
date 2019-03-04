@@ -203,14 +203,18 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
 ####Missing Assessment Given a Arm####
 #Pending
 ####Back-up######
-bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path,clean=T,expiration=30,...) {
+bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path=NULL,clean=T,expiration=30,...) {
   protocol$rdpath->rdpath
-  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+  if (is.null(curdb)){
+  curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
   funbsrc<-curdb$data
   ifrun<-curdb$success
-  if (missing(path)) {
-    path<-"/Users/jiazhouchen/Box Sync/skinner/data/RedCap Data/BSocial/Backup"
-    print("Default Location is BOXSYNC")}
+  if (is.null(path)) {
+    if(is.null(rdpath)){
+    path<-paste(paste(strsplit(rdpath,.Platform$file.sep)[[1]][1:(length(strsplit(rdpath,.Platform$file.sep)[[1]])-1)],collapse = .Platform$file.sep),"Backup",sep = .Platform$file.sep)
+    print("Default Location is BOXSYNC")
+    } else {stop("No Path")}
+    }
   if (ifrun) {
     backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
     topath<-paste(path,backupname,sep = "/")
