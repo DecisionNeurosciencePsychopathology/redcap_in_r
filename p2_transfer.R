@@ -61,6 +61,32 @@ change_evt<-function(dty,protocol_name,arm_num){
   
   return(dty)
 }
+############Clean-up upload;
+
+
+trans_cleanup<-function(dfx=NULL,metadata=NULL,ID_fieldname=NULL){
+  ahha<-names(dfx)[which(metadata$field_type[match(names(dfx),metadata$field_name)] %in% c("radio","yesno","dropdown","checkbox"))]
+  templsx<-lapply(ahha,function(xj){
+    whichones<-which(!dfx[[xj]] %in% bsrc.getchoicemapping(variablenames = xj,metadata = metadata)$choice.code & !is.na(dfx[[xj]]))
+    if(length(whichones)>0){
+      #We Now Withheld all of their data instance; instead of just changing one of them 
+      ogdata<-dfx[[xj]][whichones]
+      ogdatainstance<-dfx[whichones,]
+      IDs<-dfx[[ID_fieldname]][whichones]
+      dfaz<-data.frame(ID=IDs,VariableName=xj,TriggeredOriginalData=ogdata,order=whichones)
+      return(list(info=dfaz,ogdata=ogdatainstance))
+    } else {NULL}
+  })
+  valuemismatch <- list(info=do.call(rbind,lapply(templsx,function(dx){dx$info})),
+                        ogdata=do.call(rbind,lapply(templsx,function(dx){dx$ogdata})))
+  if(length(valuemismatch$info$order)>0){
+    dfy<-dfx[-valuemismatch$info$order,]
+  }else{dfy<-dfx}
+  valuemismatch$info$order<-NULL
+  return(list(outputdf=dfy,valuemismatch=valuemismatch))
+}
+
+
 #########
 proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanup=T,protocol_name,ID_fieldname,arm_num) {
   # excluded = dtx_ii
@@ -119,26 +145,30 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
   }                                                                                                     
   
   if(cleanup){
-    ahha<-names(lsx$transfer)[which(metals$varimap$field_type[match(names(lsx$transfer),metals$varimap$field_name)] %in% c("radio","yesno","dropdown","checkbox"))]
-
-    templsx<-lapply(ahha,function(xj){
-      whichones<-which(!lsx$transfer[[xj]] %in% bsrc.getchoicemapping(variablenames = xj,metadata = metals$varimap)$choice.code & !is.na(lsx$transfer[[xj]]))
-      if(length(whichones)>0){
-        #We Now Withheld all of their data instance; instead of just changing one of them 
-        ogdata<-lsx$transfer[[xj]][whichones]
-        ogdatainstance<-lsx$transfer[whichones,]
-        IDs<-lsx$transfer[[ID_fieldname]][whichones]
-        dfaz<-data.frame(ID=IDs,VariableName=xj,TriggeredOriginalData=ogdata,order=whichones)
-      return(list(info=dfaz,ogdata=ogdatainstance))
-      } else {NULL}
-    })
-    lsx$valuemismatch <- list(info=do.call(rbind,lapply(templsx,function(dx){dx$info})),
-                              ogdata=do.call(rbind,lapply(templsx,function(dx){dx$ogdata})))
-    if(length(lsx$valuemismatch$info$order)>0){
-    lsx$transfer<-lsx$transfer[-lsx$valuemismatch$info$order,]
+    # ahha<-names(lsx$transfer)[which(metals$varimap$field_type[match(names(lsx$transfer),metals$varimap$field_name)] %in% c("radio","yesno","dropdown","checkbox"))]
+    # 
+    # templsx<-lapply(ahha,function(xj){
+    #   whichones<-which(!lsx$transfer[[xj]] %in% bsrc.getchoicemapping(variablenames = xj,metadata = metals$varimap)$choice.code & !is.na(lsx$transfer[[xj]]))
+    #   if(length(whichones)>0){
+    #     #We Now Withheld all of their data instance; instead of just changing one of them 
+    #     ogdata<-lsx$transfer[[xj]][whichones]
+    #     ogdatainstance<-lsx$transfer[whichones,]
+    #     IDs<-lsx$transfer[[ID_fieldname]][whichones]
+    #     dfaz<-data.frame(ID=IDs,VariableName=xj,TriggeredOriginalData=ogdata,order=whichones)
+    #   return(list(info=dfaz,ogdata=ogdatainstance))
+    #   } else {NULL}
+    # })
+    # lsx$valuemismatch <- list(info=do.call(rbind,lapply(templsx,function(dx){dx$info})),
+    #                           ogdata=do.call(rbind,lapply(templsx,function(dx){dx$ogdata})))
+    # if(length(lsx$valuemismatch$info$order)>0){
+    # lsx$transfer<-lsx$transfer[-lsx$valuemismatch$info$order,]
+    # }
+    # lsx$valuemismatch$info$order<-NULL
+    #adapt function:
+    cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
+    lsx$transfer<-cleanoutput$outputdf
+    lsx$valuemismatch<-cleanoutput$valuemismatch
     }
-    lsx$valuemismatch$info$order<-NULL
-  }
   
   if(upload){
     if(nrow(lsx$transfer)>0){
@@ -170,10 +200,16 @@ transfer2redcap<-function(dtx_r=NULL,idmap=NULL,metals=NULL,misscodeallowed=NULL
   
   return(output)
 }
+##########
+convert_exceldate<-function(x){
+  return(as.Date(as.numeric(x),origin="1899-12-30"))
+}
 
+
+rootdir = "~/Box/skinner/data/Redcap Transfer/redcap outputs"
 stop("STOP HERE FUNCTIONS ABOVE")
 #Local boxdir:
-rootdir = "~/Box/skinner/data/Redcap Transfer/redcap outputs"
+
 
 #DEMO;
 #######
@@ -187,7 +223,7 @@ DEMO_trans$data$registration_lastfour<-DEMO_trans$data$ssn_last4
 DEMO_trans$data$ssn_last4<-NULL
 # DEMO_trans$data$registration_redcapid<-DEMO_trans$data$registration_dnplid
 # DEMO_trans$data$registration_dnplid<-NULL
-REDCapR::redcap_write(DEMO_trans$data,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+#REDCapR::redcap_write(DEMO_trans$data,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 #REDCapR::redcap_write(masterdemo$data,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 #######
 
@@ -213,6 +249,90 @@ sp_lookup<-lapply(split(lookuptable,lookuptable$ID),function(krz){
   }
   return(krz)
 })
+
+
+###Update the demo and consent date for folks;
+masterdemo<-bsrc.conredcap2(protocol = ptcs$masterdemo,online = T,batch_size = 1000)
+conp_DEMO<-unpack(readxl::read_xlsx(path = file.path(rootdir,"ALL_SUBJECTS_DEMO.xlsx")))
+conp_DEMO$data<-bsrc.findid(df = conp_DEMO$data,idmap = idmap)
+NOTINMASTERYET<-conp_DEMO$data[is.na(conp_DEMO$data$registration_redcapid),]
+
+allvaris<-bsrc.getchoicemapping(variablenames = "registration_ptcstat",metadata = masterdemo$metadata)
+
+noids<-which(is.na(conp_DEMO$data$registration_redcapid))
+conp_DEMO$data$registration_wpicid[noids]<-conp_DEMO$data$ID[noids]
+if(any(conp_DEMO$data$ID[noids] > 450000)){stop("SOME OF THESE PEOPLE WITH MORE THAN 45---- ID!!!")
+}else{
+  conp_DEMO$data$registration_redcapid[noids]<-conp_DEMO$data$ID[noids]
+  }
+
+all_demog<-lapply(allvaris$choice.code,function(vgname){
+    print(vgname)
+    arz<-as.data.frame(lapply(conp_DEMO$data[names(conp_DEMO$data)[which(grepl(paste0(vgname,"$"),names(conp_DEMO$data)))]],convert_exceldate),stringsAsFactors = F)
+    karz<-apply(arz, 1, function(x){any(!is.na(x))})
+    ready_arz<-cbind(conp_DEMO$data["registration_redcapid"],arz)[karz,]
+    ready_arz[paste("registration_ptcstat",vgname,sep="___")]<-1
+    return(ready_arz)
+  })
+names(all_demog)<-allvaris$choice.code
+all_demog$bsocial<-NULL
+all_demog$ksocial<-NULL
+
+lapply(all_demog,REDCapR::redcap_write,redcap_uri = ptcs$masterdemo$redcap_uri,token=ptcs$masterdemo$token)
+
+#That's fine creating new subjects
+if(any(as.numeric(NOTINMASTERYET$ID)>800000)){stop("HEY! THERE ARE SOME 88 PEOPLE!!!!!")}
+
+conp_DEMO$data$registration_redcapid[is.na(conp_DEMO$data$registration_redcapid)]<-conp_DEMO$data$ID[is.na(conp_DEMO$data$registration_redcapid)]
+
+conp_DEMO$data$NEWGROUP<-plyr::mapvalues(x = conp_DEMO$data$PATYPE_TEXT,from = c("ATTEMPTER","OTHER","IDEATOR","BPD","OTHER PATIENT","CONTROL","DEPRESSION","NON-ATTEMPTER"),
+                to = c("ATT","88","IDE","NON","88","HC","DEP","NON")
+                )
+conp_DEMO$data$registration_groupchange<-NA
+conp_DEMO$data$registration_groupchange[which(nchar(conp_DEMO$data$NEWGROUP)>4)]<-1
+
+conp_DEMO$data$registration_oggroup<-NA
+conp_DEMO$data$registration_oggroup[which(conp_DEMO$data$registration_groupchange==1)]<-sapply(strsplit(conp_DEMO$data$NEWGROUP[which(conp_DEMO$data$registration_groupchange==1)],split = "-"),`[[`,1)
+conp_DEMO$data$NEWGROUP[which(conp_DEMO$data$registration_groupchange==1)]<-sapply(strsplit(conp_DEMO$data$NEWGROUP[which(conp_DEMO$data$registration_groupchange==1)],split = "-"),`[[`,2)
+conp_DEMO$data$NEWGROUP<-plyr::mapvalues(x = conp_DEMO$data$NEWGROUP,from = c("ATTEMPTER","OTHER","IDEATOR","BPD","OTHER PATIENT","CONTROL","DEPRESSION","NON-ATTEMPTER"),
+                                         to = c("ATT","88","IDE","NON","88","HC","DEP","NON"),warn_missing = F
+)
+conp_DEMO$data$registration_oggroup<-plyr::mapvalues(x = conp_DEMO$data$registration_oggroup,from = c("ATTEMPTER","OTHER","IDEATOR","BPD","OTHER PATIENT","CONTROL","DEPRESSION","NON-ATTEMPTER"),
+                                         to = c("ATT","88","IDE","NON","88","HC","DEP","NON"),warn_missing = F
+)
+conp_DEMO$data$registration_group<-conp_DEMO$data$NEWGROUP
+
+conp_2upload<-conp_DEMO$data[c("registration_redcapid","registration_initials","registration_edu","registration_marrs","registration_groupchange",
+                               "registration_oggroup","registration_group")]
+
+
+REDCapR::redcap_write(conp_2upload,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+
+########Get BSocial People while we are here;
+bsocial<-bsrc.checkdatabase2(protocol = ptcs$bsocial)
+bsometa_reg<-bsocial$metadata[bsocial$metadata$form_name=="record_registration",]
+subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = bsocial)
+subreg<-subreg[!is.na(as.numeric(subreg$registration_redcapid)),]
+subreg[subreg==""]<-NA
+subreg$registration_id[is.na(subreg$registration_id)]<-subreg$registration_redcapid[is.na(subreg$registration_id)]
+
+masterdemo$metadata[masterdemo$metadata==""]<-NA
+
+itg_df<-data.frame(tag=masterdemo$metadata$field_note[which(masterdemo$metadata$field_note %in% bsometa_reg$field_note)],
+           from = bsometa_reg$field_name[match(tag_toget,bsometa_reg$field_note)],
+           to = masterdemo$metadata$field_name[match(tag_toget,masterdemo$metadata$field_note)],stringsAsFactors = F)
+
+
+
+lapply(itg_df$tag,function(ms_name){
+  if(!ms_name %in% c("dnplid")){
+    #Our goal here is to get the conflict df
+    subreg[c("registration_redcapid",ms_name)]
+           
+  } 
+})
+
 
 #Do the self-reports cuz they are ezzzzzz
 txpath = file.path(rootdir,"To be transferred","TransferQueue")
@@ -263,16 +383,122 @@ save(alloutputx,file = file.path(rootdir,"outputs","all_uploadresults.rdata"))
 unique(do.call(rbind,lapply(alloutputx,function(rx){rx$valuemismatch$info}))[c("VariableName","TriggeredOriginalData")])
 
 
+###Special Cases;
+
+#Med List:
+medlist_x <-readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","MEDS.xlsx"))
+
+library(httr)
+parse_results <- function(result) {
+  if(status_code(result) != 200){
+    NULL
+  } else {
+    resContent <- content(result)
+    resContent
+  }
+}
+
+rx_approximateTerm <- function(term, maxEntries = 20, option = 0) {
+  params <- list(term = term, maxEntries = maxEntries, option = option)
+  r <- GET("https://rxnav.nlm.nih.gov/REST/", path = "REST/approximateTerm.json", query = params)
+  parse_results(r)
+}
+
+rx_allProperties <- function(rxcui, prop = "all"){
+  prams <- list(prop = prop)
+  r <- GET("https://rxnav.nlm.nih.gov/REST/", path = paste0("REST/rxcui/", rxcui,"/allProperties"),
+           query = prams)
+  parse_results(r)
+}
+
+rx_filter <- function(rxcui, propName, propValues = "IN"){
+  prams <- list(propName = propName, propValues = propValues)
+  r <- GET("https://rxnav.nlm.nih.gov/REST/", path = paste0("REST/rxcui/", rxcui,"/filter"),
+           query = prams)
+  parse_results(r)
+}
+
+get_drug<-function(drugname){
+  message(drugname)
+  dxt<-rx_approximateTerm(drugname,maxEntries = 3)$approximateGroup$candidate
+  c_dxt<-dxt[!duplicated(sapply(dxt,function(xj){xj$rxcui}))]
+  m_dxt<-unlist(c_dxt[which.min(sapply(c_dxt,function(xj){xj$rank}))],recursive = F)
+  if(length(m_dxt)<1){m_dxt<-list(rxcui=NA,score=NA)}
+  return(data.frame(drug_name=drugname,drug_rxcui=m_dxt$rxcui,score=m_dxt$score,stringsAsFactors = F))
+}
+
+if(!file.exists(file.path(rootdir,"drug_indx.rdata"))){
+  allmednames<-unique(medlist_x$data$DRUGNAME)
+  alldrug_xcui<-lapply(allmednames,get_drug)
+  drug_indx<-do.call(rbind,alldrug_xcui)
+  save(drug_indx,file = file.path(rootdir,"drug_indx.rdata"))
+} else {load(file.path(rootdir,"drug_indx.rdata"))}
+
+medlist_y<-merge(medlist_x,drug_indx,by.x = "medlist_name",by.y = "drug_name",all.x = T)
+medlist_y$medlist_spname<-NA
+#medlist_y$medlist_spname[which(is.na(medlist_y$score) | as.numeric(medlist_y$score)<100)]<-medlist_y$medlist_name[which(is.na(medlist_y$score) | as.numeric(medlist_y$score)<100)]
+medlist_y$medlist_spname<-medlist_y$medlist_name
+#medlist_y$medlist_name<-medlist_y$drug_rxcui
+#medlist_y$medlist_name[which(is.na(medlist_y$score) | as.numeric(medlist_y$score)<100)]<-"1241571" #This is the code for Fish as we use 'Fish' for unspecified.
+medlist_y$medlist_name<-""
+medlist_y$medlist_dose<-round(medlist_y$medlist_dose,1)
+
+medlist_y$medlist_freq<-gsub(" ","",medlist_y$medlist_freq)
+medlist_y$medlist_freq<-gsub("DAYTOTPRN","PRN",medlist_y$medlist_freq)
+variconmap<-bsrc.getchoicemapping(variablenames = "medlist_freq_1",protocol = ptcs$protect)
+medlist_y$medlist_freq[which(tolower(medlist_y$medlist_freq)=="notinlist–seecomment")]<-"seecomment"
+medlist_y$medlist_freq<-tolower(medlist_y$medlist_freq)
+
+medlist_y$medlist_startdate<-as.Date(medlist_y$medlist_startdate,"YYYY-MM-DD")
+medlist_y$medlist_enddate<-as.Date(medlist_y$medlist_enddate,"YYYY-MM-DD")
+
+medlist_y<-bsrc.findid(medlist_y,idmap = idmap)
+
+medlist_r<-medlist_y[,c("registration_redcapid","medlist_name","medlist_dose","medlist_units","medlist_freq","medlist_startdate","medlist_enddate","medlist_comment","medlist_spname")]
+medlist_r<-medlist_r[order(medlist_r$registration_redcapid),]
+medlist_r$seqx<-unlist(lapply(split(medlist_r$registration_redcapid,medlist_r$registration_redcapid),seq_along))
+
+medlist_z<-reshape(data = medlist_r,timevar = "seqx",idvar = "registration_redcapid",direction = "wide",sep = "_")
+nouploadid<-medx$registration_redcapid[which(medx$registration_redcapid %in% medlist_z$registration_redcapid)]
+medlist_z2<-medlist_z[which(!medlist_z$registration_redcapid %in% nouploadid),]
+medlist_z2$redcap_event_name<-"baseline_arm_2"
+REDCapR::redcap_write(medlist_z2,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
 
+#####This is the termination form transfer:
+term_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","LONGITUDINAL_STUDIES_TERM.xlsx")))
+term_og$data$TERMDATE<-convert_exceldate(term_og$data$TERMDATE)
 
+term_dfx<-term_og$data[term_og$map$OG_name[!is.na(term_og$map$RC_name)]]
+names(term_dfx)<-term_og$map$RC_name[match(names(term_dfx),term_og$map$OG_name)]
+term_dfx$uniqueID<-paste(term_dfx$ID,term_dfx$ptcs,sep = "__")
+term_notes<-reshape2::melt(term_dfx[c("uniqueID",names(term_dfx)[grep("notes_",names(term_dfx))])],id.vars=c("uniqueID"))
+term_notes_sp<-split(term_notes,term_notes$uniqueID)
 
+mastermeta<-REDCapR::redcap_metadata_read(redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)$data
 
+term_notes_proc<-do.call(rbind,lapply(term_notes_sp,function(kgz){
+  kgy<-kgz[!is.na(kgz$value),]
+  if(nrow(kgy)>0){
+      kgy$value<-paste(kgy$variable,kgy$value,sep = ": ")
+      kgy<-kgy[c("uniqueID","value")]
+      names(kgy)<-c("uniqueID","reg_term_reason_n")
+      return(kgy)
+  } else {
+    return(data.frame(uniqueID=unique(kgz$uniqueID),reg_term_reason_n="NO NOTES FOUND/IMPORTED",stringsAsFactors = F) )
+  }
+})
+)
+term_dfy<-merge(term_dfx,term_notes_proc,by = "uniqueID",all.x = T)
+term_dfy$ptcs<-tolower(term_dfy$ptcs)
+term_dfy$reg_term_cod[is.na(term_dfy$reg_term_cod)]<-""
+term_dfy$reg_term_cod[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code]<- paste("Rater: ",term_dfy$reg_term_who[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],term_dfy$reg_term_cod[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],sep = "")
+term_dfy<-term_dfy[c("ID","ptcs",names(term_dfy)[grep("reg_term_",names(term_dfy))])]
+term_dfz<-reshape(data = term_dfy,timevar = "ptcs",idvar = "ID",direction = "wide",sep = "_")
+term_dfz$registration_redcapid<-term_dfz$ID; term_dfz$ID<-NULL
+REDCapR::redcap_write(term_dfz,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
-
-
-
-
+proto<-"PROTECT2"
 
 
 

@@ -432,7 +432,7 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
           })
   subreg[subreg==""]<-NA
   
-  newsubreg<-subreg[as.Date(subreg$registration_consentdate) > as.Date("2018-02-13"),]
+  
   
   
   bsrc.getchoicemapping("registration_status",metadata = curdb$metadata)->statusmap
@@ -446,9 +446,9 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
   subreg$Gender<-subreg$registration_gender
   gendergroup<-list(x1="Group",x2="Gender")
   #Race
-  subreg<-bsrc.checkbox(subreg)
-  subreg$registration_race_string->subreg$race
-  subreg$race[subreg$registration_race_ifmultiple]<-"Mixed"
+  subreg<-bsrc.checkbox(subreg,variablename = "registration_race",cleandf = F,returnstring = T)
+  subreg$registration_race__string->subreg$race
+  subreg$race[subreg$registration_race__ifmultiple]<-"Mixed"
   bsrc.getchoicemapping("registration_race",metadata = curdb$metadata)->racemap
   racemap$choice.string<-c("AmerIndi","Asian","AfriAmer","PaciIslander","White","Refused")
   subreg$Race<- plyr::mapvalues(x = subreg$race, from = racemap$choice.code, to = as.character(racemap$choice.string),warn_missing = F)
@@ -471,6 +471,7 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
   if(protcol=="bsocial") {
     #New Consent since Auguest 2017
 
+    
     newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & !subreg$registration_group %in% c(88,89)),]
     do_for_asub(newconsent,tit = "B-Social New Consent",plotpath=plotpath,filename="by_newconsent.jpeg")
     nplot<-graph_data_meet(datalist = onlygroup,xdata = newconsent,title = "New Consent")
@@ -711,13 +712,14 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
 bsrc.irb.numsum<-function() {
   ID_SUPREME <-  readxl::read_excel("~/Box/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
   ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.findid(df = ID_SUPREME,curdb = curdb)
-  tkj<-as.data.frame(tkj)
-  newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
-  names(newid)<-c("registration_redcapid")
-  jrk<-merge(tkj,newid,all = T)
+  tkj<-bsrc.findid(df = ID_SUPREME,curdb = curdb,id.var = "ID",addgroupstatus = F)
+  tkj$registration_id<-NULL; tkj$registration_soloffid<-NULL; 
+  #tkj<-as.data.frame(tkj)
+  #newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
+  #names(newid)<-c("registration_redcapid")
+  #jrk<-merge(tkj,newid,all = T)
   nui<-subset(subreg,select = c("registration_redcapid","registration_status","registration_soloffid","registration_consentdate"))
-  nui<-merge(jrk,nui,all = T,by = "registration_redcapid")
+  nui<-merge(nui,tkj,all = T,by = "registration_redcapid")
   if (length(nui$Status[which(!nui$Status==nui$registration_status)])>0) {
     #Info user the conflict:
     return(as.data.frame(nui$registration_redcapid[which(!nui$Status==nui$registration_status)],nui$Status[which(!nui$Status==nui$registration_status)],nui$registration_status[which(!nui$Status==nui$registration_status)]))
