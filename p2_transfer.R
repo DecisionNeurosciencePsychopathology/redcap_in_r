@@ -207,6 +207,7 @@ convert_exceldate<-function(x){
 
 
 rootdir = "~/Box/skinner/data/Redcap Transfer/redcap outputs"
+idmap<-REDCapR::redcap_read(batch_size = 1000,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token,fields = c("registration_redcapid","registration_wpicid"))$data
 stop("STOP HERE FUNCTIONS ABOVE")
 #Local boxdir:
 
@@ -319,9 +320,11 @@ subreg$registration_id[is.na(subreg$registration_id)]<-subreg$registration_redca
 
 masterdemo$metadata[masterdemo$metadata==""]<-NA
 
-itg_df<-data.frame(tag=masterdemo$metadata$field_note[which(masterdemo$metadata$field_note %in% bsometa_reg$field_note)],
-           from = bsometa_reg$field_name[match(tag_toget,bsometa_reg$field_note)],
-           to = masterdemo$metadata$field_name[match(tag_toget,masterdemo$metadata$field_note)],stringsAsFactors = F)
+tag<-masterdemo$metadata$field_note[which(masterdemo$metadata$field_note %in% bsometa_reg$field_note)]
+
+itg_df<-data.frame(tag=tag,
+           from = bsometa_reg$field_name[match(tag,bsometa_reg$field_note)],
+           to = masterdemo$metadata$field_name[match(tag,masterdemo$metadata$field_note)],stringsAsFactors = F)
 
 
 
@@ -465,6 +468,105 @@ medlist_z2$redcap_event_name<-"baseline_arm_2"
 REDCapR::redcap_write(medlist_z2,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
 
+####This is the suicide histroy
+##Get the existing folks, exclude them for now;
+existsingSAHX<-bsrc.getform(protocol = ptcs$protect,formname = "ongoing_suicide_hx_lethality",mod = T,grabnewinfo = T,aggressivecog = F)
+masterdemo<-bsrc.conredcap2(ptcs$masterdemo,output = T,batch_size = 500)
+p2demo<-masterdemo$data[which(masterdemo$data$registration_ptcstat___protect2==1),]
+#Let's do baseline first;
+sahx_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","SUICIDE HISTORY_BL_cv.xlsx")))
+sahx_dfx<-sahx_og$data[sahx_og$map$OG_name[!is.na(sahx_og$map$RC_name)]]
+names(sahx_dfx)<-sahx_og$map$RC_name[match(names(sahx_dfx),sahx_og$map$OG_name)]
+if(any(sahx_dfx$ID %in% as.character(existsingSAHX$registration_redcapid))){stop("HEY!!!!!OVERLAPS!!!!!!")}
+
+#For now only transfer P2 folks:
+evtname<-"baseline_arm_2"
+sahx_dfy<-sahx_dfx[which(sahx_dfx$ID %in% p2demo$registration_redcapid),]
+sahx_dfz<-melt(sahx_dfy,id.vars=c("ID","sahx_attemptnum"))
+sahx_dfz$type<-sapply(strsplit(as.character(sahx_dfz$variable),split = "-x-"),`[[`,1)
+sahx_dfz$num<-sapply(strsplit(as.character(sahx_dfz$variable),split = "-x-"),`[[`,2)
+#Recast
+sahx_dfz$variable<-NULL;
+sahx_dfr<-reshape(data = sahx_dfz,timevar = "type",idvar = c("ID","num","sahx_attemptnum"),direction = "wide",sep = "-x-")
+names(sahx_dfr)<-gsub("value-x-","",names(sahx_dfr))
+sahx_dfr$sahx_sadate_at<-convert_exceldate(sahx_dfr$sahx_sadate_at)
+
+sp_sahx<-split(sahx_dfr,sahx_dfr$ID)
+
+sp_sahx_proc<-cleanuplist(lapply(sp_sahx,function(grk){
+  #print(unique(grk$ID))
+  incorrectentry<-FALSE; notmatch<-FALSE; nodata<-FALSE
+  if(!is.na(unique(grk$sahx_attemptnum))){
+    grz<-grk[!duplicated(grk[which(!names(grk) %in% c("sahx_lr_at"))]),]
+    if(as.numeric(unique(grz$sahx_attemptnum))>0){
+      grz<-grz[which(!is.na(grz$sahx_sadate_at) | !is.na(grz$sahx_describe_at)),]
+    }
+    
+    if(nrow(grz) != unique(grz$sahx_attemptnum)) {
+      
+      dupli_date<-which(duplicated(grz$sahx_sadate_at) | duplicated(grz$sahx_sadate_at,fromLast = T))
+      if(length(dupli_date)>1){
+        grz<-rbind(grz[-dupli_date,], do.call(rbind,lapply(unique(grz$sahx_sadate_at[dupli_date]),function(gd){
+          if(any(grz[which(grz$sahx_sadate_at==gd),"sahx_describe_at"] %in% grz[which(grz$sahx_sadate_at!=gd),"sahx_describe_at"])){
+            message("This person has incorrect entries: ",unique(grz$ID))
+            incorrectentry<-TRUE
+            return(grz[which(grz$sahx_sadate_at==gd),])
+          } else {
+            data.frame(t(apply(grz[which(grz$sahx_sadate_at==gd),],2,function(xr){
+              xr<-xr[!is.na(xr)]
+              if(length(xr)==0){xr<-NA}
+              if(length(unique(xr))>1){
+                paste(xr,collapse = " / ")
+              } else {
+                return(unique(xr))
+              }
+            })))
+          }
+         
+        })
+        ),stringsAsFactors = F)
+      }
+    }
+    
+    if(nrow(grz) != as.numeric(unique(grz$sahx_attemptnum)) & as.numeric(unique(grz$sahx_attemptnum))!=0){
+      message("This person: ",unique(grz$ID)," doesn't match")
+      notmatch<-TRUE
+      }
+  } else {nodata<-TRUE}
+  
+  statusls<-data.frame(incorrectentry,notmatch,nodata)
+  
+  if(any(unlist(statusls))){returndf<-grk} else {returndf<-grz}
+  
+  return(list(status=statusls,data=returndf))
+  
+}))
+
+sahx_dfx_proc<-do.call(rbind,lapply(sp_sahx_proc,function(x){
+  if(any(unlist(x$status))){NULL}else{
+    xr<-x$data
+    xr$ML<-NA
+    xr$MR<-NA
+    xr$num<-NA
+    if(unique(xr$sahx_attemptnum)!=0){
+      xr$ML[which.max(xr$sahx_lr_at)]<-TRUE
+      xr$MR[which.max(xr$sahx_sadate_at)]<-TRUE
+      xr$num<-1:nrow(xr)
+    }
+    return(xr)
+    }
+}))
+for (xrz in names(sahx_dfx_proc)) {
+  names(sahx_dfx_proc[[xrz]])<-NULL
+}
+rownames(sahx_dfx_proc)<-NULL
+sahx_dfx_proc$sahx_lr_at[which(as.numeric(sahx_dfx_proc$sahx_lr_at)>8)]<-NA
+
+wSA_dfx<-sahx_dfx_proc[which(sahx_dfx_proc$sahx_attemptnum>0),]
+
+
+
+
 #####This is the termination form transfer:
 term_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","LONGITUDINAL_STUDIES_TERM.xlsx")))
 term_og$data$TERMDATE<-convert_exceldate(term_og$data$TERMDATE)
@@ -485,20 +587,54 @@ term_notes_proc<-do.call(rbind,lapply(term_notes_sp,function(kgz){
       names(kgy)<-c("uniqueID","reg_term_reason_n")
       return(kgy)
   } else {
-    return(data.frame(uniqueID=unique(kgz$uniqueID),reg_term_reason_n="NO NOTES FOUND/IMPORTED",stringsAsFactors = F) )
+    return(data.frame(uniqueID=unique(kgz$uniqueID),reg_term_reason_n="NO NOTES FOUND/IMPORTED",stringsAsFactors = F) )d
   }
 })
 )
 term_dfy<-merge(term_dfx,term_notes_proc,by = "uniqueID",all.x = T)
 term_dfy$ptcs<-tolower(term_dfy$ptcs)
-term_dfy$reg_term_cod[is.na(term_dfy$reg_term_cod)]<-""
-term_dfy$reg_term_cod[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code]<- paste("Rater: ",term_dfy$reg_term_who[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],term_dfy$reg_term_cod[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],sep = "")
-term_dfy<-term_dfy[c("ID","ptcs",names(term_dfy)[grep("reg_term_",names(term_dfy))])]
+term_dfy$reg_term_reason_n[is.na(term_dfy$reg_term_reason_n)]<-""
+term_dfy$reg_term_reason_n[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",
+                                                                             metadata = mastermeta)$choice.code]<- paste("Rater: ",
+   term_dfy$reg_term_who[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],
+   term_dfy$reg_term_reason_n[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code],
+   sep = " ")
+term_dfy$reg_term_who[!term_dfy$reg_term_who %in% bsrc.getchoicemapping(variablenames = "reg_term_who_protect2",metadata = mastermeta)$choice.code]<-NA
+term_dfy$reg_term_reason_n[which(!is.na(term_dfy$reg_term_cod))]<-paste("Additional Info:",term_dfy$reg_term_cod[which(!is.na(term_dfy$reg_term_cod))])
+term_dfy$reg_term_cod<-""
+term_dfy<-term_dfy[c("ID","ptcs",names(term_dfy)[grep("reg_term",names(term_dfy))])]
+term_dfy$reg_term_yesno<-1
 term_dfz<-reshape(data = term_dfy,timevar = "ptcs",idvar = "ID",direction = "wide",sep = "_")
-term_dfz$registration_redcapid<-term_dfz$ID; term_dfz$ID<-NULL
+term_dfz<-bsrc.findid(df = term_dfz,idmap = idmap,id.var = "ID")
+term_dfz$ID<-NULL;term_dfz$registration_wpicid<-NULL;term_dfz$ogid<-NULL;
+if(any(!term_dfz$ifexist)){message("Adding additional ID, consider before re-uploading...")}
+term_dfz$ifexist<-NULL
 REDCapR::redcap_write(term_dfz,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 proto<-"PROTECT2"
+
+###Upload
+ksr<-masterdemo$data[c(1,grep("reg_termdate",names(masterdemo$data)))]
+grx<-melt(ksr,id.vars="registration_redcapid")
+tx<-grx[!is.na(grx$value) & grx$value!="",]
+tx$variable<-gsub("reg_termdate_","",tx$variable)
+tx$reg_term_yesno<-1
+tx$value<-NULL
+
+txy<-reshape(data = tx,timevar = "variable",idvar = "registration_redcapid",direction = "wide",sep = "_")
+REDCapR::redcap_write(txy,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+####THIS IS CAUSE OF DEATH########
+cod_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","CAUSE OF DEATH_cv.xlsx")))
+
+cod_dfx<-cod_og$data
+names(cod_dfx)<-cod_og$map$RC_name[match(names(cod_dfx),cod_og$map$OG_name)]
+cod_dfx<-bsrc.findid(df = cod_dfx,idmap = idmap,id.var = "ID")
+cod_dfx$cod_dead<-1
+cod_dfx$registration_wpicid<-NULL; cod_dfx$ID<-NULL; cod_dfx$ogid<-NULL; cod_dfx$ifexist<-NULL
+REDCapR::redcap_write(cod_dfx,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+
 
 
 

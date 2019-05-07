@@ -212,6 +212,11 @@ loadrdata<-function(rdpath=NULL,returnas="envir",envir=new.env()) {
           "list"  = {return(as.list(envir))}
   )
 }
+#################################
+bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
+  fieldmap<-bsrc.getchoicemapping(variablenames = variname,metadata = metadata)
+  return(plyr::mapvalues(x = valuein,from = fieldmap$choice.code,to=fieldmap$choice.string))
+}
 
 #########################New Ver in DEV
 bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,online=F,...) {
