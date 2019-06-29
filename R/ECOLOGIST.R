@@ -39,10 +39,104 @@
 # subactivity$fordate <- as.Date(strptime(subactivity$For.Time, '%d/%m/%Y %H:%M:%S'))                         #
 #                                                                                                             #
 ###############################################################################################################
+####Utilities
+cleanupdf<-function(dfx,req.varinames=NULL){
+  dfx<-dfx[which(apply(dfx,2,function(s){any(!is.na(s))}))]
+  if(!is.null(req.varinames)){
+    dfx[req.varinames[which(!req.varinames %in%  names(dfx))]]<-NA
+  }
+  return(dfx)
+}
+################Main Wrapper Function:
 
-
+bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,defaultchoice=NULL,
+                          emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,metadata.ema=NULL,
+                          local=F,restricData=T, forceRerun=F, updateRC=T, updateDB=T,excludeID=c("")){
+  #Initialization:
+  if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
+  rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
+  if(file.exists(emardpath)){
+    envir_ema<-bsrc.attachngrab(emardpath)
+    #envir_ema<-bsrc.attachngrab("ema_test.rdata")
+    
+  } else { if(is.null(metadata.ema)) {stop("This function can't generate metadata object, will terminate if not provided.")}
+    envir_ema<-as.environment(list(fulldata.ema=list(raw_data=list(),proc_data=list(),progress_data=list(),info=data.frame(stringsAsFactors = F)),
+                                   metadata.ema=metadata.ema))
+  }
+  
+  completed_raw<-envir_ema$fulldata.ema$raw_data
+  completed_proc<-envir_ema$fulldata.ema$proc_data
+  completed_prog<-envir_ema$fulldata.ema$progress_data
+  completed_info<-envir_ema$fulldata.ema$info
+  finished_ID<-as.character(completed_info$RedcapID[which(completed_info$Status %in% c("COMPLETED","EARLY-TERMINATION"))])
+  # 
+  # ema_raw_old_proc<-envir_ema$fulldata.ema$raw
+  # ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
+  # completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
+  # 
+  ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema,defaultchoice=defaultchoice)
+  matchdb <- envir_ema$matchdb
+  # new_info[which(new_info$CompletionRate < 0.1),]
+  # 
+  if(!forceRerun){
+    
+    message("These folks had completed, no need to reprocess: ", paste(finished_ID,collapse = " "))
+    ema_split_filter<-ema_split[!names(ema_split) %in% finished_ID]
+  } else {ema_split_filter<-ema_split}
+  
+  #We replace old raw and get new ones here:
+  completed_raw<-completed_raw[which(!names(completed_raw) %in% names(ema_split_filter))]
+  new_raw<-c(completed_raw,ema_split_filter)
+  
+  # completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=F,graph_path=graph_path)
+  pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
+  
+  # completed_prog<-lapply(completed_sub,function(xz){xz$data})
+  ema_progress_n<-lapply(pData_allsub,function(xz){xz$data})
+  completed_prog<-completed_prog[which(!names(completed_prog) %in% names(ema_progress_n))]
+  new_progress<-c(completed_prog,ema_progress_n)
+  
+  # completed_info<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
+  # completed_info<-completed_info[order(completed_info$EndDate,decreasing = T),]
+  ninfo.df<-do.call(rbind,lapply(pData_allsub,function(xz){xz$info}))
+  completed_info<-completed_info[which(!as.character(completed_info$RedcapID) %in% as.character(ninfo.df$RedcapID) ),]
+  new_info<-rbind(completed_info,ninfo.df)
+  new_info<-new_info[order(new_info$EndDate,decreasing = T),]
+  
+  #completed_proc<-lapply(completed_raw,bsrc.ema.procActualData,metadata.ema=metadata.ema)
+  ema_proc_n<-lapply(ema_split_filter,bsrc.ema.procActualData,metadata.ema=metadata.ema)
+  completed_proc<-completed_proc[which(!names(completed_proc) %in% names(ema_proc_n))]
+  new_proc<-c(completed_proc,ema_proc_n)
+  
+  ema_rc_all<-ProcApply(pData_allsub,function(ema_lss){
+    #message(ema_lss$info$RedcapID)
+    if(!is.null(ema_lss$data)){
+      
+      bsrc.ema.redcapupload(emamelt.merge = ema_lss$data,startdate = (ema_lss$info$StartDate)-1,
+                            enddate = ema_lss$info$EndDate,funema = rc_ema,output = T,
+                            ifupload = F,curver = "3",idvar = "RedCapID")
+    } else {return(NULL)}
+  })$df
+  
+  ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
+  
+  if(updateRC){
+    print(ema_rc_all)
+    result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
+    if (result.rc_all$success) {message("Updated these IDs: ",paste(ema_rc_all$registration_redcapid,collapse = " "))}
+  } else {message("RedCap Update failed.")}
+  
+  if(updateDB) {
+    fulldata.ema<-list(info=new_info,progress_data=new_progress,proc_data=new_proc,raw_data=new_raw,update.date=Sys.Date(),ver.tag=4)
+    save(list=c("metadata.ema","fulldata.ema","matchdb"),file = emardpath)
+  }
+  
+  message("DONE.")
+  
+}
+#################
 #EMA 3 Exclusive Functions; match metricwire user ID to redcap ID
-bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
+bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,defaultchoice=NULL,...) {
   ema3<-ema3.raw
   ema3$ema_id[which(ema3$ema_id=="")]<-NA
   ema3a<-ema3[!duplicated(ema3[c("User_Id","ema_id")]),c("User_Id","ema_id")]
@@ -51,44 +145,41 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,...) {
   names(localmatch)<-c("ema_studyidentifier","registration_redcapid")
   localmatch<-localmatch[!duplicated(localmatch),]
   localmatch$registration_redcapid[is.na(localmatch$registration_redcapid)]<-"UNKNOWN"
-  if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)}
+  localmatch$origin <- "Source"
+  if(is.null(funema)) {funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T,...)}
+  rcmatch<-na.omit(funema[c("ema_studyidentifier","registration_redcapid")])
+  rcmatch$origin <- "RedCap"
   if (!is.null(envir) & exists("matchdb",envir = envir)){matchdb<-get("matchdb",envir = envir)}else{matchdb<-data.frame(ema_studyidentifier=NA,registration_redcapid=NA)}
-  disrupt<-localmatch[which(is.na(match(interaction(localmatch$ema_studyidentifier,localmatch$registration_redcapid),interaction(funema$ema_studyidentifier,funema$registration_redcapid)))),]
-  if (length(disrupt$ema_studyidentifier)>0){
-  message("ARGH,THESE PAIRS DON'T MATCH")
-  print(disrupt)
-      for (i in 1:length(disrupt$ema_studyidentifier)) {
-          if (disrupt$ema_studyidentifier[i] %in% matchdb$ema_studyidentifier) {
-            message("Try to grab from previouse matchdb")
-            p.id.try<-matchdb$registration_redcapid[match(disrupt$ema_studyidentifier[i],matchdb$ema_studyidentifier)]
-            if (length(p.id.try)==1){p.id.try->actualid}
-          } else if (disrupt$ema_studyidentifier[i] %in% funema$ema_studyidentifier) {
-            actualid.try<-NULL
-            if (length(which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])) > 1) { #if more than 1 match in localmatch, try localmatch duplicate
-              actualid.try<-localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])][which(!localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])] %in% disrupt$registration_redcapid[i])]
-              message("Try to grab from localmatch duplicates")
-              message(actualid.try)
-              if (length(actualid.try)==1){
-              stepone<-TRUE
-              actualid.try->actualid
-              message("success!")}
-            }else {stepone<-FALSE}
-            
-          if (!stepone){
-            message("Try to grab it from RedCap.")
-          maybeid<-funema$registration_redcapid[match(disrupt$ema_studyidentifier[i],funema$ema_studyidentifier)]  
-          idq<-readline(prompt = paste("Is ",maybeid," the right RedCap ID for", disrupt$ema_studyidentifier[i] ,"y/n?   :"))
-          if (idq=="y"){idq<-TRUE} else (idq<-FALSE)
-          if (idq) {maybeid->actualid} else {actualid<-readline(prompt = "What's their actual RedCap ID? : ")}}
-          } else {actualid<-readline(prompt =paste("MetricWire Identifier found no match; Please provide an RedCap ID for [",disrupt$ema_studyidentifier[i],"] (type 'REMOVE' if wish to remove from db): "))}
-          localmatch$registration_redcapid[which(localmatch$ema_studyidentifier %in% disrupt$ema_studyidentifier[i])]<-actualid
+  matchdb$origin <- "Existing"
+  
+  summatch<-rbind(localmatch,rcmatch,matchdb)
+  summatch_sp<-split(summatch,summatch$ema_studyidentifier)
+  
+  postmatch<-lapply(summatch_sp,function(dbax){
+    if(length(unique(dbax$registration_redcapid))>1) {
+      if("Existing" %in% dbax$origin) {
+        if(dbax$registration_redcapid[which(dbax$origin == "Existing")] ==  dbax$registration_redcapid[which(dbax$origin == "RedCap")] ) {
+          return(dbax[which(dbax$origin=="Existing"),c("ema_studyidentifier","registration_redcapid")])
+        }
       }
-  }else {message("NO DISRUPT")}
-  localmatch<-rbind(matchdb,localmatch)
-  localmatch<-localmatch[!duplicated(localmatch),]
-  rownames(localmatch)<-NULL
-  assign("matchdb",localmatch,envir = envir)
-  return(localmatch)
+      message(paste("This MetricWire Identifier: [",unique(dbax$ema_studyidentifier),"] has inconsistant IDs:") )
+      message(paste(dbax$registration_redcapid,dbax$origin,sep = " from ",collapse = " , ") )
+      if(is.null(defaultchoice)){
+        whichonetoget<-readline(prompt = "Please type in the source of the actual ID, type 'SKIP' to ignore this person: ")
+      } else {message("The default choice was set to: ", defaultchoice,". No need to ask.")
+        whichonetoget <- defaultchoice
+      }
+      if(whichonetoget == "SKIP") {return(NULL)} else {return(dbax[which(dbax$origin==whichonetoget),c("ema_studyidentifier","registration_redcapid")])}
+      
+    } else {
+      return(unique(dbax[c("ema_studyidentifier","registration_redcapid")]))
+    }
+  })
+  
+  postmatch <- do.call(rbind,postmatch)
+  row.names(postmatch)<-NULL
+  assign("matchdb",postmatch,envir = envir)
+  return(postmatch)
     #
   }
 ############### General Get File
@@ -141,7 +232,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
   return(emadata.raw)
 }
 ###############Updated Get file function for list:
-bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL){
+bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL,...){
   message("bsrc.ema.rawtolist only works with data collected post version 3a update. Previous Data please manually laod them as list and rbind.")
   #Clean Up
   ema_raw<-ema_raw[which(ema_raw$User_Id!=""),]
@@ -149,11 +240,12 @@ bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL){
   ema_raw[grep("Date",names(ema_raw))]<-as.data.frame(lapply(ema_raw[grep("Date",names(ema_raw))],as.Date))
   ema_raw$Survey_Class<-gsub("_U","",ema_raw$TriggerName)
   ema_raw$Survey_Class[which(!ema_raw$Survey_Class %in% c("BoD","EoD","DoD","SetUp",""))]<-"MB"
-  ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema)
+  ema_idmatch<-bsrc.ema.mwredcapmatch(ema3.raw = ema_raw,funema = rc_ema,envir = envir_ema,...)
   ema_raw<-bsrc.ema.scaletonum(ema_raw)
   #Get Info From REDCAP
   ema_raw$RedcapID<-ema_idmatch$registration_redcapid[match(x = ema_raw$User_Id,table = ema_idmatch$ema_studyidentifier)]
   ema_raw<-ema_raw[ema_raw$RedcapID!="REMOVE",]
+  ema_raw<-ema_raw[which(ema_raw$User_Id %in% ema_idmatch$ema_studyidentifier),]
   ema_raw$Initial<-rc_ema$registration_initials[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
   ema_raw$Group<-rc_ema$registration_group[match(x = ema_raw$RedcapID,table = rc_ema$registration_redcapid)]
   group_valuemap<-bsrc.getchoicemapping(variablenames = "registration_group",protocol = protocol)
@@ -318,6 +410,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
 }
 ###############Universal EMA Main function: Single Subject:
 bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path){
+  tryCatch({
   if(is.null(graph_path)){graphic<-F}
   message("")
   message("##############")
@@ -345,7 +438,7 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
   seqDate_og<-seq.Date(from = as.Date(setup_ema$StartDate),to = as.Date(setup_ema$StartDate)+20,by = "days")
   #Check for outside of the window:
   minDateTime<-strptime(paste(min(seqDate_og),setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
-  maxDateTime<-(strptime(paste(max(seqDate_og),setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
+  maxDateTime<-(strptime(paste(max(seqDate_og),"23:00",sep = " "),format = "%Y-%m-%d %H:%M")+12*60*60)
   logicDateTime<-dplyr::between(as.numeric(ema_ss$DateTime),left = as.numeric(minDateTime),right = as.numeric(maxDateTime)) | ema_ss$Survey_Class=="SetUp"
   
   if(any(!logicDateTime)){
@@ -357,6 +450,7 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
       seqDate_og<-unique(c(unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date)[!unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date) %in% seqDate_og],seqDate_og))
     }
   }
+  
   if(!is.na(unique(ema_ss$TermDate))){seqDate_og<-seqDate_og[seqDate_og<=as.Date(unique(ema_ss$TermDate))]}
   
   seqDate<-seqDate_og[seqDate_og<as.Date(Sys.Date())]
@@ -365,12 +459,13 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
   #Didn't use lapply because accumulation complications;
   lpData<-list()
   
-  for(inj in 0:length(seqDate)) {
-    if(inj>0){
+  for(inj in 1:length(seqDate)) {
+    #if(inj>0){
       xdate<-seqDate[[inj]]
       todayls<-lapply(ema_ss_s,function(ss_x){
         StartDateTime<-strptime(paste(xdate,setup_ema$WakeTime,sep = " "),format = "%Y-%m-%d %H:%M")
         EndDateTime<-(strptime(paste(xdate,setup_ema$BedTime,sep = " "),format = "%Y-%m-%d %H:%M")+2*60*60)
+        if(as.numeric(EndDateTime) < as.numeric(StartDateTime)) {EndDateTime <- EndDateTime+(24*60*60)}
         dfx_dj<-ss_x[which(dplyr::between(x = as.numeric(ss_x$DateTime),
                                           left = as.numeric(StartDateTime),
                                           right = as.numeric(EndDateTime))),]
@@ -393,7 +488,7 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
       finaldf$date<-xdate
       finaldf$daysinstudy<-as.numeric(as.Date(xdate)-(as.Date(setup_ema$StartDate)-1))
       lpData[[inj]]<-finaldf
-    }
+    #}
   }
   
   pData<-do.call(rbind,lpData)
@@ -438,6 +533,7 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
   message("#####DONE#####")
   message("")
   return(list(data=pData,info=info_ss))
+  },error=function(e){message(e)})
 }
 #########Graphing function:
 bsrc.ema.progress.graph<-function(emamelt.merge=NULL, path = getwd(), startdate=NULL,enddate=NULL, output=T, codeout=F,Initial=NULL,...) {
@@ -645,179 +741,7 @@ bsrc.ema.scaletonum<-function(emadata.raw){
   
   return(emadata.nums)
 }
-################ Loop:
-bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath, 
-                          graphic=T,updatedata=T,forcerun=F,ifupload.e=T, 
-                          local=F,curver.e="3",protocol=protocol.cur,
-                          envir.load=NULL,...) {
-  message("BE READY! THIS FUNCTION IS GETTING DEPRECIATED AND A NEW FUNCTION WILL TAKE THE NAME SOON.")
-  Sys.sleep(20)
-  if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
-  if(curver.e=="3" & is.null(file)){filename<-file.choose()}
-  if(missing(gpath)) {
-    if(exists("ema.graph.path")){
-      gpath<-ema.graph.path
-    }else{gpath<-NULL}   
-  }
-  if(is.null(gpath)){
-  message("Graphing is turned off because no graphic path provided...")
-  graphic=FALSE}
-  
-  run2<-F
-  run3<-F
-  skip<-F
-  outcome.r.temp<-NULL
-  outcome.temp<-NULL
-  writetofile<-FALSE
-  fulldata.ema<-NULL
-  outcome<-NULL
-  outcome.r<-NULL
-  emadata.raw.combo<-NULL
-  info.combo<-NULL 
-  
-  #subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
-  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = !local, protocol = protocol,... = ...)
-  subreg<-bsrc.getform(formname = c("record_registration","progress_check"),grabnewinfo = !local, protocol = protocol,... = ...)
-  protocol$redcap_uri->input.uri
-  protocol$token->input.token
-  if (file.exists(rdpath.ema)) {
-    envir.load<-invisible(bsrc.attachngrab(rdpath = rdpath.ema,returnas = "envir"))
-    fulldata.ema<-envir.load$fulldata.ema
-    metadata.ema<-envir.load$metadata.ema
-    pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
-    topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
-    file.copy(from = rdpath.ema, to = topath, overwrite = T)
-    message("Backed-up previousely used db, in case it broke...")
-    outcome<-fulldata.ema$pdata
-    outcome.r<-fulldata.ema$rdata
-    emadata.raw.combo<-fulldata.ema$raw
-    info.combo<-fulldata.ema$info
-  }else if (is.null(envir.load)) {envir.load<-new.env(parent = emptyenv())}
-  switch(curver.e, 
-  "2" = {
-  loop.path->path
-  temp<-list.files(path,pattern="*.csv")
-  print("This is to upload and update redcap")
-  for (i in 1:length(temp)){
-    print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
-    filename<-paste(path,temp[i],sep = "/")
-    emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
-    output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic, path = gpath,subreg = subreg, funema = funema)
-    if (!as.character (output.c$info$RedcapID) %in% as.character(info.combo$RedcapID) | forcerun){
-    output<-output.c$data
-    startdate<-output.c$info$startdate
-    enddate<-output.c$info$enddate
-    output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F,curver = "2",startdate = startdate,enddate = enddate, funema = funema)
-    info<-output.c$info
-      if (i==1 & !skip)
-      {outcome<-output
-      outcome.r<-output.r
-      emadata.raw.combo<-emadata.raw
-      info.combo<-info
-      }
-      if (i==1) {
-      outcome.r.temp<-output.r
-      outcome.temp<-output}
-    outcome.r.temp<-merge(outcome.r.temp,output.r,all=T)
-    outcome.temp<-merge(outcome.temp,output,all=T)
-    if (output.r$ema_completed___2==1) {
-      writetofile<-TRUE
-      outcome<-merge(outcome,output,all=T)
-      outcome.r<-merge(outcome.r,output.r,all=T)
-      emadata.raw.combo<-merge(emadata.raw.combo,emadata.raw,all=T)
-      info.combo<-merge(info.combo,info,all=T)}
-    output<-NULL
-    output.r<-NULL
-    output<-NULL
-    output.r<-NULL
-    emadata.raw<-NULL
-    info<-NULL
-    }else{print("------SKIPPED; DATA ALREADY IN emadata.all.rdata--------")}
-  }#END of LOOP
-  },
-  "3" = {
-    emadata.raw<-NULL
-    emadata.raw<-bsrc.ema.getfile(filename = filename,curver = "3",funema = funema,envir=envir.load)
-    if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
-      completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
-      emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
-      message(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
-    }
-    outcome.r.temp<-data.frame()
-    outcome.temp<-data.frame()
-    for (i in 1:length(unique(emadata.raw$RedcapID))) {
-      message("##########################")
-      message(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
-      message(unique(emadata.raw$RedcapID)[i])
-      curredcap<-unique(emadata.raw$RedcapID)[i]
-      currda<-emadata.raw[which(emadata.raw$RedcapID==curredcap),]
-      rownames(currda)<-NULL
-      fstatus<-F
-      output<-NULL
-      output.r<-NULL
-      tryCatch({
-        output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath, subreg = subreg, funema = funema)
-        output<-output.c$data
-        startdate<-output.c$info$startdate
-        enddate<-output.c$info$enddate
-        },error=function(x){
-        message("EMA MAIN NOT DONE")
-          message(unique(emadata.raw$RedcapID)[i])
-        }) 
-      tryCatch({
-        output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
-        }, error=function(x){
-          message("REDCAP UPLOAD NOT DONE")
-          message(unique(emadata.raw$RedcapID)[i])
-        }) 
-      
-      if (!is.null(output)  & length(outcome.temp)==0){
-        outcome.temp<-output}
-      if (!is.null(output.r) & length(outcome.r.temp)==0)  {
-           outcome.r.temp<-output.r
-       }
-        if (!is.null(output)) {
-          message("MERGING MAIN")
-            outcome.temp<-merge(outcome.temp,output,all = T)
 
-        }
-        if (!is.null(output.r)) {
-          message("MERGING REDCAP")
-            outcome.r.temp<-merge(outcome.r.temp,output.r,all = T)
-        }
-      if (!is.null(output.r)) {  
-      if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
-        writetofile<-TRUE
-        message("**COMPLETED/TERMINATED**")
-        message("Adding this person to EMA database")
-        info<-output.c$info
-        outcome<-merge(outcome,output,all=T)
-        outcome.r<-merge(outcome.r,output.r,all=T)
-        emadata.raw.combo<-merge(emadata.raw.combo,currda,all=T)
-        info.combo<-merge(info.combo,info,all=T)
-        currda<-NULL
-        info<-NULL}}
-    
-    } #End of Loop
-    })
-  outcome<-outcome[which(!outcome$porp %in% c("NaN",NA)),]
-  outcome.temp<-outcome.temp[which(!outcome.temp$porp %in% c("NaN",NA)),]
-  if (updatedata & writetofile){
-    message("Saving back to file...")
-    fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())
-    assign("fulldata.ema",fulldata.ema,envir=envir.load)
-    save(list = objects(envir.load),file = rdpath.ema,envir = envir.load)
-    dnpl.ema.procdb(rdpath = rdpath.ema)
-    }
-  if (ifupload.e) {
-    if (length(outcome.r.temp$registration_redcapid)>0){
-      message("Starting to upload updates to RedCap...")
-    result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
-    if (result.outcome.r$success) {message("DONE")} else {message("SOMETHING WENT WRONG")}
-    }else{message("Nothing to upload...closing down...")}
-  } else {message("ifupload.e arugement is FALSE, no uploading")}
-  return(list(main=outcome.temp,redcapupload=outcome.r.temp))
-}
 ################################
 #PENDING DX TOOL FOR PT
 #############################
@@ -1009,6 +933,192 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   else {filename.e->filename.c}
   bsrc.ema.redcapupload(emamelt.merge = bsrc.ema.main(emadata.raw = bsrc.ema.getfile(filename = filename.c), forceupdate.e = forceupdate.e, ifupload = T, graphic = graphic.e),ifupload = T,curver = curver.e)
 }
+
+bsrc.ema.procActualData<-function(dfb,metadata.ema){
+  dfb_sp<-split(dfb,dfb$Survey_Class)
+  dfb_spa<-lapply(names(dfb_sp),function(xname){
+    cleanupdf(dfb_sp[[xname]],metadata.ema[[match(tolower(xname),names(metadata.ema))]]$valuevariname)
+  })
+  names(dfb_spa)<-names(dfb_sp)
+  return(dfb_spa)
+}
+
+################ Loop:
+bsrc.ema.loopit<-function(rdpath.ema=rdpaths$ema,loop.path=NULL, file=NULL,gpath, 
+                          graphic=T,updatedata=T,forcerun=F,ifupload.e=T, 
+                          local=F,curver.e="3",protocol=protocol.cur,
+                          envir.load=NULL,...) {
+  message("!!!!!WARNING!!!!!!THIS FUNCTION IS FORMALLY REPLACED BY 'bsrc.ema.update' AND WILL NOT WORK WITH DATABASE!!!!")
+  Sys.sleep(30)
+  if(curver.e=="2" & is.null(loop.path)){loop.path<-getwd()}
+  if(curver.e=="3" & is.null(file)){filename<-file.choose()}
+  if(missing(gpath)) {
+    if(exists("ema.graph.path")){
+      gpath<-ema.graph.path
+    }else{gpath<-NULL}   
+  }
+  if(is.null(gpath)){
+    message("Graphing is turned off because no graphic path provided...")
+    graphic=FALSE}
+  
+  run2<-F
+  run3<-F
+  skip<-F
+  outcome.r.temp<-NULL
+  outcome.temp<-NULL
+  writetofile<-FALSE
+  fulldata.ema<-NULL
+  outcome<-NULL
+  outcome.r<-NULL
+  emadata.raw.combo<-NULL
+  info.combo<-NULL 
+  
+  #subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T, protocol = protocol,... = ...)
+  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = !local, protocol = protocol,... = ...)
+  subreg<-bsrc.getform(formname = c("record_registration","progress_check"),grabnewinfo = !local, protocol = protocol,... = ...)
+  protocol$redcap_uri->input.uri
+  protocol$token->input.token
+  if (file.exists(rdpath.ema)) {
+    envir.load<-invisible(bsrc.attachngrab(rdpath = rdpath.ema,returnas = "envir"))
+    fulldata.ema<-envir.load$fulldata.ema
+    metadata.ema<-envir.load$metadata.ema
+    pathsplit<-strsplit(rdpath.ema,split = "/")[[1]]
+    topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","emaloop.backup.rdata",sep = "/")
+    file.copy(from = rdpath.ema, to = topath, overwrite = T)
+    message("Backed-up previousely used db, in case it broke...")
+    outcome<-fulldata.ema$pdata
+    outcome.r<-fulldata.ema$rdata
+    emadata.raw.combo<-fulldata.ema$raw
+    info.combo<-fulldata.ema$info
+  }else if (is.null(envir.load)) {envir.load<-new.env(parent = emptyenv())}
+  switch(curver.e, 
+         "2" = {
+           loop.path->path
+           temp<-list.files(path,pattern="*.csv")
+           print("This is to upload and update redcap")
+           for (i in 1:length(temp)){
+             print(paste("Now reading file ",i," out of ",length(temp),sep = ""))
+             filename<-paste(path,temp[i],sep = "/")
+             emadata.raw<-bsrc.ema.getfile(filename = filename, curver = "2")
+             output.c<-bsrc.ema.main(emadata.raw = emadata.raw, graphic = graphic, path = gpath,subreg = subreg, funema = funema)
+             if (!as.character (output.c$info$RedcapID) %in% as.character(info.combo$RedcapID) | forcerun){
+               output<-output.c$data
+               startdate<-output.c$info$startdate
+               enddate<-output.c$info$enddate
+               output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F,curver = "2",startdate = startdate,enddate = enddate, funema = funema)
+               info<-output.c$info
+               if (i==1 & !skip)
+               {outcome<-output
+               outcome.r<-output.r
+               emadata.raw.combo<-emadata.raw
+               info.combo<-info
+               }
+               if (i==1) {
+                 outcome.r.temp<-output.r
+                 outcome.temp<-output}
+               outcome.r.temp<-merge(outcome.r.temp,output.r,all=T)
+               outcome.temp<-merge(outcome.temp,output,all=T)
+               if (output.r$ema_completed___2==1) {
+                 writetofile<-TRUE
+                 outcome<-merge(outcome,output,all=T)
+                 outcome.r<-merge(outcome.r,output.r,all=T)
+                 emadata.raw.combo<-merge(emadata.raw.combo,emadata.raw,all=T)
+                 info.combo<-merge(info.combo,info,all=T)}
+               output<-NULL
+               output.r<-NULL
+               output<-NULL
+               output.r<-NULL
+               emadata.raw<-NULL
+               info<-NULL
+             }else{print("------SKIPPED; DATA ALREADY IN emadata.all.rdata--------")}
+           }#END of LOOP
+         },
+         "3" = {
+           message("!!!!!WARNING!!!!!!THIS FUNCTION IS FORMALLY REPLACED BY 'bsrc.ema.update' AND WILL NOT WORK WITH DATABASE!!!!")
+           emadata.raw<-NULL
+           emadata.raw<-bsrc.ema.getfile(filename = filename,curver = "3",funema = funema,envir=envir.load)
+           if (!forcerun & any(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))){
+             completedid<-unique(emadata.raw$RedcapID)[which(unique(emadata.raw$RedcapID) %in% as.character(info.combo$RedcapID))]
+             emadata.raw<-emadata.raw[which(is.na(match(emadata.raw$RedcapID,completedid))),]
+             message(paste("Skipped these IDs because they have completed: ",paste(completedid,collapse = ","),sep = ""))
+           }
+           outcome.r.temp<-data.frame()
+           outcome.temp<-data.frame()
+           for (i in 1:length(unique(emadata.raw$RedcapID))) {
+             message("!!!!!WARNING!!!!!!THIS FUNCTION IS FORMALLY REPLACED BY 'bsrc.ema.update' AND WILL NOT WORK WITH DATABASE!!!!")
+             message("##########################")
+             message(paste("Now processing ",i," out of ",length(unique(emadata.raw$RedcapID)),sep = ""))
+             message(unique(emadata.raw$RedcapID)[i])
+             curredcap<-unique(emadata.raw$RedcapID)[i]
+             currda<-emadata.raw[which(emadata.raw$RedcapID==curredcap),]
+             rownames(currda)<-NULL
+             fstatus<-F
+             output<-NULL
+             output.r<-NULL
+             tryCatch({
+               output.c<-bsrc.ema.main(emadata.raw = currda, graphic = graphic, path = gpath, subreg = subreg, funema = funema)
+               output<-output.c$data
+               startdate<-output.c$info$startdate
+               enddate<-output.c$info$enddate
+             },error=function(x){
+               message("EMA MAIN NOT DONE")
+               message(unique(emadata.raw$RedcapID)[i])
+             }) 
+             tryCatch({
+               output.r<-bsrc.ema.redcapupload(emamelt.merge = output,output = T, ifupload = F, curver = "3",startdate = startdate,enddate = enddate,funema = funema)
+             }, error=function(x){
+               message("REDCAP UPLOAD NOT DONE")
+               message(unique(emadata.raw$RedcapID)[i])
+             }) 
+             
+             if (!is.null(output)  & length(outcome.temp)==0){
+               outcome.temp<-output}
+             if (!is.null(output.r) & length(outcome.r.temp)==0)  {
+               outcome.r.temp<-output.r
+             }
+             if (!is.null(output)) {
+               message("MERGING MAIN")
+               outcome.temp<-merge(outcome.temp,output,all = T)
+               
+             }
+             if (!is.null(output.r)) {
+               message("MERGING REDCAP")
+               outcome.r.temp<-merge(outcome.r.temp,output.r,all = T)
+             }
+             if (!is.null(output.r)) {  
+               if (output.r$ema_completed___3==1 | output.r$ema_completed___999==1) {
+                 writetofile<-TRUE
+                 message("**COMPLETED/TERMINATED**")
+                 message("Adding this person to EMA database")
+                 info<-output.c$info
+                 outcome<-merge(outcome,output,all=T)
+                 outcome.r<-merge(outcome.r,output.r,all=T)
+                 emadata.raw.combo<-merge(emadata.raw.combo,currda,all=T)
+                 info.combo<-merge(info.combo,info,all=T)
+                 currda<-NULL
+                 info<-NULL}}
+             
+           } #End of Loop
+         })
+  outcome<-outcome[which(!outcome$porp %in% c("NaN",NA)),]
+  outcome.temp<-outcome.temp[which(!outcome.temp$porp %in% c("NaN",NA)),]
+  if (updatedata & writetofile){
+    message("Saving back to file...")
+    fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())
+    assign("fulldata.ema",fulldata.ema,envir=envir.load)
+    save(list = objects(envir.load),file = rdpath.ema,envir = envir.load)
+    dnpl.ema.procdb(rdpath = rdpath.ema)
+  }
+  if (ifupload.e) {
+    if (length(outcome.r.temp$registration_redcapid)>0){
+      message("Starting to upload updates to RedCap...")
+      result.outcome.r<-REDCapR::redcap_write(outcome.r.temp,token = input.token,redcap_uri = input.uri)
+      if (result.outcome.r$success) {message("DONE")} else {message("SOMETHING WENT WRONG")}
+    }else{message("Nothing to upload...closing down...")}
+  } else {message("ifupload.e arugement is FALSE, no uploading")}
+  return(list(main=outcome.temp,redcapupload=outcome.r.temp))
+}
+
 #####################
 ########END##########
 #####################
@@ -1017,66 +1127,46 @@ bsrc.ema.oneshotupload<-function(filename.e,forceupdate.e=F,ifupload=T,curver.e=
   
   #New orgnization and looping:
   #input:
-bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,
-                          emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,
-                          local=F,restricData=T, forceRerun=F, updateRC=T, excludeID=c("")){
-    #Initialization:
-    if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
-    rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
-    if(file.exists(emardpath)){
-      envir_ema<-bsrc.attachngrab(emardpath)
-      } else {envir_ema<-as.environment(list())}
-    
-    ema_raw_old_proc<-envir_ema$fulldata.ema$raw
-    ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
-    completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
-    ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema)
-    
-    if(!forceRerun){
-      message("These folks had completed, no need to reprocess: ", paste(names(completed),collapse = " "))
-      ema_split_filter<-ema_split[!names(ema_split) %in% names(completed) ]
-    } else {ema_split_filter<-ema_split}
-    
-    pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
-   
 
-    ema_rc_all<-ProcApply(pData_allsub,function(ema_lss){
-      #message(ema_lss$info$RedcapID)
-      if(!is.null(ema_lss$data)){
-        
-        bsrc.ema.redcapupload(emamelt.merge = ema_lss$data,startdate = (ema_lss$info$StartDate)-1,
-                              enddate = ema_lss$info$EndDate,funema = rc_ema,output = T,
-                              ifupload = F,curver = "3",idvar = "RedCapID")
-      } else {return(NULL)}
-    })$df
-    
-    ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
-    
-    if(updateRC){
-      print(ema_rc_all)
-      result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
-      if (result.rc_all$success) {message("Updated these IDs: ",paste(ema_rc_all$registration_redcapid,collapse = " "))}
-    } else {message("RedCap Update failed.")}
-    
-    
-  }
+# raw_fpath=file.choose()
+# ema_raw=NULL
+# protocol=protocol.cur
+# emardpath=rdpaths$ema
+# ss.graph=T
+# graph_path=ema.graph.path
+# local=F
+# restricData=T
+# forceRerun=F
+# updateRC=T
+# excludeID=c("")
+
+
 if(FALSE){ 
   #!stucture of new environment:
+  newenvir_ema<-new.env()
   envir_ema$matchdb->newenvir_ema$matchdb #no need to worry about that
   newenvir_ema$CompletedData$CompletionRateData<-lapply(completed_sub,function(sx){sx$data})
+  
   do.call(rbind,lapply(completed_sub,function(sx){sx$info}))
   
     
   fulldata.ema<-list(info=info.combo,pdata=outcome,rdata=outcome.r,raw=emadata.raw.combo,update.date=Sys.Date())    
-
-
-ema_raw_old_proc<-ema$fulldata.ema$raw
+  
+metadata.ema<-ema$metadata.ema
+ema_raw_old_proc<-envir_ema$fulldata.ema$raw
 ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
 completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
 completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=F,graph_path=graph_path)
+
 info.df<-do.call(rbind,lapply(completed_sub,function(xz){xz$info}))
 info.df<-info.df[order(info.df$EndDate),]
-rownames(info.df)<-NULL
+#rownames(info.df)<-NULL
+
+completed$`203182`->dfb
+
+
+
+
 }
 
 

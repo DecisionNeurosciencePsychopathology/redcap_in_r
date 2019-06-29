@@ -474,11 +474,16 @@ existsingSAHX<-bsrc.getform(protocol = ptcs$protect,formname = "ongoing_suicide_
 masterdemo<-bsrc.conredcap2(ptcs$masterdemo,output = T,batch_size = 500)
 p2demo<-masterdemo$data[which(masterdemo$data$registration_ptcstat___protect2==1),]
 #Let's do baseline first;
-sahx_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","SUICIDE HISTORY_BL_cv.xlsx")))
+sahx_og<-unpack(readxl::read_xlsx(file.path(rootdir,"To be transferred","SP","SUICIDE HISTORY_cv.xlsx")))
 sahx_dfx<-sahx_og$data[sahx_og$map$OG_name[!is.na(sahx_og$map$RC_name)]]
 names(sahx_dfx)<-sahx_og$map$RC_name[match(names(sahx_dfx),sahx_og$map$OG_name)]
+sahx_dfx<-bsrc.findid(sahx_dfx,idmap = idmap)
+sahx_dfx$ID<-sahx_dfx$registration_redcapid
 if(any(sahx_dfx$ID %in% as.character(existsingSAHX$registration_redcapid))){stop("HEY!!!!!OVERLAPS!!!!!!")}
 
+
+
+sahx_dfx$registration_redcapid<-NULL;sahx_dfx$registration_wpicid<-NULL;sahx_dfx$ogid<-NULL;sahx_dfx$ifexist<-NULL
 #For now only transfer P2 folks:
 evtname<-"baseline_arm_2"
 sahx_dfy<-sahx_dfx[which(sahx_dfx$ID %in% p2demo$registration_redcapid),]
@@ -500,6 +505,8 @@ sp_sahx_proc<-cleanuplist(lapply(sp_sahx,function(grk){
     grz<-grk[!duplicated(grk[which(!names(grk) %in% c("sahx_lr_at"))]),]
     if(as.numeric(unique(grz$sahx_attemptnum))>0){
       grz<-grz[which(!is.na(grz$sahx_sadate_at) | !is.na(grz$sahx_describe_at)),]
+    } else {
+      grz<-grz[1,]
     }
     
     if(nrow(grz) != unique(grz$sahx_attemptnum)) {
@@ -507,6 +514,7 @@ sp_sahx_proc<-cleanuplist(lapply(sp_sahx,function(grk){
       dupli_date<-which(duplicated(grz$sahx_sadate_at) | duplicated(grz$sahx_sadate_at,fromLast = T))
       if(length(dupli_date)>1){
         grz<-rbind(grz[-dupli_date,], do.call(rbind,lapply(unique(grz$sahx_sadate_at[dupli_date]),function(gd){
+          if(!is.na(gd)){
           if(any(grz[which(grz$sahx_sadate_at==gd),"sahx_describe_at"] %in% grz[which(grz$sahx_sadate_at!=gd),"sahx_describe_at"])){
             message("This person has incorrect entries: ",unique(grz$ID))
             incorrectentry<-TRUE
@@ -522,9 +530,15 @@ sp_sahx_proc<-cleanuplist(lapply(sp_sahx,function(grk){
               }
             })))
           }
+          } else {
+            return(grz[is.na(grz$sahx_sadate_at) & !duplicated(grz$sahx_describe_at),])
+          }
          
         })
         ),stringsAsFactors = F)
+        
+        
+        
       }
     }
     
@@ -542,15 +556,18 @@ sp_sahx_proc<-cleanuplist(lapply(sp_sahx,function(grk){
   
 }))
 
+#taking out ppl who are wrong;
+sp_sahx_proc<-sp_sahx_proc[which(!sapply(sp_sahx_proc,function(arz){any(unlist(arz$status,use.names = F))}))]
+
 sahx_dfx_proc<-do.call(rbind,lapply(sp_sahx_proc,function(x){
   if(any(unlist(x$status))){NULL}else{
     xr<-x$data
-    xr$ML<-NA
-    xr$MR<-NA
+    #xr$ML<-NA
+    #xr$MR<-NA
     xr$num<-NA
     if(unique(xr$sahx_attemptnum)!=0){
-      xr$ML[which.max(xr$sahx_lr_at)]<-TRUE
-      xr$MR[which.max(xr$sahx_sadate_at)]<-TRUE
+      #xr$ML[which.max(xr$sahx_lr_at)]<-TRUE
+      #xr$MR[which.max(xr$sahx_sadate_at)]<-TRUE
       xr$num<-1:nrow(xr)
     }
     return(xr)
@@ -564,7 +581,24 @@ sahx_dfx_proc$sahx_lr_at[which(as.numeric(sahx_dfx_proc$sahx_lr_at)>8)]<-NA
 
 wSA_dfx<-sahx_dfx_proc[which(sahx_dfx_proc$sahx_attemptnum>0),]
 
+wide_SAdfx<-reshape(wSA_dfx,idvar = c("ID","sahx_attemptnum"),timevar = "num",direction = "wide",sep = "")
+wide_SAdfx$redcap_event_name<-evtname
+wide_SAdfx$registration_redcapid<-wide_SAdfx$ID; wide_SAdfx$ID<-NULL
 
+noSA_dfx<-sahx_dfx_proc[which(sahx_dfx_proc$sahx_attemptnum==0),]
+noSA_dfx$redcap_event_name<-evtname
+noSA_dfx$registration_redcapid<-noSA_dfx$ID; noSA_dfx$ID<-NULL
+noSA_dfx<-noSA_dfx[c("registration_redcapid","redcap_event_name","sahx_attemptnum")]
+noSA_dfx<-noSA_dfx[!noSA_dfx$registration_redcapid %in% c("114170"),]
+
+REDCapR::redcap_write(wide_SAdfx,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+REDCapR::redcap_write(noSA_dfx,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+
+wSA_dfx$suiq_mlanum_bl<-NA
+wSA_dfx$suiq_mranum_bl<-NA
+wSA_dfx$suiq_mlanum_bl[which(wSA_dfx$ML)]<-wSA_dfx$num[which(wSA_dfx$ML)]
+wSA_dfx$suiq_mranum_bl[which(wSA_dfx$MR)]<-wSA_dfx$num[which(wSA_dfx$MR)]
+#wSA_dfx$ML<-NULL;wSA_dfx$MR<-NULL
 
 
 #####This is the termination form transfer:
@@ -587,7 +621,7 @@ term_notes_proc<-do.call(rbind,lapply(term_notes_sp,function(kgz){
       names(kgy)<-c("uniqueID","reg_term_reason_n")
       return(kgy)
   } else {
-    return(data.frame(uniqueID=unique(kgz$uniqueID),reg_term_reason_n="NO NOTES FOUND/IMPORTED",stringsAsFactors = F) )d
+    return(data.frame(uniqueID=unique(kgz$uniqueID),reg_term_reason_n="NO NOTES FOUND/IMPORTED",stringsAsFactors = F) )
   }
 })
 )

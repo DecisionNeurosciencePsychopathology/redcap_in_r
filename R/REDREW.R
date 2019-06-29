@@ -263,6 +263,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     }else{anyfailed.d<-TRUE
     print("Main database not loaded")}
   }else {anyfailed.d<-TRUE}
+  
   if (!any(anyfailed.s,anyfailed.e,anyfailed.d)){
     assign("update.date",Sys.Date(),envir = cur.envir)
     assign("update.time",Sys.time(),envir = cur.envir)
