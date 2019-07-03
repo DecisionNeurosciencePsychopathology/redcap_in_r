@@ -74,7 +74,7 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
   # ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
   # completed<-bsrc.ema.rawtolist(ema_raw = ema_raw_old_proc, rc_ema = rc_ema, envir_ema = envir_ema)
   # 
-  ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema,defaultchoice=defaultchoice)
+  ema_split<-bsrc.ema.rawtolist(ema_raw = ema_raw, rc_ema = rc_ema, envir_ema = envir_ema,protocol=protocol,defaultchoice=defaultchoice)
   matchdb <- envir_ema$matchdb
   # new_info[which(new_info$CompletionRate < 0.1),]
   # 
@@ -232,7 +232,7 @@ bsrc.ema.getfile<-function(filename, curver="2",funema=NULL,envir=NULL,...){
   return(emadata.raw)
 }
 ###############Updated Get file function for list:
-bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL,...){
+bsrc.ema.rawtolist<-function(ema_raw=NULL,rc_ema=NULL,envir_ema=NULL,protocol=protocol,...){
   message("bsrc.ema.rawtolist only works with data collected post version 3a update. Previous Data please manually laod them as list and rbind.")
   #Clean Up
   ema_raw<-ema_raw[which(ema_raw$User_Id!=""),]
