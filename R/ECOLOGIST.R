@@ -133,7 +133,7 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
   
   message("DONE.")
   
-}d
+}
 #################
 #EMA 3 Exclusive Functions; match metricwire user ID to redcap ID
 bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,defaultchoice=NULL,...) {
