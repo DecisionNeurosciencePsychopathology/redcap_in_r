@@ -145,26 +145,7 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
   }                                                                                                     
   
   if(cleanup){
-    # ahha<-names(lsx$transfer)[which(metals$varimap$field_type[match(names(lsx$transfer),metals$varimap$field_name)] %in% c("radio","yesno","dropdown","checkbox"))]
-    # 
-    # templsx<-lapply(ahha,function(xj){
-    #   whichones<-which(!lsx$transfer[[xj]] %in% bsrc.getchoicemapping(variablenames = xj,metadata = metals$varimap)$choice.code & !is.na(lsx$transfer[[xj]]))
-    #   if(length(whichones)>0){
-    #     #We Now Withheld all of their data instance; instead of just changing one of them 
-    #     ogdata<-lsx$transfer[[xj]][whichones]
-    #     ogdatainstance<-lsx$transfer[whichones,]
-    #     IDs<-lsx$transfer[[ID_fieldname]][whichones]
-    #     dfaz<-data.frame(ID=IDs,VariableName=xj,TriggeredOriginalData=ogdata,order=whichones)
-    #   return(list(info=dfaz,ogdata=ogdatainstance))
-    #   } else {NULL}
-    # })
-    # lsx$valuemismatch <- list(info=do.call(rbind,lapply(templsx,function(dx){dx$info})),
-    #                           ogdata=do.call(rbind,lapply(templsx,function(dx){dx$ogdata})))
-    # if(length(lsx$valuemismatch$info$order)>0){
-    # lsx$transfer<-lsx$transfer[-lsx$valuemismatch$info$order,]
-    # }
-    # lsx$valuemismatch$info$order<-NULL
-    #adapt function:
+   
     cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
     lsx$transfer<-cleanoutput$outputdf
     lsx$valuemismatch<-cleanoutput$valuemismatch

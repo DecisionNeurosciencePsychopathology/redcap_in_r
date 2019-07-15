@@ -1,5 +1,5 @@
 ######THIS SCRIPT DEALS WITH NDA STUFF:
-
+if(F){
 masterdemo<-bsrc.checkdatabase2(protocol = ptcs$masterdemo,online = T,forceskip = T,batch_size=1000L)
 
 
@@ -38,20 +38,27 @@ REDCapR::redcap_write_oneshot(rcUpload,redcap_uri = masterdemoptcs$redcap_uri,to
 InstruMap<-read.csv(file.choose(),stringsAsFactors = F)
 requiredMap<-InstruMap[which(InstruMap$Required=="Required"),]
 
-requiredDF<-ptcdf_b[c("registration_ndaguid","registration_redcapid","registration_gender")]
-names(requiredDF)<-c("subjectkey","src_subject_id","gender")
+requiredDF<-ptcdf_b[c("registration_ndaguid","registration_redcapid","registration_gender","registration_dob")]
+names(requiredDF)<-c("subjectkey","src_subject_id","gender","dob")
 #Gender:
 requiredDF$gender<-sapply(requiredDF$gender,function(x){if(nchar(x)>1){strsplit(x,split = "")[[1]][1]}else{x}},simplify = T,USE.NAMES = F)
 
+#Get ctq first
+referencedf<-data.frame(evt=c("baseline_arm_1","catchup_17_renewal_arm_1"),variname=c("demo_visitdate","registration_catchupdate"),stringsAsFactors = F)
+bsocial<-bsrc.checkdatabase2(protocol = ptcs$bsocial)
+ref_a<-bsocial$data[c(rcIDvar,"redcap_event_name",referencedf$variname)];ref_a[ref_a==""]<-NA
 
 
-
-
+l <- reshape(ref_a, 
+             varying = referencedf$variname, 
+             v.names = "date",
+             timevar = "registration_redcapid", 
+             direction = "long")
 
 requiredMap$ElementName %in% c("subjectkey","src_subject_id","interview_date","interview_age","gender")
+}
 
-
-
+#EVT_DATEFIELD
 # 
 # CSSIR<-read.csv(file.choose())
 # IDs<-c(220989,
