@@ -400,37 +400,45 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   return(ifrun)
 }
 ###############################
-bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL,curdb=NULL,protocol=protocol.cur,addgroupstatus=T,...){
-  if (is.null(idmap)) {
-    if (is.null(curdb)) {curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
-    if(addgroupstatus) {varitoget<-c("registration_id","registration_redcapid","registration_soloffid","registration_group","registration_status")
-    } else {varitoget<-c("registration_id","registration_redcapid","registration_soloffid")}
-    idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[varitoget]
-    cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
-    rownames(idmap)<-NULL
-  } else {
-    cleanmap<-idmap
-  }
+bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL){
+  #Offload the idmap generation to some other function...
+  # if (is.null(idmap)) {
+  #   if (is.null(curdb)) {curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
+  #   if(addgroupstatus) {varitoget<-c("registration_id","registration_redcapid","registration_soloffid","registration_group","registration_status")
+  #   } else {varitoget<-c("registration_id","registration_redcapid","registration_soloffid")}
+  #   idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[varitoget]
+  #   cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
+  #   rownames(idmap)<-NULL
+  # } else {
+  cleanmap<-idmap
+  #}
   if (!missing(df)){
-  t<-lapply(df[[id.var]],function(id) {
-    pos<-as.data.frame(which(cleanmap==id,arr.ind = T))
-    dx<-idmap[unique(pos$row),]
-    if(length(dx[[1]])>0) {
-      dx$ogid<-id
-      dx$ifexist<-TRUE
-      return(dx)
-    }else{
-      dk <- data.frame(matrix(ncol = length(names(idmap)), nrow = 1))
-      names(dk)<-names(idmap)
-      dk$ogid<-id
-      dk$ifexist<-FALSE
-      return(dk)
+    t<-lapply(df[[id.var]],function(id) {
+      pos<-as.data.frame(which(cleanmap==id,arr.ind = T))
+      dx<-idmap[unique(pos$row),]
+      if(length(dx[[1]])>0) {
+        dx$ogid<-id
+        dx$ifexist<-TRUE
+        return(dx)
+      }else{
+        dk <- data.frame(matrix(ncol = length(names(idmap)), nrow = 1))
+        names(dk)<-names(idmap)
+        dk$ogid<-id
+        dk$ifexist<-FALSE
+        return(dk)
+      }
+    })
+    names(t)<-df[[id.var]]
+    if(any(sapply(t,nrow)>1)){
+      
+      message("Duplicated ID map entry found for singular ID, terminate and return list of ID identified.")
+      return(t[sapply(t,nrow)==2])
     }
-  })
-  tx<-do.call(rbind,t)
-  if (!is.null(onlyoutput)){tx<-tx[c(onlyoutput)]}
-  lx<-cbind(df,tx)
-  return(lx)
+    
+    tx<-do.call(rbind,t)
+    if (!is.null(onlyoutput)){tx<-tx[c(onlyoutput)]}
+    lx<-cbind(df,tx)
+    return(lx)
   } else {return(idmap)}
 }
 #############
@@ -856,34 +864,6 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
 }
 #########################
 ### MATACH FUNCTIONS ####
-######################### Match RedCap ID to df
-bsrc.getidmatchdb<-function(db,idfield="ID",protocol=protocol.cur,...) {
-  message("This function is being depreciated, use bsrc.findid() instead.")
-  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
-  funbsrc<-curdb$data
-  ifrun<-curdb$success
-  if (ifrun) {
-  idmatch.k<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
-  names(idmatch.k)<-c('id','soloffid','redcapid')
-  
-  if ((idfield %in% names(db))) {
-    #GET ID FIELD
-    if (idfield!="ID"){db$ID<-db[,grep(idfield,names(db))]}
-      if(any(db$ID %in% idmatch.k$soloffid | db$ID %in% idmatch.k$id)){
-        db$registration_redcapid<-NA
-        db$registration_redcapid<-idmatch.k$redcapid[ifelse(db$ID %in% idmatch.k$soloffid,
-                                                            match(db$ID,idmatch.k$soloffid),
-                                                            match(db$ID,idmatch.k$id))]
-        db$iftranx<-is.na(match(db$ID,idmatch.k$soloffid))      
-        }
-      else stop("NO ID MATCH FOUND,CHECK SOURCE")
-    }
-  else stop("NO ID COLUMN FOUND IN SPECIFIED DATAFRAME")
-  
-  if (idfield!="ID"){db$ID<-NULL}
-  return(db)
-  }else stop(";_;")
-}
 ##########################Working progress
 dnpl.mappingtransfer<-function(map,spiltsign="."){
   getnthobject<-function(x,n) {
@@ -933,7 +913,19 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
 }
 
 ########################## function call
-
+bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=NA,evt_fieldtag="EVT_DATEFIELD"){
+  metadfx<-dbx$metadata[grep(evt_fieldtag,dbx$metadata$field_note),]
+  evtmap<-dbx$eventmap[which(dbx$eventmap$form %in% metadfx$form_name),]
+  evtmap$date_variname<-metadfx$field_name[match(evtmap$form,metadfx$form_name)]
+  return(evtmap)
+  
+  IDEVT_a<-dbx$data[which(dbx$data$redcap_event_name %in% evtmap$unique_event_name & !dbx$data$redcap_event_name %in% evt_filter),
+                    c(rcIDvar,"redcap_event_name",metadfx$field_name)]
+  IDEVT_w<-melt(IDEVT_a,id.vars=c(rcIDvar,"redcap_event_name"))
+  IDEVT_wa<-IDEVT_w[which(!is.na(IDEVT_w$value) & IDEVT_w$value!=""),]
+  names(IDEVT_wa)<-c(rcIDvar,"redcap_event_name","variname","date")
+  return(IDEVT_wa)
+}
 # dnpl.dffunctioncall<-function(lfunc.object=list(
 #                                               list(call=NULL, #either this function(x){} or this "function"
 #                                                    argument=list(x=NULL,
@@ -1035,6 +1027,19 @@ bsrc.process.race<-function(odk,Race) {
   }
 }
 }
+######MasterDEMO related:
+
+bsrc.masterdemo.checkduplicate<-function(protocol=ptcs$masterdemo,infovars="registration_redcapid",
+                                         uniquevars=c("registration_initials","registration_gender","registration_lastfour","registration_dob")){
+  masterdemo<-bsrc.conredcap2(protocol = ptcs$masterdemo,batch_size = 1000L,output = T)
+  masterdemo$data[masterdemo$data==""]<-NA
+  return(masterdemo$data[which(duplicated(masterdemo$data[uniquevars])),c(infovars,uniquevars)])
+}
+
+
+
+
+
 ###############################
 ####### SHINY######### ########
 ###############################

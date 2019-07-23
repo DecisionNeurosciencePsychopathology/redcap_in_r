@@ -291,33 +291,6 @@ conp_2upload<-conp_DEMO$data[c("registration_redcapid","registration_initials","
 REDCapR::redcap_write(conp_2upload,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 
-########Get BSocial People while we are here;
-bsocial<-bsrc.checkdatabase2(protocol = ptcs$bsocial)
-bsometa_reg<-bsocial$metadata[bsocial$metadata$form_name=="record_registration",]
-subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = bsocial)
-subreg<-subreg[!is.na(as.numeric(subreg$registration_redcapid)),]
-subreg[subreg==""]<-NA
-subreg$registration_id[is.na(subreg$registration_id)]<-subreg$registration_redcapid[is.na(subreg$registration_id)]
-
-masterdemo$metadata[masterdemo$metadata==""]<-NA
-
-tag<-masterdemo$metadata$field_note[which(masterdemo$metadata$field_note %in% bsometa_reg$field_note)]
-
-itg_df<-data.frame(tag=tag,
-           from = bsometa_reg$field_name[match(tag,bsometa_reg$field_note)],
-           to = masterdemo$metadata$field_name[match(tag,masterdemo$metadata$field_note)],stringsAsFactors = F)
-
-
-
-lapply(itg_df$tag,function(ms_name){
-  if(!ms_name %in% c("dnplid")){
-    #Our goal here is to get the conflict df
-    subreg[c("registration_redcapid",ms_name)]
-           
-  } 
-})
-
-
 #Do the self-reports cuz they are ezzzzzz
 txpath = file.path(rootdir,"To be transferred","TransferQueue")
 protocol_name = c("PROTECT2","SNAKE","EYE_DECIDE")
@@ -339,7 +312,7 @@ alloutputx<-lapply(list.files(txpath,full.names = F),function(rz){
     outputx<-NULL
     tryCatch({
       outputx<-transfer2redcap(dtx_r = dtx_t,idmap = idmap,metals = metals,misscodeallowed = c(as.character(1:26)),arm_num = 2,
-                               ID_fieldname = "registration_redcapid",protocol_name = protocol_name,ifupload = T)
+                               ID_fieldname = "registration_redcapid",protocol_name = protocol_name,ifupload = F)
     },error=function(e){message("general processing error: ",e)})
     if(is.null(outputx)){outputx<-list(status="FAILED")}
     outputx$sourcefile<-rz
