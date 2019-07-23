@@ -33,37 +33,25 @@ gsub("___.*","",names(notEXDEMO_rcmatch))[which(!gsub("___.*","",names(notEXDEMO
 
 
 targ_a<-notEXDEMO_rcmatch[grep(paste(directtransvarinames,collapse = "|"),names(notEXDEMO_rcmatch))]
+targ_b<-data.frame(registration_redcapid=notEXDEMO_rcmatch$registration_redcapid,
+           registration_ptcstat___bsocial=1,reg_condate_bsocial= notEXDEMO_rcmatch$registration_consentdate,reg_status_bsocial=notEXDEMO_rcmatch$registration_status,
+           reg_term_yesno_bsocial=notEXDEMO_rcmatch$terminate_yesno, reg_termdate_bsocial=notEXDEMO_rcmatch$termination_date,
+           reg_term_reason_bsocial=notEXDEMO_rcmatch$termination_reason,
+           reg_term_reason_why=notEXDEMO_rcmatch$termination_reason_why,
+           reg_term_reason_n_bsocial=notEXDEMO_rcmatch$termination_reason_other)
 
-REDCapR::redcap_write(targ_a,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 
-bsrc.change_grp_ptcs<-function(input=NULL,origin=c("bsocial","protect","masterdemo"),destination=c("bsocial","protect","masterdemo")){
-  if(is.null(input)){message("No input, supports data.frame (must specify group name) or vector string")}
-  if((!origin %in% c("bsocial","protect","masterdemo")) | (!destination %in% c("bsocial","protect","masterdemo")) ) {
-    message("Only supports the following:",c("bsocial","protect","masterdemo"))}
-  grp_map<-data.frame(masterdemo=c("HC","NON","DEP","IDE","ATT","ATT","ATT","88","89"),
-                  bsocial=c("1","4","4","4",NA,"2","3","88","89"),
-                  protect=c("HC","NON","DEP","IDE","ATT","ATT","ATT","88","89"),stringsAsFactors = F
-  )
-  vari_map<-data.frame(masterdemo="registration_group",
-                       bsocial="registration_group",
-                       masterdemo="startup_group",stringsAsFactors = F
-  )
-  if(!is.data.frame(input)){input<-as.character(input)}
-  
-  switch (class(input),
-          "character" = {
-            noorder<-is.na(input)
-            input<-plyr::mapvalues(x = input,from = grp_map[[origin]],to = grp_map[[destination]],warn_missing = F)
-            input[noorder]<-NA
-          },
-          "data.frame" = { noorder<-is.na(input[[vari_map[[origin]]]])
-            input[[vari_map[[destination]]]]<-plyr::mapvalues(x = input[[vari_map[[origin]]]],from = grp_map[[origin]],to = grp_map[[destination]],warn_missing = F)
-          if (vari_map[[origin]] != vari_map[[destination]]){input[[vari_map[[origin]]]]<-NULL};
-            input[[vari_map[[destination]]]][noorder]<-NA
-          return(input)},
-  )
-}
+#REDCapR::redcap_write(targ_a,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+REDCapR::redcap_write(targ_b,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+
+bsrc.masterdemo.checkduplicate(infovars = c("registration_redcapid","registration_gender"),uniquevars = c("registration_initials","registration_dob"))
+
+
+
+
+
 
 
 

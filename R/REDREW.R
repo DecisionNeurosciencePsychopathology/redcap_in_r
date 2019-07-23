@@ -1032,10 +1032,41 @@ bsrc.process.race<-function(odk,Race) {
 bsrc.masterdemo.checkduplicate<-function(protocol=ptcs$masterdemo,infovars="registration_redcapid",
                                          uniquevars=c("registration_initials","registration_gender","registration_lastfour","registration_dob")){
   masterdemo<-bsrc.conredcap2(protocol = ptcs$masterdemo,batch_size = 1000L,output = T)
-  masterdemo$data[masterdemo$data==""]<-NA
-  return(masterdemo$data[which(duplicated(masterdemo$data[uniquevars])),c(infovars,uniquevars)])
+  trydf<-masterdemo$data[c(infovars,uniquevars)]
+  trydf$uniuqe_identifying_variable<-apply(trydf[uniquevars],1,paste,collapse=" - ")
+  #masterdemo$data[masterdemo$data==""]<-NA
+  tocleandf<-split(trydf,trydf$uniuqe_identifying_variable)
+  tocleandf<-tocleandf[which(sapply(tocleandf,nrow)>1)]
+  return(tocleandf)
 }
 
+bsrc.change_grp_ptcs<-function(input=NULL,origin=c("bsocial","protect","masterdemo"),destination=c("bsocial","protect","masterdemo")){
+  if(is.null(input)){message("No input, supports data.frame (must specify group name) or vector string")}
+  if((!origin %in% c("bsocial","protect","masterdemo")) | (!destination %in% c("bsocial","protect","masterdemo")) ) {
+    message("Only supports the following:",c("bsocial","protect","masterdemo"))}
+  grp_map<-data.frame(masterdemo=c("HC","NON","DEP","IDE","ATT","ATT","ATT","88","89"),
+                      bsocial=c("1","4","4","4",NA,"2","3","88","89"),
+                      protect=c("HC","NON","DEP","IDE","ATT","ATT","ATT","88","89"),stringsAsFactors = F
+  )
+  vari_map<-data.frame(masterdemo="registration_group",
+                       bsocial="registration_group",
+                       masterdemo="startup_group",stringsAsFactors = F
+  )
+  if(!is.data.frame(input)){input<-as.character(input)}
+  
+  switch (class(input),
+          "character" = {
+            noorder<-is.na(input)
+            input<-plyr::mapvalues(x = input,from = grp_map[[origin]],to = grp_map[[destination]],warn_missing = F)
+            input[noorder]<-NA
+          },
+          "data.frame" = { noorder<-is.na(input[[vari_map[[origin]]]])
+          input[[vari_map[[destination]]]]<-plyr::mapvalues(x = input[[vari_map[[origin]]]],from = grp_map[[origin]],to = grp_map[[destination]],warn_missing = F)
+          if (vari_map[[origin]] != vari_map[[destination]]){input[[vari_map[[origin]]]]<-NULL};
+          input[[vari_map[[destination]]]][noorder]<-NA
+          return(input)},
+  )
+}
 
 
 
