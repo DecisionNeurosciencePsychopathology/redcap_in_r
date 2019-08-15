@@ -1,8 +1,8 @@
 #Reporter
 
 #EMA Chunk:
-
-
+library(bsrc)
+startup()
 #Load up the db:
 ema_db<-bsrc.attachngrab(rdpath = rdpaths$ema)
 

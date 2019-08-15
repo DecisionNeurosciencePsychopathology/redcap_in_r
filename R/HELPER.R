@@ -23,22 +23,37 @@ bsrc.idevtdatemap<-function(protocol=NULL,rcIDvar="registration_redcapid",filter
   }
   return(rMAPb)
 }
-
+######This is a very helpful function to check before uploading######################
+######By check,  I mean verify if certrain informaiton is already in redcap##########
 bsrc.uploadcheck<-function(dfa=NULL,uniqueidvars=c("registration_redcapid","redcap_event_name"),db_data=NULL) {
   og_df<-db_data[names(dfa)]
   og_df[og_df==""]<-NA
   og_df<-og_df[which(og_df$redcap_event_name %in% unique(dfa$redcap_event_name)),]
-  df_long<-reshape2::melt(dfa,id.vars=uniqueidvars)
+  
+  dfa<-as.data.frame(apply(dfa,2,as.character))
+  og_df<-as.data.frame(apply(og_df,2,as.character))
+  
+  dfa$row_num<-1:nrow(dfa)
+  df_long<-reshape2::melt(dfa,id.vars=c(uniqueidvars,"row_num"), factorsAsStrings=F)
   df_long<-na.omit(df_long)
-  og_long<-reshape2::melt(og_df,id.vars=uniqueidvars)
-  tomatch_og<-do.call(paste,og_long[c(uniqueidvars,"variable")])
-  outx<-do.call(rbind,lapply(1:nrow(df_long),function(i){
-    dftoinvestigate<-df_long[i,]
-    result<-match(paste(dftoinvestigate[c(uniqueidvars,"variable")],collapse = " "),tomatch_og)
-    data.frame(df_rownum=i,og_matched=result,matched=!is.na(result))
-  }))
-  return(outx)
+  df_long$identity<-do.call(paste,df_long[c(uniqueidvars,"variable")])
+  
+  og_long<-reshape2::melt(og_df,id.vars=uniqueidvars, factorsAsStrings=F)
+  og_long<-na.omit(og_long)
+  og_long$identity<-do.call(paste,og_long[c(uniqueidvars,"variable")])
+  
+  df_long$og_value<-og_long$value[match(df_long$identity,og_long$identity)]
+  df_long$ifDiff<-df_long$value != df_long$og_value
+  
+  
+  
+  outputx<-df_long[which(is.na(df_long$og_value)),]
+  newDF<-reshape2::dcast(data = outputx[c(uniqueidvars,"variable","value")],value.var = "value",formula = as.formula(paste(paste(uniqueidvars,collapse = "+"),"~ variable",sep = " ")))
+  
+  return(list(DFdifferent=df_long[which(df_long$ifDiff),],DFnew=df_long[which(is.na(df_long$og_value)),],
+              uploaddf=newDF))
 }
+##########################
 
 change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
   if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
@@ -63,6 +78,10 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
           },
           "EYE_DECIDE" = {
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("idecide_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
+          },
+          "EXPLORE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("explore_arm",arm_num,sep="_")
             dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
           }
   )
@@ -166,7 +185,19 @@ trans_cleanup<-function(dfx=NULL,metadata=NULL,ID_fieldname=NULL){
   return(list(outputdf=dfy,valuemismatch=valuemismatch))
 }
 
-
+get_ThisNotInThat<-function(dfa,dfb,uniquevars=c("ID","CDATE")){
+  dfax<-dfa[uniquevars]
+  dfa$uID<-paste(dfax$ID,dfax$CDATE)
+  message("dfa has duplicated records?: ",any(duplicated(dfax$uID)))
+  
+  dfbx<-dfb[uniquevars]
+  dfb$uID<-paste(dfbx$ID,dfbx$CDATE)
+  message("dfb has duplicated records?: ",any(duplicated(dfbx$uID)))
+  
+  return(list(a_NotIn_b=dfa[which(!dfa$uID %in% dfb$uID),],
+              b_NotIn_a=dfb[which(!dfb$uID %in% dfa$uID),]))
+  
+}
 
 proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanup=T,protocol_name,ID_fieldname,arm_num) {
   # excluded = dtx_ii
@@ -220,6 +251,100 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
   } else {
     lsx<-list2env(list(transfer=dty_combo, excluded=dty_combo[0,],excludecodes=list(misscodeallowed=misscodenotallowed,
                                                                                     noevent=noevent,
+                                                                                    eventnotincluded=eventnotincluded))
+                  ,envir = lsx)
+  }                                                                                                     
+  
+  if(cleanup){
+    
+    cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
+    lsx$transfer<-cleanoutput$outputdf
+    lsx$valuemismatch<-cleanoutput$valuemismatch
+  }
+  
+  if(upload){
+    if(nrow(lsx$transfer)>0){
+      tryCatch({
+        REDCapR::redcap_write(bsrc.choice2checkbox(dfx = lsx$transfer,metadata = metals$varimap,cleanupog = T),redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+      },error=function(e){
+        message("upload failed, reason: ",e)
+        lsx$status<-"Upload Failed"
+      })
+      
+    } else {
+      message("No data to upload.")
+      lsx$status<-"No Data to be Uploaded"
+    }
+  } 
+  outz<-as.list(lsx)
+  rm(lsx)
+  return(outz)  
+}
+
+
+proc_transfer2<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanup=T,protocol_name,ID_fieldname,arm_num,Replacementlist=NULL) {
+  # excluded = dtx_ii
+  # dty = dtx_ii[which(dtx_ii$MISSCODE %in% misscodeallowed & !is.na(dtx_ii$EVT)),]
+  map<-dtx_rp$map
+  dty<-dtx_rp$data
+  
+  
+  formname<-unique(metals$varimap$form_name[match(map$RC_name,metals$varimap$field_name,nomatch = 0)])
+  supposedevtname<-metals$evtmap$unique_event_name[which(metals$evtmap$form %in% formname)]
+  
+  dty_i<-bsrc.findid(dty,idmap,id.var = "ID")
+  dty_dt<-dty_i[map$OG_name[!is.na(map$RC_name)]]
+  names(dty_dt)<-map$RC_name[match(names(dty_dt),map$OG_name)]
+  
+  dty_dt[[paste0(formname,"_miss")]]<-dty$MISSCODE
+  
+  if(!is.null(Replacementlist)){
+    for (todo_rp in names(Replacementlist)) {
+      dty_dt[[todo_rp]]<-unlist(plyr::revalue(dty_dt[[todo_rp]],replace = Replacementlist[[todo_rp]],warn_missing = F))
+    }
+  }
+  
+  allcombodf<-do.call(rbind,lapply(protocol_name,function(evt){
+    #print(evt)
+    dty_i$EVT<-dty_i[[evt]]
+    dtyx<-change_evt(dty_i,evt,arm_num)
+    
+    dty_rc<-dtyx[c(ID_fieldname,"EVT")]
+    names(dty_rc)<-c(ID_fieldname,"redcap_event_name")
+    
+    dty_combo<-cbind(dty_rc[which(!is.na(dty_rc$redcap_event_name)),],dty_dt[which(!is.na(dty_rc$redcap_event_name)),])
+    dty_combo$ID<-NULL
+    
+    return(dty_combo)
+  }))
+  
+  
+  
+  
+  ndls<-which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name))
+  if(length(ndls)>0) {
+    allnadf<-dty_dt[which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name)),]
+    allnadf[[ID_fieldname]]<-allnadf$ID
+    allnadf$ID<-NULL
+    allnadf$redcap_event_name<-NA
+  } else {allnadf<-NULL}
+  dty_combo<-rbind(allcombodf,allnadf)
+  
+  misscodenotallowed<-which(!dty_combo[[paste0(formname,"_miss")]] %in% misscodeallowed)
+  noevent<-which(is.na(dty_combo$redcap_event_name))
+  eventnotincluded<-which(!dty_combo$redcap_event_name %in% supposedevtname)
+  duplicatedentry<-which(duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name)) | duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name),fromLast = T))
+  
+  whichtoexclude<-unique( c(misscodenotallowed,noevent,eventnotincluded,duplicatedentry) )
+  lsx<-new.env()
+  if(length(whichtoexclude)>0) {
+    lsx<-list2env(list(transfer=dty_combo[-whichtoexclude,], excluded=dty_combo[whichtoexclude,],excludecodes=list(misscodeallowed=misscodenotallowed,
+                                                                                                                   noevent=noevent,duplicatedentry=duplicatedentry,
+                                                                                                                   eventnotincluded=eventnotincluded))
+                  ,envir = lsx)
+  } else {
+    lsx<-list2env(list(transfer=dty_combo, excluded=dty_combo[0,],excludecodes=list(misscodeallowed=misscodenotallowed,
+                                                                                    noevent=noevent,duplicatedentry=duplicatedentry,
                                                                                     eventnotincluded=eventnotincluded))
                   ,envir = lsx)
   }                                                                                                     

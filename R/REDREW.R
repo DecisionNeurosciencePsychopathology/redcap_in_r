@@ -71,6 +71,142 @@ is.empty<-function(...) {
   return(...=="")
 }
 
+redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5, retry_whenfailed=T,
+                         continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, 
+                         config_options = NULL) 
+{
+  start_time <- base::Sys.time()
+  if (base::missing(redcap_uri)) 
+    base::stop("The required parameter `redcap_uri` was missing from the call to `redcap_write()`.")
+  if (base::missing(token)) 
+    base::stop("The required parameter `token` was missing from the call to `redcap_write()`.")
+  token <- REDCapR::sanitize_token(token)
+  ds_glossary <- REDCapR::create_batch_glossary(row_count = base::nrow(ds_to_write), 
+                                                batch_size = batch_size)
+  affected_ids <- character(0)
+  excluded_ids <- 
+    lst_status_code <- NULL
+  lst_outcome_message <- NULL
+  success_combined <- TRUE
+  message("Starting to update ", format(nrow(ds_to_write), 
+                                        big.mark = ",", scientific = F, trim = T), " records to be written at ", 
+          Sys.time())
+  for (i in seq_along(ds_glossary$id)) {
+    selected_indices <- seq(from = ds_glossary[i, "start_index"], 
+                            to = ds_glossary[i, "stop_index"])
+    if (i > 0) 
+      Sys.sleep(time = interbatch_delay)
+    message("Writing batch ", i, " of ", nrow(ds_glossary), 
+            ", with indices ", min(selected_indices), " through ", 
+            max(selected_indices), ".")
+    write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,
+                                                           ], previousIDs = NULL,retry_whenfailed = T,
+                                          redcap_uri = redcap_uri, token = token, verbose = verbose, 
+                                          config_options = config_options)
+    lst_status_code[[i]] <- write_result$status_code
+    lst_outcome_message[[i]] <- write_result$outcome_message
+    if (!write_result$success) {
+      error_message <- paste0("The `redcap_write()` call failed on iteration ", 
+                              i, ".")
+      error_message <- paste(error_message, ifelse(!verbose, 
+                                                   "Set the `verbose` parameter to TRUE and rerun for additional information.", 
+                                                   ""))
+      if (continue_on_error) 
+        warning(error_message)
+      else stop(error_message)
+    }
+    affected_ids <- c(affected_ids, write_result$affected_ids)
+    success_combined <- success_combined | write_result$success
+    excluded_ids <- c(excluded_ids, write_result$excludedIDs)
+    rm(write_result)
+  }
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
+                                         units = "secs"))
+  status_code_combined <- paste(lst_status_code, collapse = "; ")
+  outcome_message_combined <- paste(lst_outcome_message, collapse = "; ")
+  excluded_ids <- excluded_ids[excluded_ids!=""]
+  return(list(success = success_combined, status_code = status_code_combined,excluded_ids=excluded_ids,
+              outcome_message = outcome_message_combined, records_affected_count = length(affected_ids), 
+              affected_ids = affected_ids, elapsed_seconds = elapsed_seconds))
+}
+
+
+redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_options = NULL,retry_whenfailed=F,previousIDs=NULL) 
+{
+  start_time <- Sys.time()
+  csvElements <- NULL
+  if (missing(redcap_uri)) 
+    stop("The required parameter `redcap_uri` was missing from the call to `redcap_write_oneshot()`.")
+  if (missing(token)) 
+    stop("The required parameter `token` was missing from the call to `redcap_write_oneshot()`.")
+  token <- REDCapR::sanitize_token(token)
+  con <- base::textConnection(object = "csvElements", open = "w", 
+                              local = TRUE)
+  utils::write.csv(ds, con, row.names = FALSE, na = "")
+  close(con)
+  csv <- paste(csvElements, collapse = "\n")
+  rm(csvElements, con)
+  post_body <- list(token = token, content = "record", format = "csv", 
+                    type = "flat", data = csv, overwriteBehavior = "overwrite", 
+                    returnContent = "ids", returnFormat = "csv")
+  result <- httr::POST(url = redcap_uri, body = post_body, 
+                       config = config_options)
+  status_code <- result$status_code
+  raw_text <- httr::content(result, type = "text")
+  
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
+                                         units = "secs"))
+  success <- (status_code == 200L)
+  if (success) {
+    elements <- unlist(strsplit(raw_text, split = "\\n"))
+    affectedIDs <- elements[-1]
+    recordsAffectedCount <- length(affectedIDs)
+    outcome_message <- paste0(format(recordsAffectedCount, 
+                                     big.mark = ",", scientific = FALSE, trim = TRUE), 
+                              " records were written to REDCap in ", round(elapsed_seconds, 
+                                                                           1), " seconds.")
+    raw_text <- ""
+  }
+  else {
+    if(retry_whenfailed){
+      outcome_message<-outcome_message <- paste0("The upload was not successful:\n", 
+                                                 raw_text,"\n","But we will try again...\n")
+      sp_rawtext<-strsplit(raw_text,split = "\\n")[[1]]
+      allgx<-lapply(sp_rawtext,function(x){xa<-strsplit(gsub("\"","",x),",")[[1]];})
+      mxID<-sapply(allgx,function(sp_rawtext){gsub("ERROR: ","",sp_rawtext[1])})
+      allIDs<-c(previousIDs,mxID)
+      posX<-which(ds==allIDs,arr.ind = T)
+      ds_new<-ds[-posX[,1],]
+      gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
+                                retry_whenfailed = T,previousIDs = allIDs,
+                                config_options = config_options)
+      raw_text<-paste(raw_text,gx$raw_text,sep = "re-try: ")
+      success<-gx$success
+      status_code<-gx$status_code
+      outcome_message<-paste(outcome_message,gx$outcome_message,sep = "re-try: ")
+      recordsAffectedCount<-gx$records_affected_count
+      affectedIDs<-gx$affected_ids
+      elapsed_seconds<-gx$elapsed_seconds
+      previousIDs<-gx$excludedIDs
+    } else {
+      affectedIDs <- numeric(0)
+      recordsAffectedCount <- NA_integer_
+      outcome_message <- paste0("The REDCapR write/import operation was not successful.  The error message was:\n", 
+                                raw_text)
+    }
+  }
+  if (verbose) 
+    message(outcome_message)
+  if (!is.null(previousIDs)){excludedIDs<-previousIDs}else {excludedIDs<-""}
+  return(list(success = success, status_code = status_code, 
+              outcome_message = outcome_message, records_affected_count = recordsAffectedCount, 
+              affected_ids = affectedIDs, elapsed_seconds = elapsed_seconds, excludedIDs = excludedIDs,
+              raw_text = raw_text))
+}
+
+
+
+
 ###############Get Event Mapping from RedCap:
 redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
   start_time <- Sys.time()
@@ -264,7 +400,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     print("Main database not loaded")}
   }else {anyfailed.d<-TRUE}
   
-  if (!any(anyfailed.s,anyfailed.e,anyfailed.d)){
+  if (!any(anyfailed.s,anyfailed.d)){
     assign("update.date",Sys.Date(),envir = cur.envir)
     assign("update.time",Sys.time(),envir = cur.envir)
     assign("success",TRUE,envir = cur.envir)
@@ -545,42 +681,7 @@ bsrc.choice2checkbox<-function(dfx=NULL,metadata=NULL,cleanupog=T){
 }
 
 ######
-# use the info intergraded in redcap for more elegant solution:
-# fundsrc$timeretrived
-#Need to be more useful
-bsrc.getdemo <- function(id,flavor="single",protocol = protocol.cur,printout=T,curdb=NULL,...){
-  if (is.null(curdb)){
-  curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
-  }
-  ifrun<-curdb$success
-  if (ifrun){
-    funbsrc<-curdb$data
-    if (flavor == 'single'){
-      if(missing(id)){idt<-readline(prompt = "Please enter the participant's 6 digits or 4 digits ID: ")}else{idt<-id}
-      idmatch<-data.frame(funbsrc$registration_id,funbsrc$registration_soloffid,funbsrc$registration_redcapid)
-      names(idmatch)<-c('id','soloffid','redcapid')
-      if(any(idt %in% idmatch$soloffid | idt %in% idmatch$id)){
-        ifelse(idt %in% idmatch$soloffid, rid<-as.character(idmatch$redcapid[which(idmatch$soloffid==idt)]), 
-               rid<-as.character(idmatch$redcapid[which(idmatch$id==idt)]))
-        if(length(rid)==1){
-        idonly<-funbsrc[which(funbsrc$registration_redcapid==rid & funbsrc$redcap_event_name=='enrollment_arm_1'),]
-        #ID, Names,
-        
-        curage<-lubridate::as.period(lubridate::interval(start = as.Date(idonly$registration_dob), end = Sys.Date()))$year
-        bsg<-data.frame(idonly$registration_id,idonly$registration_soloffid,idonly$registration_initials,
-                        idonly$registration_dob,idonly$registration_consentdate,curage)
-        names(bsg)<-c('ID',"Soloffid","Initials","Date of Birth","Consent Date" ,"AgeToday")
-        if (printout==T){
-        message(as.character('======================'))
-        message(bsg)}
-        }
-        else {message("Multiple RedCap Record Identified")
-              return(rid)}
-      }
-      else {message("NO ID FOUND, PLEASE DOUBLE CHECK")
-        return(NULL)}
-    }}
-}
+
 ####Find duplicate RedCap IDs
 bsrc.findduplicate <- function(protocol = protocol.cur) {
   curdb<-bsrc.checkdatabase2(protocol = protocol)
@@ -756,112 +857,110 @@ bsrc.reg.race<-function(x,reverse=F){
 #Combined use of the following allow extraction of data within EVENT and FORM
 ############################
 #Function to get all data of given event:  #Get form names and then use get form have better flexiblity
-bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,whivarform="default",nocalc=T,subreg=F,mod=F,aggressivecog=1,...){
-  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)}
-  funbsrc<-curdb$data
-  funevent<-curdb$eventmap
-  funstrc<-curdb$metadata
-  ifrun<-curdb$success
-  protocol$redcap_uri->input.uri
-  protocol$token->input.token
+bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=F,aggressivecog=1,...){
+  if (is.null(curdb)) {
+    if (grabnewinfo) {
+      curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
+      ifrun<-TRUE
+    }else if (!grabnewinfo) {
+      curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+      funbsrc<-curdb$data
+      ifrun<-curdb$success
+      funevent<-curdb$eventmap
+    }
+  }else {
+    funbsrc<-curdb$data
+    ifrun<-curdb$success
+    funevent<-curdb$eventmap
+  } 
+  
   if(ifrun) {
     if (missing(eventname)){
       print(as.character(unique(funbsrc$redcap_event_name)))
-      eventname<-readline(prompt = "Please type in the event name, for ALL FU, use 'allfu': ")
-    }
-    if (eventname=="allfu") {
-    eventname<-as.character(unique(funbsrc$redcap_event_name))[grep("months_follow",as.character(unique(funbsrc$redcap_event_name)))]
+      eventname<-readline(prompt = "Please type in the event name: ")
     }
     
     eventonly<-funbsrc[which(funbsrc$redcap_event_name %in% eventname),]
-    
-    switch(whivarform,
-    default = ifelse(!exists("funevent") | is.null(funevent),funevent<-redcap.eventmapping(redcap_uri = input.uri,token = input.token),print("GOT IT")),
-    anyfile = funevent<-read.csv(file.choose())
-    )
     formname<-funevent$form[funevent$unique_event_name %in% eventname]
-    if (subreg) {formname<-formname[-grep(paste("ipde","scid",sep = "|"),formname)]}  
+    eventonly.r<-bsrc.getform(formname = formname,curdb = curdb,res.event = eventname,forceskip = T,aggressivecog = aggressivecog,
+                              nocalc=nocalc,mod=mod)
     
-    variablename<-names(bsrc.getform(formname = formname,curdb = curdb,forceskip = T))
-    
-    eventonly.r<-eventonly[,grep(paste(variablename,collapse = "|"),names(eventonly))]
-    
-    if (mod) {print("By default, NA will replace '' and 0 in checkbox items")
-      eventonly.r[eventonly.r==""]<-NA
-      if (length(grep("___",names(eventonly.r))) > 0){
-        eventonly.r[,grep("___",names(eventonly.r))][eventonly.r[,grep("___",names(eventonly.r))] == "0"]<-NA}
-    }
-    tempch<-funstrc[which(funstrc$form_name %in% formname),]
-    if (nocalc){print("By default, will not take calculated field into consideration.")
-      calmove<-length(which(tempch$field_type=="calc"))} else {calmove<-0}
-    eventonly.x<-eventonly.r[rowSums(is.na(eventonly.r[,3:length(names(eventonly.r))])) < (length(names(eventonly.r))- (2+aggressivecog+calmove)),]
-    
-    return(eventonly.x)
+    return(eventonly.r)
   }
 }
 #####################################
 #Functions to get all data from given forms: 
-bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,res.event=NULL,curdb = NULL,...) {
+bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, nocalc=T, grabnewinfo=F,res.event=NULL,curdb = NULL,IDvar="registration_redcapid",...) {
   if (is.null(curdb)) {
-  if (grabnewinfo) {
-  curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
-  ifrun<-TRUE
-  }else if (!grabnewinfo) {
-    curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+    if (grabnewinfo) {
+      curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
+      ifrun<-TRUE
+    }else if (!grabnewinfo) {
+      curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
+      funbsrc<-curdb$data
+      ifrun<-curdb$success
+    }
+  }else {
     funbsrc<-curdb$data
     ifrun<-curdb$success
-  }
-  }else {funbsrc<-curdb$data
-  ifrun<-curdb$success} 
+  } 
   if (ifrun) {
-  funstrc<-curdb$metadata
-  funevent<-curdb$eventmap
-  if (missing(formname)){
-    message("Here's a list of forms: ")
-    print(as.character(unique(as.character(funstrc$form_name))))
-  formname<-readline(prompt = "Please type in one form name; if multiple, use ARGUMENT formname = c(,): ")
-  }
-  if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
-   if (grabnewinfo) {
-     message("Grab updated data from RedCap.")
-     lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
-     lvariname<-c("registration_redcapid","redcap_event_name",lvariname)
-     eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
-      if (!is.null(res.event)) {
-        #New feature: event restriction; for better subsetting when doing multiple forms
-        eventname<-eventname[which(eventname %in% res.event)]
-      }
-     renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = lvariname, events = eventname)
-     if (renew$success){
-       raw<-renew$data
-     }else {stop("Update failed...;_; Try again?")}
-   }else {
-     lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
-     raw<-funbsrc[,unique(c(1,2,grep(paste(lvariname,collapse = "|"),names(funbsrc))))]
-     eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
-     if (!is.null(res.event)) {
-       #New feature: event restriction; for better subsetting when doing multiple forms
-       eventname<-eventname[which(eventname %in% res.event)]
-     }
-     raw<-raw[which(raw$redcap_event_name %in% eventname),]
-   }
-   tempch<-funstrc[which(funstrc$form_name %in% formname),]
-   if (nocalc){
-     message("By default, will not take calculated field into consideration.")
-     calmove<-length(which(tempch$field_type=="calc"))
-     } else {calmove<-0}
-   if (mod) {
-     message("By default, NA will replace '' and 0 in checkbox items")
-      raw[raw==""]<-NA
-      if (length(grep("___",names(raw))) > 0){
-      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
-      }}
-    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog+calmove)),]
-    return(new_raw)
+    funstrc<-curdb$metadata
+    funevent<-curdb$eventmap
+    if (missing(formname)){
+      message("Here's a list of forms: ")
+      print(as.character(unique(as.character(funstrc$form_name))))
+      formname<-readline(prompt = "Please type in one form name; if multiple, use formname = c(a,b): ")
     }
-  else print(paste("NO FORM NAMED: ",formname, sep = ""))
+    if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
+      if (grabnewinfo) {
+        message("Grab updated data from RedCap.")
+        lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
+        lvariname<-c(IDvar,"redcap_event_name",lvariname)
+        eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+        if (!is.null(res.event)) {
+          eventname<-eventname[which(eventname %in% res.event)]
+        }
+        renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = lvariname, events = eventname)
+        if (renew$success){
+          raw<-renew$data
+        }else {stop("Update failed...;_; Try again?")}
+      }else {
+        lvariname<-as.character(funstrc$field_name[which(funstrc$form_name %in% formname)])
+        lvariname<-lvariname[!lvariname %in% names(funbsrc)[1:2]]
+        raw<-funbsrc[,c(1,2,as.numeric(na.omit(match(lvariname,gsub("___.*$","",names(funbsrc))))))]
+        eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+        if (!is.null(res.event)) {
+          #New feature: event restriction; for better subsetting when doing multiple forms
+          eventname<-eventname[which(eventname %in% res.event)]
+        }
+        raw<-raw[which(raw$redcap_event_name %in% eventname),]
+      }
+      
+      tempch<-funstrc[which(funstrc$form_name %in% formname),]
+      if (nocalc){
+        message("By default, will not take calculated field into consideration.")
+        calmove<-length(which(tempch$field_type=="calc"))
+      } else {calmove<-0}
+      if (mod) {
+        raw<-rc_na_checkboxremove(raw)
+      }
+      new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog+calmove)),]
+      return(new_raw)
+    }
+    else {message("NO FORM NAMED: ",formname)}
   }
 }
+
+rc_na_checkboxremove<-function(raw){
+  message("By default, NA will replace '' and 0 in checkbox items")
+  raw[raw==""]<-NA
+  if (length(grep("___",names(raw))) > 0){
+    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+  }
+  return(raw)
+}
+
 #########################
 ### MATACH FUNCTIONS ####
 ##########################Working progress

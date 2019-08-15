@@ -1,6 +1,7 @@
-source("./R/HELPER.R")
+
 
 jiazhou.startup()
+source(file.path(scriptrootdir,"/R/HELPER.R"))
 rootdir = "~/Box/skinner/data/Redcap Transfer/redcap outputs"
 #Load ID Map:
 idmap<-REDCapR::redcap_read(batch_size = 1000,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token,fields = c("registration_redcapid","registration_wpicid","registration_soloffid"))$data
@@ -15,6 +16,8 @@ sp_lookup<-lapply(split(lookuptable,lookuptable$ID),function(krz){
   }
   return(krz)
 })
+protect<-bsrc.checkdatabase2(ptcs$protect)
+masterdemo<-bsrc.checkdatabase2(ptcs$masterdemo,online = T,batch_size=1000L)
 
 metals<-list(
   evtmap=redcap.eventmapping(redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)$data,
@@ -544,134 +547,89 @@ test_cirs<-readxl::read_xlsx(file.path(txpath,"test cirs","old_cirsg.xlsx"))
 lol_a<-match_evt_clean_up(test_cirs,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup)
 lol_b<-bsrc.findid(df = lol_a,idmap = idmap,id.var = "ID")
 
-protocol_name <- c("PROTECT2","EXPLORE","SNAKE","EYE_DECIDE")
-dtx_r<-readxl::read_xlsx(file.path(dirname(txpath),"SSIcurr_cv.xlsx"))
-dtx_rp<-unpack(dtx_r)
-dtx_rp$data<-match_evt_clean_up(df_a = dtx_rp$data,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup,cleanout = F)
+
+#SSI
+protocol_name <- c("PROTECT2","EXPLORE","EYE_DECIDE")
+dtx_cur<-readxl::read_xlsx(file.path(rootdir,"To be transferred","SSIcurr_cv.xlsx"))
+dtx_cur<-unpack(dtx_cur)
+
+dtx_worst<-readxl::read_xlsx(file.path(rootdir,"To be transferred","SSIworst_cvs.xlsx"))
+dtx_worst<-unpack(dtx_worst)
+dtx_worst$data$WORSTSI<-convert_exceldate(dtx_worst$data$WORSTSI)
+
+
+dtx_worst$data<-match_evt_clean_up(df_a = dtx_worst$data,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup,cleanout = F)
 
 
 Replacementlist<-lapply(as.character(na.omit(dtx_rp$map$RC_name)),function(a) {list("3"="dk","4"="refuse","5"="na")})
 names(Replacementlist)<-as.character(na.omit(dtx_rp$map$RC_name))
-ssi_cur<-proc_transfer(dtx_rp = dtx_rp,idmap = idmap,upload = F,metals = metals,misscodeallowed = 1:25,Replacementlist=Replacementlist,
-              cleanup = T,protocol_name = c("PROTECT2","EXPLORE","SNAKE","EYE_DECIDE"),ID_fieldname = "masterdemoid",arm_num = 2)
+ssi_cur<-proc_transfer2(dtx_rp = dtx_rp,idmap = idmap,upload = F,metals = metals,misscodeallowed = 1:25,Replacementlist=Replacementlist,
+              cleanup = T,protocol_name = protocol_name,ID_fieldname = "masterdemoid",arm_num = 2)
 ssi_cur$transfer$registration_redcapid<-ssi_cur$transfer$masterdemoid; ssi_cur$transfer$masterdemoid<-NULL
-REDCapR::redcap_write(ssi_cur$transfer,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
 
-protocol_name <- c("PROTECT2","EXPLORE","SNAKE","EYE_DECIDE")
-dtx_r<-readxl::read_xlsx(file.path(dirname(txpath),"SSIworst_cv.xlsx"))
-dtx_rp<-unpack(dtx_r)
-dtx_rp$data$WORSTSI<-convert_exceldate(dtx_rp$data$WORSTSI)
-dtx_rp$data<-match_evt_clean_up(df_a = dtx_rp$data,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup,cleanout = F)
+print(output<-bsrc.uploadcheck(dfa = ssi_cur$transfer,db_data = protect$data))
+REDCapR::redcap_write(output$uploaddf,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
 
-Replacementlist<-lapply(as.character(na.omit(dtx_rp$map$RC_name)),function(a) {list("3"="dk","4"="refuse","5"="na")})
-names(Replacementlist)<-as.character(na.omit(dtx_rp$map$RC_name))
-Replacementlist$ssi_idead_worst<-NULL
-ssi_cur<-proc_transfer(dtx_rp = dtx_rp,idmap = idmap,upload = F,metals = metals,misscodeallowed = 1:25,Replacementlist=Replacementlist,
-                       cleanup = T,protocol_name = c("PROTECT2","EXPLORE","SNAKE","EYE_DECIDE"),ID_fieldname = "masterdemoid",arm_num = 2)
-ssi_cur$transfer$registration_redcapid<-ssi_cur$transfer$masterdemoid; ssi_cur$transfer$masterdemoid<-NULL
-REDCapR::redcap_write(ssi_cur$transfer,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
-
-
-
-
-
-
-
-
-proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanup=T,protocol_name,ID_fieldname,arm_num,Replacementlist=NULL) {
-  # excluded = dtx_ii
-  # dty = dtx_ii[which(dtx_ii$MISSCODE %in% misscodeallowed & !is.na(dtx_ii$EVT)),]
-  map<-dtx_rp$map
-  dty<-dtx_rp$data
-  
-  
-  formname<-unique(metals$varimap$form_name[match(map$RC_name,metals$varimap$field_name,nomatch = 0)])
-  supposedevtname<-metals$evtmap$unique_event_name[which(metals$evtmap$form %in% formname)]
-  
-  dty_i<-bsrc.findid(dty,idmap,id.var = "ID")
-  dty_dt<-dty_i[map$OG_name[!is.na(map$RC_name)]]
-  names(dty_dt)<-map$RC_name[match(names(dty_dt),map$OG_name)]
-  
-  dty_dt[[paste0(formname,"_miss")]]<-dty$MISSCODE
-  
-  if(!is.null(Replacementlist)){
-  for (todo_rp in names(Replacementlist)) {
-    dty_dt[[todo_rp]]<-unlist(plyr::revalue(dty_dt[[todo_rp]],replace = Replacementlist[[todo_rp]],warn_missing = F))
-  }
-  }
-  
-  allcombodf<-do.call(rbind,lapply(protocol_name,function(evt){
-    #print(evt)
-    dty_i$EVT<-dty_i[[evt]]
-    dtyx<-change_evt(dty_i,evt,arm_num)
-    
-    dty_rc<-dtyx[c(ID_fieldname,"EVT")]
-    names(dty_rc)<-c(ID_fieldname,"redcap_event_name")
-    
-    dty_combo<-cbind(dty_rc[which(!is.na(dty_rc$redcap_event_name)),],dty_dt[which(!is.na(dty_rc$redcap_event_name)),])
-    dty_combo$ID<-NULL
-    
-    return(dty_combo)
-  }))
-  
-  
-  
-  
-  ndls<-which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name))
-  if(length(ndls)>0) {
-    allnadf<-dty_dt[which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name)),]
-    allnadf[[ID_fieldname]]<-allnadf$ID
-    allnadf$ID<-NULL
-    allnadf$redcap_event_name<-NA
-  } else {allnadf<-NULL}
-  dty_combo<-rbind(allcombodf,allnadf)
-  
-  misscodenotallowed<-which(!dty_combo[[paste0(formname,"_miss")]] %in% misscodeallowed)
-  noevent<-which(is.na(dty_combo$redcap_event_name))
-  eventnotincluded<-which(!dty_combo$redcap_event_name %in% supposedevtname)
-  duplicatedentry<-which(duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name)) | duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name),fromLast = T))
-  
-  whichtoexclude<-unique( c(misscodenotallowed,noevent,eventnotincluded,duplicatedentry) )
-  lsx<-new.env()
-  if(length(whichtoexclude)>0) {
-    lsx<-list2env(list(transfer=dty_combo[-whichtoexclude,], excluded=dty_combo[whichtoexclude,],excludecodes=list(misscodeallowed=misscodenotallowed,
-                                                                                                                   noevent=noevent,duplicatedentry=duplicatedentry,
-                                                                                                                   eventnotincluded=eventnotincluded))
-                  ,envir = lsx)
-  } else {
-    lsx<-list2env(list(transfer=dty_combo, excluded=dty_combo[0,],excludecodes=list(misscodeallowed=misscodenotallowed,
-                                                                                    noevent=noevent,duplicatedentry=duplicatedentry,
-                                                                                    eventnotincluded=eventnotincluded))
-                  ,envir = lsx)
-  }                                                                                                     
-  
-  if(cleanup){
-    
-    cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
-    lsx$transfer<-cleanoutput$outputdf
-    lsx$valuemismatch<-cleanoutput$valuemismatch
-  }
-  
-  if(upload){
-    if(nrow(lsx$transfer)>0){
-      tryCatch({
-        REDCapR::redcap_write(bsrc.choice2checkbox(dfx = lsx$transfer,metadata = metals$varimap,cleanupog = T),redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
-      },error=function(e){
-        message("upload failed, reason: ",e)
-        lsx$status<-"Upload Failed"
-      })
-      
-    } else {
-      message("No data to upload.")
-      lsx$status<-"No Data to be Uploaded"
-    }
-  } 
-  outz<-as.list(lsx)
-  rm(lsx)
-  return(outz)  
+bkarig<-function(dfa){
+  dfax<-dfa[c("ID","CDATE")]
+  dfax$uID<-paste(dfax$ID,dfax$CDATE)
+  message(any(duplicated(dfax$uID)))
+  return(dfax)
 }
+
+dt_cur<-bkarig(dtx_cur$data)
+dt_wor<-bkarig(dtx_worst$data)
+
+
+
+##############SSI
+protocol_name <- c("PROTECT2","EXPLORE","EYE_DECIDE")
+SIN_worst<-readxl::read_xlsx(file.path(rootdir,"To be transferred","SINTrecent_cv.xlsx"))
+SIN_worst<-unpack(SIN_worst)
+SIN_worst$data$CDATE<-convert_exceldate(SIN_worst$data$CDATE)
+SIN_worst$data<-match_evt_clean_up(df_a = SIN_worst$data,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup,cleanout = F)
+if(any(SIN_worst$data$multiple_match)){message("Identified some records with multiple match")}
+SIN_worst$data$RATER<-NULL;SIN_worst$map$RC_name[SIN_worst$map$OG_name=="RATER"]<-NA
+SIN_worst<-proc_transfer2(dtx_rp = SIN_worst,idmap = idmap,upload = F,metals = metals,misscodeallowed = 1:25,Replacementlist=Replacementlist,
+                       cleanup = T,protocol_name = protocol_name,ID_fieldname = "masterdemoid",arm_num = 2)
+SIN_worst$transfer$registration_redcapid<-SIN_worst$transfer$masterdemoid; SIN_worst$transfer$masterdemoid<-NULL
+
+
+print(output<-bsrc.uploadcheck(dfa = SIN_worst$transfer,db_data = protect$data))
+REDCapR::redcap_write(output$uploaddf,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+
+rm(SIN_worst)
+protocol_name <- c("PROTECT2","EXPLORE","EYE_DECIDE")
+SIN_max<-readxl::read_xlsx(file.path(rootdir,"To be transferred","SINTmax_cv.xlsx"))
+SIN_max<-unpack(SIN_max)
+SIN_max$data$CDATE<-convert_exceldate(SIN_max$data$CDATE)
+SIN_max$data<-match_evt_clean_up(df_a = SIN_max$data,TimeDiffMax = 30,protocol_name = protocol_name,sp_lookup = sp_lookup,cleanout = F)
+if(any(SIN_max$data$multiple_match)){message("Identified some records with multiple match")}
+SIN_max$data$RATER<-NULL;SIN_max$map$RC_name[SIN_max$map$OG_name=="RATER"]<-NA
+SIN_max<-proc_transfer2(dtx_rp = SIN_max,idmap = idmap,upload = F,metals = metals,misscodeallowed = 1:25,Replacementlist=Replacementlist,
+                          cleanup = T,protocol_name = protocol_name,ID_fieldname = "masterdemoid",arm_num = 2)
+SIN_max$transfer$registration_redcapid<-SIN_max$transfer$masterdemoid; SIN_max$transfer$masterdemoid<-NULL
+
+
+print(output<-bsrc.uploadcheck(dfa = SIN_max$transfer,db_data = protect$data))
+REDCapR::redcap_write(output$uploaddf,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+
+
+
+
+get_ThisNotInThat(SIN_worst$data,SIN_max$data)
+
+
+
+
+
+
+
+
+#############
+
 ##########other stuff#######
 transfer2redcap<-function(dtx_r=NULL,idmap=NULL,metals=NULL,misscodeallowed=NULL,arm_num=NULL,ID_fieldname=NULL,protocol_name=NULL,ifupload=T,clean=T) {
   dtx_rp<-unpack(dtx_r)
