@@ -51,14 +51,14 @@ cleanupdf<-function(dfx,req.varinames=NULL){
 
 bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol.cur,defaultchoice=NULL,
                           emardpath=rdpaths$ema,ss.graph=T,graph_path=ema.graph.path,metadata.ema=NULL,
-                          local=F,restricData=T, forceRerun=F, updateRC=T, updateDB=T,excludeID=c("")){
+                          local=F,restrictData=T, forceRerun=F, updateRC=T, updateDB=T,excludeID=c("")){
   #Initialization:
   if(is.null(ema_raw)){ema_raw<-read.csv(raw_fpath,stringsAsFactors = F)}
   rc_ema<-bsrc.getform(formname = c("record_registration","ema_session_checklist"),grabnewinfo = !local, protocol = protocol)
   if(file.exists(emardpath)){
     envir_ema<-bsrc.attachngrab(emardpath)
     #envir_ema<-bsrc.attachngrab("ema_test.rdata")
-    
+    if(is.null(metadata.ema)){metadata.ema <- envir_ema$metadata.ema}
   } else { if(is.null(metadata.ema)) {stop("This function can't generate metadata object, will terminate if not provided.")}
     envir_ema<-as.environment(list(fulldata.ema=list(raw_data=list(),proc_data=list(),progress_data=list(),info=data.frame(stringsAsFactors = F)),
                                    metadata.ema=metadata.ema))
@@ -92,7 +92,7 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
   new_raw<-c(completed_raw,ema_split_filter)
   
   # completed_sub<-lapply(X = completed,FUN = bsrc.ema.singlesubproc,graphic=F,graph_path=graph_path)
-  pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path)
+  pData_allsub<-lapply(X = ema_split_filter,FUN = bsrc.ema.singlesubproc,graphic=ss.graph,graph_path=graph_path,restrictData=restrictData)
   
   # completed_prog<-lapply(completed_sub,function(xz){xz$data})
   ema_progress_n<-lapply(pData_allsub,function(xz){xz$data})
@@ -416,7 +416,7 @@ bsrc.ema.main<-function(emadata.raw,path=NULL,graphic=T, gprint=T,subreg=NULL,fu
     
 }
 ###############Universal EMA Main function: Single Subject:
-bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path){
+bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path,restrictData=F){
   tryCatch({
   if(is.null(graph_path)){graphic<-F}
   message("")
@@ -454,10 +454,10 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
   
   if(any(!logicDateTime)){
     message("This subject has data outside of the 21 days window.")
-    if(restricData) {
-      message("restricData argument is on, therefore will omit any data outside of the 21 days window! But we will keep the raw data.")
+    if(restrictData) {
+      message("restrictData argument is on, therefore will omit any data outside of the 21 days window! But we will keep the raw data.")
     } else {
-      message("restricData argument is off, will keep all data.")
+      message("restrictData argument is off, will keep all data.")
       seqDate_og<-unique(c(unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date)[!unique(ema_ss[ema_ss$Survey_Class!="SetUp",]$Survey_Submitted_Date) %in% seqDate_og],seqDate_og))
     }
   }
