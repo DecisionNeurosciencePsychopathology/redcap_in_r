@@ -69,6 +69,9 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
   completed_prog<-envir_ema$fulldata.ema$progress_data
   completed_info<-envir_ema$fulldata.ema$info
   finished_ID<-as.character(completed_info$RedcapID[which(completed_info$Status %in% c("COMPLETED","EARLY-TERMINATION"))])
+  
+  finished_ID<-finished_ID[finished_ID %in% names(completed_proc)]
+  
   # 
   # ema_raw_old_proc<-envir_ema$fulldata.ema$raw
   # ema_raw_old_proc<-as.data.frame(apply(ema_raw_old_proc,2,as.character),stringsAsFactors = F)
@@ -117,7 +120,8 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
                             ifupload = F,curver = "3",idvar = "RedCapID")
     } else {return(NULL)}
   })$df
-  
+  #return(ema_rc_all)
+  if(is.data.frame(ema_rc_all) && nrow(ema_rc_all)>0){
   ema_rc_all<-as.data.frame(apply(ema_rc_all[!is.na(ema_rc_all$registration_redcapid),],2,as.character))
   
   if(updateRC){
@@ -125,7 +129,9 @@ bsrc.ema.update<-function(raw_fpath=file.choose(),ema_raw=NULL,protocol=protocol
     result.rc_all<-REDCapR::redcap_write(ema_rc_all,token = protocol$token,redcap_uri = protocol$redcap_uri)
     if (result.rc_all$success) {message("Updated these IDs: ",paste(ema_rc_all$registration_redcapid,collapse = " "))}
   } else {message("RedCap Update failed.")}
-  
+  } else {
+    message("Nothing to update, go away.")
+  }
   if(updateDB) {
     fulldata.ema<-list(info=new_info,progress_data=new_progress,proc_data=new_proc,raw_data=new_raw,update.date=Sys.Date(),ver.tag=4)
     save(list=c("metadata.ema","fulldata.ema","matchdb"),file = emardpath)
@@ -156,8 +162,9 @@ bsrc.ema.mwredcapmatch<-function(ema3.raw=NULL,funema=NULL,envir=NULL,defaultcho
   summatch_sp<-split(summatch,summatch$ema_studyidentifier)
   
   postmatch<-lapply(summatch_sp,function(dbax){
+    #print(unique(dbax$ema_studyidentifier))
     if(length(unique(dbax$registration_redcapid))>1) {
-      if("Existing" %in% dbax$origin) {
+      if("Existing" %in% dbax$origin && "RedCap" %in% dbax$origin) {
         if(dbax$registration_redcapid[which(dbax$origin == "Existing")] ==  dbax$registration_redcapid[which(dbax$origin == "RedCap")] ) {
           return(dbax[which(dbax$origin=="Existing"),c("ema_studyidentifier","registration_redcapid")])
         }
@@ -418,9 +425,13 @@ bsrc.ema.singlesubproc<-function(ema_ss=NULL,graphic=T,graph_path=ema.graph.path
   ema_ss<-ema_ss[order(ema_ss$Survey_Class),]
   ema_ss_s<-split(ema_ss,ema_ss$Survey_Class)
   #Get the SetUp
-  setup_ema<-ema_ss[ema_ss$DateTime==max(ema_ss$DateTime[!is.na(ema_ss$ema_waketime_u)]) & !is.na(ema_ss$ema_waketime_u),
-                    c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
-  names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
+  if(!is.null(ema_ss$ema_waketime_u)){
+    setup_ema<-ema_ss[ema_ss$DateTime==max(ema_ss$DateTime[!is.na(ema_ss$ema_waketime_u)]) & !is.na(ema_ss$ema_waketime_u),
+                      c("RedcapID","ema_startdate","ema_waketime_u","ema_bedtime_u")]
+    names(setup_ema)<-c("RedcapID","StartDate","WakeTime","BedTime")
+  }else{
+    setup_ema<-data.frame()
+  }
   #Get the SetUp for version 2
   if(nrow(setup_ema)<1){
     message("This is probably a version 2 participant...we have to make it up on the fly!")

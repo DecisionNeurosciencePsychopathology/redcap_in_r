@@ -873,3 +873,15 @@ ggplot(deathcat.df, aes(x="", y=Proportions, fill=`Death Category`))+
 #END OF NOT RUN CHUCK
 }
 
+
+
+
+
+
+
+
+
+
+
+
+

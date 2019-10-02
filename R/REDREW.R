@@ -175,8 +175,10 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_o
       allgx<-lapply(sp_rawtext,function(x){xa<-strsplit(gsub("\"","",x),",")[[1]];})
       mxID<-sapply(allgx,function(sp_rawtext){gsub("ERROR: ","",sp_rawtext[1])})
       allIDs<-c(previousIDs,mxID)
-      posX<-which(ds==allIDs,arr.ind = T)
-      ds_new<-ds[-posX[,1],]
+      negPos<-as.numeric(na.omit(sapply(allIDs,function(IDX){
+        a<-which(ds==IDX,arr.ind = T)[,1];if(length(a)>0){a}else{NA}
+        })))
+      ds_new<-ds[-negPos,]
       gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
                                 retry_whenfailed = T,previousIDs = allIDs,
                                 config_options = config_options)
@@ -738,6 +740,20 @@ dnpl.bso.getsahx<-function(curdb=NULL) {
   dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
   return(dff)
 }
+###########################
+bsrc.getSUIHX_index<-function(protocol=protocol.cur,suicide_formname="suicide_history"){
+  metadata<-bsrc.getform(protocol = protocol,formname = suicide_formname,aggressivecog = F,mod = F,grabnewinfo = T,batch_size=1000L)
+  sui_names<-names(metadata)
+  index_df<-data.frame(names=sui_names,rxsim1=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
+  index_df$SingleEntry<-index_df$names==index_df$rxsim1
+  index_df$is_checkbox<-grepl("___",index_df$names)
+  index_df$root_names<-index_df$names;index_df$checkbox_names<-NA
+  index_df$root_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$checkbox_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$root_names<-gsub("_at[0-9]*$","\\1",index_df$root_names)
+  return(index_df)
+}
+
 ###########################
 ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
   proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
