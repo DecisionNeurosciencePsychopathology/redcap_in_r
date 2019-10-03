@@ -308,9 +308,9 @@ bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protoco
                         regiformname=NULL,forcenewsubinsync=NULL){
   #This is used to switch protocols [hard coding lab protocls]
    if (!is.null(name) & !is.null(redcap_uri) & !is.null(token)){
-    print("constructing new one...")
+     message("constructing new one for: ",name)
     protocol<-list(name=name,redcap_uri=redcap_uri,token=token,rdpath=rdpath)
-   } else {print("Not enough info")}
+   } else {message("Not enough info")}
   if (!is.null(regiformname)) {protocol$regiformname<-regiformname}
   if (!is.null(forcenewsubinsync)) {protocol$forcenewsubinsync<-forcenewsubinsync}
   if (protocol.cur){
@@ -321,7 +321,7 @@ bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protoco
 bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
   if (file.exists(protocol$rdpath)){
     if (!skipcheck){curdb<-bsrc.checkngrab(protocol=protocol)}
-  }else {print("File don't exist...loading")
+  }else {message("File don't exist...loading")
     bsrc.checkdatabase2(protocol = protocol, glob.release = T)}
   updated.time<-curdb$update.time
   funbsrc<<-curdb$data
@@ -335,7 +335,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir",
   if(is.list(protocol)) {protocol.n<-protocol$name
     rdpath<-protocol$rdpath
   } else {stop("ERROR, protocol object is not a list.")}
-  } else {print("when rdpath argument available, will always use that")}
+  } else {message("when rdpath argument available, will always use that")}
   
   if(file.exists(rdpath)){
     loadrdata(rdpath=rdpath,returnas=returnas,envir=envir)
@@ -359,9 +359,9 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
 #########################New Ver in DEV
 bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
-  if (!is.list(protocol)) {print("protocol has not sufficient information, using global variables [input.uri/input.token]")}
-  if (is.list(protocol)) {print(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
-    print(protocol[ protocol != protocol$token ])
+  if (!is.list(protocol)) {message("protocol has not sufficient information, using global variables [input.uri/input.token]")}
+  if (is.list(protocol)) {message(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
+    message(protocol[ protocol != protocol$token ])
     protocol.n<-protocol$name
     input.uri<-protocol$redcap_uri
     input.token<-protocol$token
@@ -388,18 +388,18 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
   if (funstrc.x$success){
     funstrc<-funstrc.x$data
   }else{anyfailed.s<-TRUE
-  print("Metadata not loaded")}
+  message("Metadata not loaded")}
   funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
   if (funevent.x$success){
     funevent<-funevent.x$data
   }else{anyfailed.e<-TRUE
-  print("Event mapping not loaded")}
+  message("Event mapping not loaded")}
   if (fullupdate){
     funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
     if (funbsrc.x$success){
       funbsrc<-funbsrc.x$data
     }else{anyfailed.d<-TRUE
-    print("Main database not loaded")}
+    message("Main database not loaded")}
   }else {anyfailed.d<-TRUE}
   
   if (!any(anyfailed.s,anyfailed.d)){
@@ -407,8 +407,8 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullu
     assign("update.time",Sys.time(),envir = cur.envir)
     assign("success",TRUE,envir = cur.envir)
   }else{
-    print("something went wrong, better go check it out.")
-    print("will still update successfully loaded parts.")
+    message("something went wrong, better go check it out.")
+    message("will still update successfully loaded parts.")
     assign("success",FALSE,envir = cur.envir)
   }
   #New way, use environment:
@@ -442,17 +442,17 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
   if(!forceskip){  
     if (curdb$success) {
       if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
-        print(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
-        reload<-TRUE} }else {print("Something went wrong when loading rdata file...")
+        message(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
+        reload<-TRUE} }else {message("Something went wrong when loading rdata file...")
       ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
       if (!as.logical(ifso)){reload<-T}
       }
   
-  }else{print("FORCE SKIP RDATA CHECKS")
+  }else{message("FORCE SKIP RDATA CHECKS")
   ifrun<-T}
-  }else{print("No such file...reloading")
+  }else{message("No such file...reloading")
     reload<-T}
-  } else {print("Online mode is on")
+  } else {message("Online mode is on")
     reload<-F
     online<-T
     forceupdate<-F}
@@ -476,9 +476,9 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
 ###############Legacy
 bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
   if (missing(uri)) {uri<-'DNPL'
-  print("By default, the location is set to Pitt's RedCap.")}
+  message("By default, the location is set to Pitt's RedCap.")}
   if (missing(batch_size)) {batch_size<-"50" 
-  print("By default, the batch size is 50 unique records")}
+  message("By default, the batch size is 50 unique records")}
   if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
   else (input.uri<-uri)
   if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
@@ -493,13 +493,13 @@ bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
     redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
     funbsrc.x<-redcap$read(batch_size = batch_size)
     if (funbsrc.x$success) {
-      print("Success! Database Loaded")
+      message("Success! Database Loaded")
       jzc.connection.yesno<<-1
       jzc.connection.date<<-Sys.Date()
       funbsrc<<-funbsrc.x$data
     } #take only the regi part
     else {
-      print("Connection Failed, Please Try Again.") 
+      message("Connection Failed, Please Try Again.") 
       jzc.connection.yesno<<-0}
     if (!output) {subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)}
     if (output){
@@ -517,19 +517,19 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
     jzc.connection.yesno<-0 
     jzc.connection.date<-NA}
   if (forceupdate==TRUE) {
-    print("FORCEUPDATE")
+    message("FORCEUPDATE")
     bsrc.conredcap(token = token)
     ifrun<-TRUE
   }
   else {ifelse (jzc.connection.yesno == 1, {
     ifelse(forcerun==TRUE | jzc.connection.date==Sys.Date(), {
-      print("Database is loaded or was loaded today")
-      ifrun<-TRUE}, {print("Local database is out of date, redownload now")
+      message("Database is loaded or was loaded today")
+      ifrun<-TRUE}, {message("Local database is out of date, redownload now")
         ifrun<-FALSE
         bsrc.conredcap(token = token)
         ifrun<-bsrc.checkdatabase()})
   }, 
-  {print("RedCap Connection is not loaded, Retry Now")
+  {message("RedCap Connection is not loaded, Retry Now")
     ifrun<-FALSE
     bsrc.conredcap(token = token)
     ifrun<-bsrc.checkdatabase()
@@ -692,13 +692,13 @@ bsrc.findduplicate <- function(protocol = protocol.cur) {
     for (i in 1:length(unique(funbsrc$registration_soloffid)) ) {
       tryCatch({
     idq<-unique(funbsrc$registration_soloffid)[i]
-    invisible(capture.output(krz<-bsrc.getdemo(id=idq,printout = F,curdb=curdb)))
-    if(length(krz)>1){print(idq)
-      print(krz)
-      print(i)}
+    invisible(capture.output(krz<-bsrc.getdemo(id=idq,messageout = F,curdb=curdb)))
+    if(length(krz)>1){message(idq)
+      message(krz)
+      message(i)}
      },error=function(x){})
       }
-    print("DONE")
+    message("DONE")
 }
 ####################
 bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T,protocol=protocol.cur,...) {
@@ -892,7 +892,7 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=
   
   if(ifrun) {
     if (missing(eventname)){
-      print(as.character(unique(funbsrc$redcap_event_name)))
+      message(as.character(unique(funbsrc$redcap_event_name)))
       eventname<-readline(prompt = "Please type in the event name: ")
     }
     
@@ -925,7 +925,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,mod=T,aggressivecog=1, n
     funevent<-curdb$eventmap
     if (missing(formname)){
       message("Here's a list of forms: ")
-      print(as.character(unique(as.character(funstrc$form_name))))
+      message(as.character(unique(as.character(funstrc$form_name))))
       formname<-readline(prompt = "Please type in one form name; if multiple, use formname = c(a,b): ")
     }
     if (any(as.character(formname) %in% as.character(funstrc$form_name))) {
@@ -1048,7 +1048,7 @@ bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=
 #                                                    )
 #                                               ), envir=parent.env()) {
 #   
-#   lapply(lfunc.object, function(x) {print(x)
+#   lapply(lfunc.object, function(x) {message(x)
 #   if (class(x$call)=="function") {
 #     mode=FALSE
 #   } else if (class(x$functionname)=="character") {
