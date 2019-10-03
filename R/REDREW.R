@@ -357,7 +357,7 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
 }
 
 #########################New Ver in DEV
-bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size="50",fullupdate=T,output=F,newfile=F,online=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullupdate=T,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   if (!is.list(protocol)) {message("protocol has not sufficient information, using global variables [input.uri/input.token]")}
   if (is.list(protocol)) {message(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))

@@ -712,7 +712,7 @@ bsrc.datameeting<-function(curdb=NULL,protocol=protocol.cur,plotpath=NULL,...){
 bsrc.irb.numsum<-function() {
   ID_SUPREME <-  readxl::read_excel("~/Box/skinner/projects_analyses/Project BPD Longitudinal/BPD Database/JC/RE/ID_ SUPREME.xlsx")
   ID_SUPREME[,5:8]<-NULL
-  tkj<-bsrc.findid(df = ID_SUPREME,curdb = curdb,id.var = "ID",addgroupstatus = F)
+  tkj<-bsrc.findid(df = ID_SUPREME,id.var = "ID")
   tkj$registration_id<-NULL; tkj$registration_soloffid<-NULL; 
   #tkj<-as.data.frame(tkj)
   #newid<-as.data.frame(subreg$registration_redcapid[! subreg$registration_redcapid %in% tkj$registration_redcapid])
