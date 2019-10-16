@@ -632,7 +632,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
     new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog+calmove)),]
     return(new_raw)
   }
-  else {message("NO FORM NAMED: ",formname)}
+  else {message("Form [",formname,"] can not be loacted.")}
 }
 
 ###############################
