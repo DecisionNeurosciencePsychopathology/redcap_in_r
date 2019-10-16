@@ -5,8 +5,6 @@
 #---
 #[Task List]  
 #0/1 Missingness check arm specific 
-#0.5/1 Attach demo info for given list of IDs [NO NEED]
-#0.5/1 function to bridge current and pass db
 #Version 2.2 Changelog:
 #bsec.getchoicemapping() get the choice from metadata object which can be updated according to design, no more fixed codessss
 #General bug fix to redcap connection/check redcap; so that the refresh function can run
@@ -668,7 +666,7 @@ bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL){
     if(any(sapply(t,nrow)>1)){
       
       message("Duplicated ID map entry found for singular ID, terminate and return list of ID identified.")
-      return(t[sapply(t,nrow)==2])
+      return(t[sapply(t,nrow)>1])
     }
     
     tx<-do.call(rbind,t)
