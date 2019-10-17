@@ -583,7 +583,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
     }
     
     
-    if (grabnewinfo) {
+    if (online) {
       #Do online version:
       message("Getting form data directly from RedCap.")
       
