@@ -574,7 +574,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
     lvariname<-as.character(metadata$field_name[which(metadata$form_name %in% formname)])
     #lvariname<-
     if(!no_evt_rc){
-      eventname<-funevent$unique_event_name[which(funevent$form %in% formname)]
+      eventname<-eventdata$unique_event_name[which(eventdata$form %in% formname)]
       if (!is.null(filter_events)) {
         eventname<-eventname[which(eventname %in% filter_events)]
       }
@@ -635,17 +635,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
 
 ###############################
 bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL){
-  #Offload the idmap generation to some other function...
-  # if (is.null(idmap)) {
-  #   if (is.null(curdb)) {curdb<-bsrc.checkdatabase2(protocol = protocol,...)}
-  #   if(addgroupstatus) {varitoget<-c("registration_id","registration_redcapid","registration_soloffid","registration_group","registration_status")
-  #   } else {varitoget<-c("registration_id","registration_redcapid","registration_soloffid")}
-  #   idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[varitoget]
-  #   cleanmap<-idmap[c("registration_id","registration_redcapid","registration_soloffid")]
-  #   rownames(idmap)<-NULL
-  # } else {
   cleanmap<-idmap
-  #}
   if (!missing(df)){
     t<-lapply(df[[id.var]],function(id) {
       pos<-as.data.frame(which(cleanmap==id,arr.ind = T))
