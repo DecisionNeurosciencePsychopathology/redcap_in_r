@@ -828,7 +828,7 @@ dnpl.bso.getsahx<-function(curdb=NULL) {
 }
 ###########################
 bsrc.getSUIHX_index<-function(protocol=protocol.cur,suicide_formname="suicide_history"){
-  metadata<-bsrc.getform(protocol = protocol,formname = suicide_formname,aggressivecog = F,mod = F,grabnewinfo = T,batch_size=1000L)
+  metadata<-bsrc.getform(protocol = protocol,formname = suicide_formname,aggressivecog = F,mod = F,online = T,batch_size=1000L)
   sui_names<-names(metadata)
   index_df<-data.frame(names=sui_names,rxsim1=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
   index_df$SingleEntry<-index_df$names==index_df$rxsim1

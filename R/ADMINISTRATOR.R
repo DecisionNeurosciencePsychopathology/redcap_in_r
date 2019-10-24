@@ -250,7 +250,7 @@ prep_bsocial_datameet<-function(protocol=protocol.cur,curdb=NULL,idvar="registra
   curdb<-bsrc.checkdatabase2(protocol = protocol,...)
   }
   
-  olddemopath<-"/Users/jiazhouchen/Box Sync/skinner/projects_analyses/Project BPD Longitudinal/pj_migration/raw_csv/Bdemo_PG1_raw.csv"
+  olddemopath<-"~/Box/skinner/projects_analyses/Project BPD Longitudinal/pj_migration/raw_csv/Bdemo_PG1_raw.csv"
   BLDEMO_OLD<-read.csv(olddemopath,stringsAsFactors = F)
   BLDEMO_OLD[BLDEMO_OLD==999 | BLDEMO_OLD=="999"]<-NA
   
@@ -294,23 +294,23 @@ prep_bsocial_datameet<-function(protocol=protocol.cur,curdb=NULL,idvar="registra
   
   edudf<-edudf[which(!edudf$Group %in% c("Not Sure Yet","Ineligible / Not Applicable")),]
   edudf$Group<-droplevels(edudf$Group)
-  xcList<-lapply(c("NewConsent","fMRI","EMA","Overall"),function(xc){
+  xcList<-lapply(c("fMRI","EMA","Overall"),function(xc){
     txc<-edudf[which(edudf[[paste0("if",xc)]]),]
     txc$Study<-paste0("B-Social ",xc)
     return(txc)
   })
-  names(xcList)<-c("NewConsent","fMRI","EMA","Overall")
+  names(xcList)<-c("fMRI","EMA","Overall")
   return(list(list=xcList,df=edudf))
 }
 
 dofostudy<-function(xcDF){
 lsxc<-lapply(c("Edu","Age","Race","Gender",NA), function(typexc){
   if(is.na(typexc)) {
-    x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste("Group","Study",sep = "+")))))
+    x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste("Group",sep = "+")))))
     x2<-aes(x=Group,y=Freq)
     x3<-""
     } else {
-  x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste(typexc,"Group","Study",sep = "+")))))
+  x1<-as.data.frame(xtabs(data = xcDF,formula = as.formula( paste0("~",paste(typexc,"Group",sep = "+")))))
   x2<-eval(parse(text = paste0("aes(x=Group,fill=",typexc,",y=Freq)")))
   x3<-typexc
   }
@@ -323,7 +323,7 @@ plotxc<-lapply(lsxc,function(txc){
     geom_text(stat = "identity",aes(label=Freq), size=5, position=position_dodge(width=0.9), vjust=-0.2)+
     ggtitle(paste(txc$type,"by Group")) +
     xlab(txc$type) + ylab("Frequency Count")+
-    scale_fill_brewer(palette="OrRd") + facet_wrap(~Study) +theme(axis.text=element_text(size=12),
+    scale_fill_brewer(palette="OrRd") +theme(axis.text=element_text(size=12),
           axis.title=element_text(size=14,face="bold"))
     return(list(plot=pltx,type=txc$type))
 })
