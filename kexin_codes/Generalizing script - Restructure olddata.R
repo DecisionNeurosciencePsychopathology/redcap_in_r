@@ -1,8 +1,22 @@
+# startup
+rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
+source('~/Documents/github/UPMC/startup.R')
+
+#note: here uses 'QOL interview' as the 'training form'. 
+
+# rctransfer.dataclean <- function(
+# [variables]
+#curdb = bsoc
+protocol.cur = ptcs$bsocial
+bsoc<- bsrc.checkdatabase2()
+#range
+replace_w_na = FALSE
+#) {
+
 library(tidyverse)
 library(chron)
 
-rootdir="/User/kexinchen/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
-source('~/Documents/github/UPMC/startup.R')
+#prepare functions
 # make a fun to report abnormal values 
 report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, comments = NA, report = wrong_val_report){
   report <<- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
@@ -13,58 +27,79 @@ report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, comments
   colnames(new_repo)<-c('id','var_name','wrong_val', 'comments')
   return(rbind(report,new_repo))
 }
-
-  
 #Grabs data from bsocial, everything that starts with x, minus the variable for complete
 rd.var.map<-function(x){
-  names(bsoc$data[c("registration_redcapid",names(bsoc$data)[which(grepl(x,names(bsoc$data)))])])->bsocnames
+  bsocnames<-c('id',names(bsoc$data[c(which(grepl(x,names(bsoc$data))))]))
   bsocnames[-which(grepl("complete$", bsocnames))]->bsocnames
   return(bsocnames)
-  }
-##QOL interview
-  #Functions
-  #Gives value of 1 if not in range
-  qol.range<-function(range, cols){for (i in 1:nrow(QOL_fresh)){
-        if (any(sapply(QOL_fresh[i, cols], function(x){
-          !x %in% range & !is.na(x)
-          }))){
-          QOL_fresh$probs4[i]<-1}
-        else{QOL_fresh$probs4[i]<-0}} 
-        return(QOL_fresh)}
-  #Changes these values to NA
-  qol.na<-function(range, cols){for (i in 1:nrow(QOL_fresh)){
-        QOL_fresh[i, cols]<-
-          sapply(QOL_fresh[i, cols], function(x){
-          ifelse (!x %in% range & !is.na(x) ,x<-NA,x<-x)})}
-        return(QOL_fresh)}
-  #Get form
-  QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"))
-  #rename the variables to something more reasonable:
-  QOL_fresh <- select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
-                      TIME.BEGAN, QOLBA1:TIME.ENDED)
-  #get redcap names for each form
-  bsoc<-bsrc.checkdatabase2(ptcs$bsocial, batch_size=200L)
-  #get variables for qol
-  rd.var.map("qol")->qolvarmap
-  #change variable names to match redcap
-  names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
-  as.character(QOL_fresh$qol_startdate)->QOL_fresh$qol_startdate
-  as.character(QOL_fresh$qol_endtime)->QOL_fresh$qol_endtime
-  as.character(QOL_fresh$qol_b_1_os)->QOL_fresh$qol_b_1_os
-  as.character(QOL_fresh$qol_b_2_a_des)->QOL_fresh$qol_b_2_a_des
-  as.character(QOL_fresh$qol_b_2_b_des)->QOL_fresh$qol_b_2_b_des
-  as.character(QOL_fresh$qol_b_2_c_des)->QOL_fresh$qol_b_2_c_des
-  as.character(QOL_fresh$qol_b_2_d_des)->QOL_fresh$qol_b_2_d_des
-  as.character(QOL_fresh$qol_b_2_e_des)->QOL_fresh$qol_b_2_e_des
-  as.character(QOL_fresh$qol_b_2_f_des)->QOL_fresh$qol_b_2_f_des
-  as.character(QOL_fresh$qol_f_1_others)->QOL_fresh$qol_f_1_others
-  as.character(QOL_fresh$qol_g_2)->QOL_fresh$qol_g_2
-  
-  #Change 999's to NA
-  for (i in 1:nrow(QOL_fresh)){
-    QOL_fresh[i,]<-
-      sapply(QOL_fresh[i, ], function(x){
-      ifelse (x==999, x<-NA,x<-x)})}
+}
+#Gives value of 1 if not in range # TO BE CHANGED - MAKE A REPORT INSTEAD OF A COL 
+qol.range<-function(range, tar_cols){for (i in 1:nrow(QOL_fresh)){
+  if (any(sapply(QOL_fresh[i, tar_cols], function(x){
+    !x %in% range & !is.na(x)
+  }))){
+    QOL_fresh$probs4[i]<-1} # TO BE GENERALIZED
+  else{QOL_fresh$probs4[i]<-0}} # TO BE GENERALIZED
+  return(QOL_fresh)}
+#if not in range, changes the values to NA
+qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
+  QOL_fresh[i, tar_cols]<-
+    sapply(QOL_fresh[i, tar_cols], function(x){
+      ifelse (!x %in% range & !is.na(x) ,x<-NA,x<-x)})}
+  return(QOL_fresh)}
+
+# import data from access and match variables  # TO BE GENERALIZED 
+QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+#rename the variables to something more reasonable (i.e. var names in redcap): 
+QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                           TIME.BEGAN, QOLBA1:TIME.ENDED)
+#get variables for qol
+rd.var.map("qol")->qolvarmap
+#change variable names to match redcap
+names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
+
+
+## identify wrong values/datatypes, correct and report 
+log_replace <- ''
+
+#change data type 
+# identify all non-integer/numeric col
+
+#Report 999 AND if replace_w_na=T, replace change 999's to NA
+
+apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){
+  log_replace <- report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = 'QOL',wrong_val = 999, 
+                              comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
+})
+# how to write the result of apply to a dataframe???
+
+
+
+
+
+if(replace_w_na){QOL_fresh[which(QOL_fresh==999)]<-NA}
+
+for (i in 1:nrow(QOL_fresh)){
+  QOL_fresh[i,]<-
+    sapply(QOL_fresh[i, ], function(x){
+      if (!is.na(x) & x==999) {
+        log_replace <<- report_wrong(report = log_replace, id=QOL_fresh[1,1],which_var = 'QOL',wrong_val = '999',comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
+        ifelse(replace_w_na,x<-NA,x<-x)
+      } else {x<-x}
+      })}
+log_replace<-unique(log_replace)
+
+
+
+#}
+
+
+
+#### original codes   
+
+
+
+
   #Range problems:
     ##Range problems for DT scale (1-7)
       #which ones don't fit get probs=1
