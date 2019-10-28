@@ -1,5 +1,5 @@
 ####Jiazhou's mergeing script
-
+masterdemo_db <-bsrc.conredcap2(protocol = ptcs$masterdemo)
 masterdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L)
 
 bs_demo<-bsrc.getform(protocol = ptcs$bsocial,formname = "record_registration",online = T,batch_size = 1000L)
@@ -19,17 +19,13 @@ for (i in 1:length(change_varinames)){
 bs_demo_sp<-split(bs_demo_matched,paste0("is_",as.character(bs_demo_matched$registration_redcapid) %in% as.character(masterdemo$registration_redcapid)))
 
 
-df_new <- bs_demo_sp$is_TRUE
-df_rc_current <- masterdemo
-id = "registration_redcapid"
-id.new = NULL
-id.rc = NULL
-
-if(is.null(id.new) && is.null(id.rc))
+bs_demo_v<-bsrc.verify(df_new = bs_demo_sp$is_TRUE,df_ref = masterdemo,id.var = "registration_redcapid")
 
 
 
+bs_demo_dx<-bs_demo_v$DIFF[is.na(bs_demo_v$DIFF$REF),]
 
-
+bs_demo_dcast<-reshape2::dcast(bs_demo_dx,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
+redcap_upload(ds = bs_demo_dcast,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 

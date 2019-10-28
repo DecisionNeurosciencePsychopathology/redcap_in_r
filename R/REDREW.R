@@ -93,12 +93,12 @@ redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5,
     selected_indices <- seq(from = ds_glossary[i, "start_index"], 
                             to = ds_glossary[i, "stop_index"])
     if (i > 0) 
-      Sys.sleep(time = interbatch_delay)
+    Sys.sleep(time = interbatch_delay)
     message("Writing batch ", i, " of ", nrow(ds_glossary), 
             ", with indices ", min(selected_indices), " through ", 
             max(selected_indices), ".")
-    write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,
-                                                           ], previousIDs = NULL,retry_whenfailed = T,
+    
+    write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,], previousIDs = NULL,retry_whenfailed = T,
                                           redcap_uri = redcap_uri, token = token, verbose = verbose, 
                                           config_options = config_options)
     lst_status_code[[i]] <- write_result$status_code
@@ -174,7 +174,9 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_o
       mxID<-sapply(allgx,function(sp_rawtext){gsub("ERROR: ","",sp_rawtext[1])})
       allIDs<-c(previousIDs,mxID)
       negPos<-as.numeric(na.omit(sapply(allIDs,function(IDX){
-        a<-which(ds==IDX,arr.ind = T)[,1];if(length(a)>0){a}else{NA}
+        #print(IDX)
+        a<-unique(which(ds==IDX,arr.ind = T)[,1]);
+        if(length(a)>0){a}else{NA}
       })))
       ds_new<-ds[-negPos,]
       gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
