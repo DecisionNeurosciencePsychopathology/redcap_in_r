@@ -1,9 +1,12 @@
 #Actual Pipeline:
-# 
+# Input
+ptcs = ptcs[c("masterdemo")]
+
 #Step 1:
 # [ID] ID/DEMO duplicate check against Master Demo  
 # General rule before generating IDs for folks who are not in the master demo, one must construct a data frame with existing ID and some basic uniquely identifiable information such as initial, data of birth, last four of the social, gender and race. 
-idmap<-
+masterdemo<-bsrc.checkdatabase2(protocol = ptcs$masterdemo,online = T,batch_size=10000L)
+idmap<-masterdemo$data[""]
 bsrc.findid(df,idmap=NULL,id.var="ID",onlyoutput=NULL)
 
 #Step 2:
