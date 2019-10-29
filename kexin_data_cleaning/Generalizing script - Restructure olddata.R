@@ -1,6 +1,8 @@
-# startup
+## startup
 rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
 source('~/Documents/github/UPMC/startup.R')
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE)
+var_map[which(var_map=="",arr.ind = T)]<-NA
 
 #note: here uses 'QOL interview' as the 'training form'. 
 
@@ -10,17 +12,18 @@ source('~/Documents/github/UPMC/startup.R')
 protocol.cur <- ptcs$bsocial
 bsoc<- bsrc.checkdatabase2()
 #range
+replace_999 = TRUE # by defult, replace all 999 with NA 
 replace_w_na = FALSE
 #) {
 
 library(tidyverse)
 library(chron)
 
-#prepare functions
+##prepare functions
 # make a fun to report abnormal values 
-report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, which_form = NULL, comments = NA, 
+report_wrong <- function(id = "", which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
                          report = wrong_val_report,rbind=T){
-  report <<- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+  report <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                         which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
   new_repo <- data.frame(id = id)
   new_repo[1:nrow(new_repo),2]<- which_var
@@ -66,21 +69,61 @@ names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
 
-#change data type 
+## verify Morgan's var_map 
+
+
+##STEP1 change data type 
 # identify all non-integer/numeric col
 
-#Report 999 AND if replace_w_na=T, replace change 999's to NA
-log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
-  report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],
-               wrong_val = 999, which_form = 'QOL', rbind = F,
-               comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
-})))) # TO BE GENERALIZAED
-if(replace_w_na){QOL_fresh[which(QOL_fresh==999)]<-NA}
+##STEP2 Report 999 AND if replace_999=T, replace 999's with NA
+if (length(which(QOL_fresh==999))>0){
+  log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
+    report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],
+                 wrong_val = 999, which_form = 'QOL', rbind = F,
+                 comments = ifelse(replace_999,'Replaced with NA','Not replaced with NA yet'))
+  })))) # TO BE GENERALIZAED
+  if(replace_999){QOL_fresh[which(QOL_fresh==999,arr.ind = T)]<-NA}
+  }else {message(paste('Form','QOL','does not have any value of 999'))}
+
+##STEP3 fix data with systematic issues (eg: shifted range) identified in 'var_map'
+#STEP3.1 systematically shifted (eg: 1-false; 2-true)
+
+
+#STEP3.2 unreasonable date
+
+#STEP3.3 special issues (occur in only one form)
+sp1var<-subset(var_map,fix_what=='special_1',select = redcap_var)[[1]]
+QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
+log_replace<-report_wrong(report = log_replace,id="all", which_form = 'QOL',which_var = do.call('paste',as.list(sp1var)), wrong_val = '',comments = 'weired date, deleted')
+
+
+##STEP4 
+#Report out-of-range values AND if replace_w_na=T, replace them with NA
+choice_map<-bsrc.getchoicemapping(variablenames = "registration_gender",protocol = ptcs$masterdemo)
+
+##STEP5 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
+#If almost all of them have the same issue it may be very likely to be systematic. 
+
+##STEP6 fix issues identified in STEP5 
 
 
 
 
 #}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

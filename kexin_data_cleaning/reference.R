@@ -20,3 +20,10 @@ bsrc.verify<-function(df_new=NULL,df_ref=NULL,id.var=NULL){
   return(df_comp_sp)
 }
 
+# morgan's code to deal with date in qol 
+gsub("1899-12-30", "", QOL_fresh[which(grepl("1899-12-30", QOL_fresh$qol_startdate)),"qol_startdate"])->
+  QOL_fresh[which(grepl("1899-12-30", QOL_fresh$qol_startdate)),"qol_startdate"]
+chron(times=QOL_fresh$qol_startdate)->QOL_fresh$qol_startdate
+gsub("1899-12-30", "", QOL_fresh[which(grepl("1899-12-30", QOL_fresh$qol_endtime)),"qol_endtime"])->
+  QOL_fresh[which(grepl("1899-12-30", QOL_fresh$qol_endtime)),"qol_endtime"]
+chron(times=QOL_fresh$qol_endtime)->QOL_fresh$qol_endtime
