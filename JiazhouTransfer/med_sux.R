@@ -15,7 +15,7 @@ proc.rc.medlist <- function(med_dfx=NULL,get_RxName=T) {
       RxRead<-rx_allProperties(RxNum)$propConceptGroup$propConcept
       RxRead<-RxRead[sapply(RxRead,`[[`,"propCategory")=="NAMES"]
       if(length(RxRead)<1) {
-        RxRead <- ""
+        RxRead <- "Unknown, see comment"
       } else {
         RxRead<-RxRead[sapply(RxRead,`[[`,"propName")%in% c("RxNorm Name","Prescribable Synonym")][[1]][["propValue"]]
       }
@@ -23,12 +23,24 @@ proc.rc.medlist <- function(med_dfx=NULL,get_RxName=T) {
     })
   }
   
+  
+  
   med_dfx_rej<-do.call(rbind,lapply(med_dfx_sp,function(dfmedx){
     if(any(!is.na(dfmedx$value))){
       #Renaming the numeric value to string 
       if(get_RxName && !is.na(dfmedx$value[dfmedx$Type == "name"])) {
-        dfmedx$value[dfmedx$Type == "spname"]<-paste(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxName[match(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxID)],sep = ": ")
-        dfmedx$value[dfmedx$Type == "name"] <-NA
+        
+        if(!"spname" %in% dfmedx$Type ){
+          
+          dfmedx$var_str_sp[[which(dfmedx$Type=="name")]] <- gsub("^name$","spname",dfmedx$var_str_sp[[which(dfmedx$Type=="name")]])
+          dfmedx$Type[dfmedx$Type=="name"]<-"spname"
+          dfmedx$variable<-sapply(dfmedx$var_str_sp,paste,collapse="_")
+          dfmedx$value[dfmedx$Type == "spname"]<-paste(dfmedx$value[dfmedx$Type == "spname"],rx_ref$RxName[match(dfmedx$value[dfmedx$Type == "spname"],rx_ref$RxID)],sep = ": ")
+        } else {
+          dfmedx$value[dfmedx$Type == "spname"]<-paste(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxName[match(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxID)],sep = ": ")
+          dfmedx$value[dfmedx$Type == "name"] <-NA
+        }
+
       }
         return(dfmedx)
       } else {
@@ -78,6 +90,7 @@ med_dfx_spa<-do.call(rbind,lapply(med_dfx_sp,function(dk){
 
 med_dfx_sp<-bsrc.findid(df = med_dfx_spa,idmap = idmap,id.var = "registration_redcapid")
 message(paste(unique(med_dfx_sp$registration_redcapid[!med_dfx_sp$ifexist]),collapse=", ")," has no masterdemo record double check! Remove for now.")
+
 med_dfx_sp$registration_redcapid<-med_dfx_sp$masterdemoid
 med_dfx_sp<-med_dfx_sp[med_dfx_sp$ifexist,]
 
