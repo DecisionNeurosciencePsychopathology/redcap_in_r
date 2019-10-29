@@ -7,7 +7,7 @@ source('~/Documents/github/UPMC/startup.R')
 # rctransfer.dataclean <- function(
 # [variables]
 #curdb = bsoc
-protocol.cur = ptcs$bsocial
+protocol.cur <- ptcs$bsocial
 bsoc<- bsrc.checkdatabase2()
 #range
 replace_w_na = FALSE
@@ -18,14 +18,14 @@ library(chron)
 
 #prepare functions
 # make a fun to report abnormal values 
-report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, comments = NA, report = wrong_val_report){
+report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, comments = NA, report = wrong_val_report,rbind=T){
   report <<- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
   new_repo <- data.frame(id = id)
   new_repo[1:nrow(new_repo),2]<- which_var
   new_repo[1:nrow(new_repo),3]<- wrong_val
   new_repo[4]<- comments
   colnames(new_repo)<-c('id','var_name','wrong_val', 'comments')
-  return(rbind(report,new_repo))
+  ifelse(rbind,return(rbind(report,new_repo)),return(new_repo))
 }
 #Grabs data from bsocial, everything that starts with x, minus the variable for complete
 rd.var.map<-function(x){
@@ -60,34 +60,20 @@ names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 
 ## identify wrong values/datatypes, correct and report 
-log_replace <- ''
+log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),comments=as.character(),stringsAsFactors = F)
 
 #change data type 
 # identify all non-integer/numeric col
 
 #Report 999 AND if replace_w_na=T, replace change 999's to NA
 
-apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){
-  log_replace <- report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = 'QOL',wrong_val = 999, 
-                              comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
-})
-# how to write the result of apply to a dataframe???
-
-
-
-
+log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
+  report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],wrong_val = 999, rbind = F,
+                              comments = paste("QOL",":",ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet')))
+})))) # TO BE GENERALIZAED
 
 if(replace_w_na){QOL_fresh[which(QOL_fresh==999)]<-NA}
 
-for (i in 1:nrow(QOL_fresh)){
-  QOL_fresh[i,]<-
-    sapply(QOL_fresh[i, ], function(x){
-      if (!is.na(x) & x==999) {
-        log_replace <<- report_wrong(report = log_replace, id=QOL_fresh[1,1],which_var = 'QOL',wrong_val = '999',comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
-        ifelse(replace_w_na,x<-NA,x<-x)
-      } else {x<-x}
-      })}
-log_replace<-unique(log_replace)
 
 
 
