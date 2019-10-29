@@ -97,7 +97,7 @@ med_dfx_sp<-med_dfx_sp[med_dfx_sp$ifexist,]
 med_rej_sp <-split(med_dfx_sp,med_dfx_sp$registration_redcapid)
 gx<-lapply(med_rej_sp,function(dfRej){
   df_dcast<-reshape2::dcast(data = dfRej[which(!is.na(dfRej$value)),],formula = registration_redcapid ~ variable, drop = T, value.var = "value")
-  d<-redcap_upload(ds = df_dcast,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+  d<-redcap_upload(ds = df_dcast,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token,retry_whenfailed = F)
   d$success
 })
 
