@@ -601,8 +601,10 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
       check_box_varis<-split(lvariname,metadata$field_type[match(lvariname, metadata$field_name)] == "checkbox")
       
       #Get a (fixed variables) and b (non-checkbox data)
+      #return(list(data,check_box_varis,fix_variables))
       raw_a <- data[,fix_variables]
-      raw_b <- data[,check_box_varis$`FALSE`]
+      
+      raw_b <- data[,check_box_varis$`FALSE`[which(check_box_varis$`FALSE` %in% names(data))]]
       
       
       if(is.null(check_box_varis$`TRUE`)) {
