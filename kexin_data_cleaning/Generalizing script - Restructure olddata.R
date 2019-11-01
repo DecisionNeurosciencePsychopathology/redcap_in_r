@@ -6,6 +6,12 @@ var_map[which(var_map=="",arr.ind = T)]<-NA
 
 #note: here uses 'QOL interview' as the 'training form'. 
 
+#Initialize reports 
+log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                               which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
+log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
+
 # rctransfer.dataclean <- function(
 # [variables]
 #curdb = bsoc
@@ -16,16 +22,14 @@ replace_999 = TRUE # by defult, replace all 999 with NA
 replace_w_na = FALSE
 #) {
 
-library(tidyverse)
-library(chron)
+#library(tidyverse)
+#library(chron)
 
 ##prepare functions
 # make a fun to report abnormal values 
-report_wrong <- function(id = "", which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
+report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
                          report = wrong_val_report,rbind=T){
-  report <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                        which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
-  new_repo <- data.frame(id = id)
+  new_repo <- data.frame(id = id, stringsAsFactors = F)
   new_repo[1:nrow(new_repo),2]<- which_var
   new_repo[1:nrow(new_repo),3]<- wrong_val
   new_repo[1:nrow(new_repo),4]<- which_form
@@ -33,13 +37,13 @@ report_wrong <- function(id = "", which_var = NA, wrong_val = NA, which_form = N
   colnames(new_repo)<-c('id','var_name','wrong_val', 'which_form','comments')
   ifelse(rbind,return(rbind(report,new_repo)),return(new_repo))
 }
-#Grabs data from bsocial, everything that starts with x, minus the variable for complete
+#?Grabs data from bsocial, everything that starts with x, minus the variable for complete
 rd.var.map<-function(x){
   bsocnames<-c('id',names(bsoc$data[c(which(grepl(x,names(bsoc$data))))]))
   bsocnames[-which(grepl("complete$", bsocnames))]->bsocnames
   return(bsocnames)
 }
-#Gives value of 1 if not in range # TO BE CHANGED - MAKE A REPORT INSTEAD OF A COL 
+#?Gives value of 1 if not in range # TO BE CHANGED - MAKE A REPORT INSTEAD OF A COL 
 qol.range<-function(range, tar_cols){for (i in 1:nrow(QOL_fresh)){
   if (any(sapply(QOL_fresh[i, tar_cols], function(x){
     !x %in% range & !is.na(x)
@@ -47,7 +51,7 @@ qol.range<-function(range, tar_cols){for (i in 1:nrow(QOL_fresh)){
     QOL_fresh$probs4[i]<-1} # TO BE GENERALIZED
   else{QOL_fresh$probs4[i]<-0}} # TO BE GENERALIZED
   return(QOL_fresh)}
-#if not in range, changes the values to NA
+#?if not in range, changes the values to NA
 qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
   QOL_fresh[i, tar_cols]<-
     sapply(QOL_fresh[i, tar_cols], function(x){
@@ -64,10 +68,7 @@ rd.var.map("qol")->qolvarmap
 #change variable names to match redcap
 names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
-
-## identify wrong values/datatypes, correct and report 
-log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
+## replace log: identify wrong values/datatypes, correct and report 
 
 ## verify Morgan's var_map 
 
@@ -94,11 +95,35 @@ if (length(which(QOL_fresh==999))>0){
 #STEP3.3 special issues (occur in only one form)
 sp1var<-subset(var_map,fix_what=='special_1',select = redcap_var)[[1]]
 QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
-log_replace<-report_wrong(report = log_replace,id="all", which_form = 'QOL',which_var = do.call('paste',as.list(sp1var)), wrong_val = '',comments = 'weired date, deleted')
-
 
 ##STEP4 
 #Report out-of-range values AND if replace_w_na=T, replace them with NA
+if(!replace_999){message('Warn: 999 has not been replaced yet.')}
+
+for (j in 1:length(colnames(QOL_fresh))) {
+  if (!(colnames(QOL_fresh)[j] %in% bsoc$metadata$field_name)){ # variable should be in redcap 
+    log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='INVALID_FIELD_NAME',which_var = colnames(QOL_fresh)[j],comments = 'Not a fieldname found in metadata')
+  } else{
+    rg<-bsrc.getchoicemapping(variablenames = colnames(QOL_fresh)[j],metadata = bsoc$metadata)[[1]]
+    if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='OKAY-NO_RANGE',which_var = colnames(QOL_fresh)[j],comments = 'This variable has no range') # variable should have a range 
+    } else {
+      if (any(is.na(as.integer(rg)))){ # the range should be integer 
+        stop(message(paste('The range of variable',colnames(QOL_fresh)[j],'is not integer or contain NA. Stop the function.')))
+      }else{
+        rg<-as.integer(rg)
+        i<-which(!((QOL_fresh[[j]] %in% rg) | is.na(QOL_fresh[[j]]))) # report values that is not in the range. NA is acceptable 
+        if (length(i)==0){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='GOOD',which_var = colnames(QOL_fresh)[j],comments = 'GOOD. All values are within the range.')
+        }else{
+          log_out_of_range<-report_wrong(report = log_out_of_range,id=QOL_fresh[i,1],which_form = 'QOL', which_var = colnames(QOL_fresh)[j],wrong_val = QOL_fresh[i,j],
+                                         comments = paste('Correct range:', do.call('paste',as.list(rg))))
+}}}}}
+
+
+
+#########33This variable: 'qol_startdate' has a type of [text], which is not supported!
+######Warning message:
+#######  In `[<-.factor`(`*tmp*`, ri, value = 7126L) :
+#######  invalid factor level, NA generated
 choice_map<-bsrc.getchoicemapping(variablenames = "registration_gender",protocol = ptcs$masterdemo)
 
 ##STEP5 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
