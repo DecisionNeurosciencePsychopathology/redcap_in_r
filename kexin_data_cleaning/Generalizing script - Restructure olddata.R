@@ -75,6 +75,9 @@ names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 ##STEP1 change data type 
 # identify all non-integer/numeric col
+#Dates (change date to date (YYYY-MM-DD))
+
+
 
 ##STEP2 Report 999 AND if replace_999=T, replace 999's with NA
 if (length(which(QOL_fresh==999))>0){
@@ -88,13 +91,19 @@ if (length(which(QOL_fresh==999))>0){
 
 ##STEP3 fix data with systematic issues (eg: shifted range) identified in 'var_map'
 #STEP3.1 systematically shifted (eg: 1-false; 2-true)
-
+#range_fix
 
 #STEP3.2 unreasonable date
 
 #STEP3.3 special issues (occur in only one form)
 sp1var<-subset(var_map,fix_what=='special_1',select = redcap_var)[[1]]
 QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
+
+#STEP 3.4 calculated_field= don't transfer this one
+#range_allowed (redcap range is WIDER than Access range)
+
+
+
 
 ##STEP4 
 #Report out-of-range values AND if replace_w_na=T, replace them with NA
@@ -126,10 +135,14 @@ for (j in 1:length(colnames(QOL_fresh))) {
 #######  invalid factor level, NA generated
 choice_map<-bsrc.getchoicemapping(variablenames = "registration_gender",protocol = ptcs$masterdemo)
 
-##STEP5 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
+#STEP5 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
+
+##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
 #If almost all of them have the same issue it may be very likely to be systematic. 
 
-##STEP6 fix issues identified in STEP5 
+
+
+##STEP7 fix issues identified in STEP5 
 
 
 
