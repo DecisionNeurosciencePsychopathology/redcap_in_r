@@ -1,7 +1,7 @@
 ## startup
 rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
 source('~/Documents/github/UPMC/startup.R')
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE)
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 
 #note: here uses 'QOL interview' as the 'training form'. 
@@ -11,6 +11,8 @@ log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_v
                                which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
 log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
+log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 
 #####################################start of the function#########################################
 # rctransfer.dataclean <- function(
@@ -35,12 +37,13 @@ if (is.null(forms)){
 } else {  
   # check if form names can be found in variable mapping   
   if (!is.vector(forms)){stop(message('`forms` must be a vector. Use "c("example1","example2")" or "example".'))}
-  if (sum(forms %in% all_formnm)>1) {
+  if (sum(!forms %in% all_formnm)>1) {
     stop(message('One of the formnames cannot be found in the variable mapping. Please note that form names are case sensitive and space sensitive.'))
   }
   # removed duplicates and NA from `forms`
   forms<-unique(forms[!is.na(forms)])
 } 
+rm(all_formnm)
 
 ## PREPARE functions
 # make a fun to report abnormal values 
@@ -75,24 +78,31 @@ qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
       ifelse (!x %in% range & !is.na(x) ,x<-NA,x<-x)})}
   return(QOL_fresh)}
 
+
+
 #STEP1: Select a form. Match variable names, checkbox variables considered.??? 
 for (form_i in 1:length(forms)) {
-  formname<-forms[form_i]
+  formname <- forms[form_i]
+  vm_col <- which(var_map$Form_name==formname)
+  fm_dir<-unique(var_map$path[vm_col])
+  # import data from access and match variables  # TO BE GENERALIZED 
+  # IF if multiple forms are transformed into one form in redcap, combine them by ID and check if they have the same ID  
+  if (length(fm_dir)>1){
+    
+  }else{
+    
+  }
 
-# if multiple forms are transformed into one form in redcap, combine them by ID and check if they have the same ID  
 
-
-
-
-# import data from access and match variables  # TO BE GENERALIZED 
-QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
-#rename the variables to something more reasonable (i.e. var names in redcap): 
-QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
-                           TIME.BEGAN, QOLBA1:TIME.ENDED)
-#get variables for qol
-rd.var.map("qol")->qolvarmap
-#change variable names to match redcap
-names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
+  
+  raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+  #rename the variables to something more reasonable (i.e. var names in redcap): 
+  QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                             TIME.BEGAN, QOLBA1:TIME.ENDED)
+  #get variables for qol
+  rd.var.map("qol")->qolvarmap
+  #change variable names to match redcap
+  names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 ## replace log: identify wrong values/datatypes, correct and report 
 
@@ -186,6 +196,15 @@ for (j in 1:length(colnames(QOL_fresh))) {
 
 #### original codes   
 
+# import data from access and match variables  # TO BE GENERALIZED 
+QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+#rename the variables to something more reasonable (i.e. var names in redcap): 
+QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                           TIME.BEGAN, QOLBA1:TIME.ENDED)
+#get variables for qol
+rd.var.map("qol")->qolvarmap
+#change variable names to match redcap
+names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 
 
