@@ -1,7 +1,7 @@
 ## startup
 rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
 source('~/Documents/github/UPMC/startup.R')
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE)
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 
 #note: here uses 'QOL interview' as the 'training form'. 
@@ -11,21 +11,41 @@ log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_v
                                which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
 log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
+log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 
+#####################################start of the function#########################################
 # rctransfer.dataclean <- function(
-# [variables]
+# [VARIABLES]
 #curdb = bsoc
 protocol.cur <- ptcs$bsocial
-bsoc<- bsrc.checkdatabase2()
+#db = 
+  bsoc<- bsrc.checkdatabase2()
+forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 #range
 replace_999 = TRUE # by defult, replace all 999 with NA 
+
 replace_w_na = FALSE
 #) {
 
-#library(tidyverse)
-#library(chron)
+## verify Morgan's var_map. 
 
-##prepare functions
+# PREPARE variable: forms
+all_formnm<-with(var_map,unique(Form_name[!is.na(Form_name)])) #get all redcap formnames  
+if (is.null(forms)){
+  forms<-all_formnm
+} else {  
+  # check if form names can be found in variable mapping   
+  if (!is.vector(forms)){stop(message('`forms` must be a vector. Use "c("example1","example2")" or "example".'))}
+  if (sum(!forms %in% all_formnm)>1) {
+    stop(message('One of the formnames cannot be found in the variable mapping. Please note that form names are case sensitive and space sensitive.'))
+  }
+  # removed duplicates and NA from `forms`
+  forms<-unique(forms[!is.na(forms)])
+} 
+rm(all_formnm)
+
+## PREPARE functions
 # make a fun to report abnormal values 
 report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
                          report = wrong_val_report,rbind=T){
@@ -58,28 +78,44 @@ qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
       ifelse (!x %in% range & !is.na(x) ,x<-NA,x<-x)})}
   return(QOL_fresh)}
 
-# import data from access and match variables  # TO BE GENERALIZED 
-QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
-#rename the variables to something more reasonable (i.e. var names in redcap): 
-QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
-                           TIME.BEGAN, QOLBA1:TIME.ENDED)
-#get variables for qol
-rd.var.map("qol")->qolvarmap
-#change variable names to match redcap
-names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
+
+
+#STEP1: Select a form. Match variable names, checkbox variables considered.??? 
+for (form_i in 1:length(forms)) {
+  formname <- forms[form_i]
+  vm_col <- which(var_map$Form_name==formname)
+  fm_dir<-unique(var_map$path[vm_col])
+  # import data from access and match variables  # TO BE GENERALIZED 
+  # IF if multiple forms are transformed into one form in redcap, combine them by ID and check if they have the same ID  
+  if (length(fm_dir)>1){
+    
+  }else{
+    
+  }
+
+
+  
+  raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+  #rename the variables to something more reasonable (i.e. var names in redcap): 
+  QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                             TIME.BEGAN, QOLBA1:TIME.ENDED)
+  #get variables for qol
+  rd.var.map("qol")->qolvarmap
+  #change variable names to match redcap
+  names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 ## replace log: identify wrong values/datatypes, correct and report 
 
-## verify Morgan's var_map 
 
 
-##STEP1 change data type 
+
+##STEP2 change data type 
 # identify all non-integer/numeric col
 #Dates (change date to date (YYYY-MM-DD))
 
 
 
-##STEP2 Report 999 AND if replace_999=T, replace 999's with NA
+##STEP3 Report 999 AND if replace_999=T, replace 999's with NA
 if (length(which(QOL_fresh==999))>0){
   log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
     report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],
@@ -89,24 +125,24 @@ if (length(which(QOL_fresh==999))>0){
   if(replace_999){QOL_fresh[which(QOL_fresh==999,arr.ind = T)]<-NA}
   }else {message(paste('Form','QOL','does not have any value of 999'))}
 
-##STEP3 fix data with systematic issues (eg: shifted range) identified in 'var_map'
-#STEP3.1 systematically shifted (eg: 1-false; 2-true)
+##STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map'
+#STEP4.1 systematically shifted (eg: 1-false; 2-true)
 #range_fix
 
-#STEP3.2 unreasonable date
+#STEP4.2 unreasonable date
 
-#STEP3.3 special issues (occur in only one form)
+#STEP4.3 special issues (occur in only one form)
 sp1var<-subset(var_map,fix_what=='special_1',select = redcap_var)[[1]]
 QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
 
-#STEP 3.4 calculated_field= don't transfer this one
+#STEP4.4 calculated_field= don't transfer this one
 #range_allowed (redcap range is WIDER than Access range)
 
 
 
 
-##STEP4 
-#Report out-of-range values AND if replace_w_na=T, replace them with NA
+##STEP5 
+#Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
 if(!replace_999){message('Warn: 999 has not been replaced yet.')}
 
 for (j in 1:length(colnames(QOL_fresh))) {
@@ -129,30 +165,23 @@ for (j in 1:length(colnames(QOL_fresh))) {
 
 
 
-#########33This variable: 'qol_startdate' has a type of [text], which is not supported!
-######Warning message:
-#######  In `[<-.factor`(`*tmp*`, ri, value = 7126L) :
-#######  invalid factor level, NA generated
-choice_map<-bsrc.getchoicemapping(variablenames = "registration_gender",protocol = ptcs$masterdemo)
-
-#STEP5 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
-
-##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
+##STEP7 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
 #If almost all of them have the same issue it may be very likely to be systematic. 
 
 
 
-##STEP7 fix issues identified in STEP5 
+##STEP8 fix issues identified in STEP7
+
+#STEP9 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
 
 
-
-
+}
 #}
 
 
 
 
-
+#####################################end of the function#########################################
 
 
 
@@ -167,6 +196,15 @@ choice_map<-bsrc.getchoicemapping(variablenames = "registration_gender",protocol
 
 #### original codes   
 
+# import data from access and match variables  # TO BE GENERALIZED 
+QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+#rename the variables to something more reasonable (i.e. var names in redcap): 
+QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                           TIME.BEGAN, QOLBA1:TIME.ENDED)
+#get variables for qol
+rd.var.map("qol")->qolvarmap
+#change variable names to match redcap
+names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
 
 
 
