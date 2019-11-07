@@ -13,7 +13,7 @@ log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
 log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
-
+deleted_rows<-list()
 #####################################start of the function#########################################
 # rctransfer.dataclean <- function(
 # [VARIABLES]
@@ -24,7 +24,7 @@ protocol.cur <- ptcs$bsocial
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 #range
 replace_999 = TRUE # by defult, replace all 999 with NA 
-
+remove_dupid = FALSE # if T, only keep duplicated id with the earliest date 
 replace_w_na = FALSE
 #) {
 
@@ -36,7 +36,10 @@ chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule gi
 # vice versa 
 chckmg<-subset(var_map,select = c('redcap_var','access_var','is.checkbox'),!is.na(is.checkbox))
 which(is.na(chckmg),arr.ind = T) # should give us nothing. if yes, try run the following line of code 
-var_map$is.checkbox[which(any(is.na(var_map$redcap_var),is.na(var_map$access_var))&!var_map$is.checkbox)]<-NA
+sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
+var_map$is.checkbox[which(is.na(var_map$redcap_var)&!var_map$is.checkbox)]<-NA
+var_map$is.checkbox[which(is.na(var_map$access_var)&!var_map$is.checkbox)]<-NA
+sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
 ####remove all blank rows 
 
 # PREPARE variable: forms
