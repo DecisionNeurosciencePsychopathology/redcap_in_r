@@ -29,6 +29,15 @@ replace_w_na = FALSE
 #) {
 
 ## verify Morgan's var_map. 
+####for the col is.box. NA should mean represent unecessary variables. i.e. 
+# if redcap_var and access_var both exist, is.checkbox cannot be NA
+chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
+chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing
+# vice versa 
+chckmg<-subset(var_map,select = c('redcap_var','access_var','is.checkbox'),!is.na(is.checkbox))
+which(is.na(chckmg),arr.ind = T) # should give us nothing. if yes, try run the following line of code 
+var_map$is.checkbox[which(any(is.na(var_map$redcap_var),is.na(var_map$access_var))&!var_map$is.checkbox)]<-NA
+####remove all blank rows 
 
 # PREPARE variable: forms
 all_formnm<-with(var_map,unique(Form_name[!is.na(Form_name)])) #get all redcap formnames  
@@ -80,7 +89,8 @@ qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
 
 
 
-#STEP1: Select a form. Match variable names, checkbox variables considered.??? 
+#STEP1: Select one RC form which may consist of multiple AC forms.
+#STEP1.1 Select all useful variables. Give every row a matching_id. Split variables into ordinary variables and checkbox variables. Save data with checkbox variables for step 10. Match variable later using matching_id
 for (form_i in 1:length(forms)) {
   formname <- forms[form_i]
   vm_col <- which(var_map$Form_name==formname)
@@ -172,7 +182,8 @@ for (j in 1:length(colnames(QOL_fresh))) {
 
 ##STEP8 fix issues identified in STEP7
 
-#STEP9 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
+#STEP10 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
+#STEP10.2 match checkbox variabels with other variabels using matching_id
 
 
 }
