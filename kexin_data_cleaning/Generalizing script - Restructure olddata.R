@@ -1,28 +1,67 @@
-# startup
+## startup
 rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
 source('~/Documents/github/UPMC/startup.R')
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
+var_map[which(var_map=="",arr.ind = T)]<-NA
 
 #note: here uses 'QOL interview' as the 'training form'. 
 
+#Initialize reports 
+log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                               which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
+log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
+log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+deleted_rows<-list()
+#####################################start of the function#########################################
 # rctransfer.dataclean <- function(
-# [variables]
+# [VARIABLES]
 #curdb = bsoc
 protocol.cur <- ptcs$bsocial
-bsoc<- bsrc.checkdatabase2()
+#db = 
+  bsoc<- bsrc.checkdatabase2()
+forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 #range
+replace_999 = TRUE # by defult, replace all 999 with NA 
+remove_dupid = FALSE # if T, only keep duplicated id with the earliest date 
 replace_w_na = FALSE
 #) {
 
-library(tidyverse)
-library(chron)
+## verify Morgan's var_map. 
+####for the col is.box. NA should mean represent unecessary variables. i.e. 
+# if redcap_var and access_var both exist, is.checkbox cannot be NA
+chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
+chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing
+# vice versa 
+chckmg<-subset(var_map,select = c('redcap_var','access_var','is.checkbox'),!is.na(is.checkbox))
+which(is.na(chckmg),arr.ind = T) # should give us nothing. if yes, try run the following line of code 
+sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
+var_map$is.checkbox[which(is.na(var_map$redcap_var)&!var_map$is.checkbox)]<-NA
+var_map$is.checkbox[which(is.na(var_map$access_var)&!var_map$is.checkbox)]<-NA
+sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
+####remove all blank rows 
 
-#prepare functions
+# PREPARE variable: forms
+all_formnm<-with(var_map,unique(Form_name[!is.na(Form_name)])) #get all redcap formnames  
+if (is.null(forms)){
+  forms<-all_formnm
+} else {  
+  # check if form names can be found in variable mapping   
+  if (!is.vector(forms)){stop(message('`forms` must be a vector. Use "c("example1","example2")" or "example".'))}
+  if (sum(!forms %in% all_formnm)>1) {
+    stop(message('One of the formnames cannot be found in the variable mapping. Please note that form names are case sensitive and space sensitive.'))
+  }
+  # removed duplicates and NA from `forms`
+  forms<-unique(forms[!is.na(forms)])
+} 
+rm(all_formnm)
+
+## PREPARE functions
 # make a fun to report abnormal values 
-report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, which_form = NULL, comments = NA, 
+report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
                          report = wrong_val_report,rbind=T){
-  report <<- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                        which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
-  new_repo <- data.frame(id = id)
+  new_repo <- data.frame(id = id, stringsAsFactors = F)
   new_repo[1:nrow(new_repo),2]<- which_var
   new_repo[1:nrow(new_repo),3]<- wrong_val
   new_repo[1:nrow(new_repo),4]<- which_form
@@ -30,13 +69,13 @@ report_wrong <- function(id = NULL, which_var = NULL, wrong_val = NULL, which_fo
   colnames(new_repo)<-c('id','var_name','wrong_val', 'which_form','comments')
   ifelse(rbind,return(rbind(report,new_repo)),return(new_repo))
 }
-#Grabs data from bsocial, everything that starts with x, minus the variable for complete
+#?Grabs data from bsocial, everything that starts with x, minus the variable for complete
 rd.var.map<-function(x){
   bsocnames<-c('id',names(bsoc$data[c(which(grepl(x,names(bsoc$data))))]))
   bsocnames[-which(grepl("complete$", bsocnames))]->bsocnames
   return(bsocnames)
 }
-#Gives value of 1 if not in range # TO BE CHANGED - MAKE A REPORT INSTEAD OF A COL 
+#?Gives value of 1 if not in range # TO BE CHANGED - MAKE A REPORT INSTEAD OF A COL 
 qol.range<-function(range, tar_cols){for (i in 1:nrow(QOL_fresh)){
   if (any(sapply(QOL_fresh[i, tar_cols], function(x){
     !x %in% range & !is.na(x)
@@ -44,12 +83,132 @@ qol.range<-function(range, tar_cols){for (i in 1:nrow(QOL_fresh)){
     QOL_fresh$probs4[i]<-1} # TO BE GENERALIZED
   else{QOL_fresh$probs4[i]<-0}} # TO BE GENERALIZED
   return(QOL_fresh)}
-#if not in range, changes the values to NA
+#?if not in range, changes the values to NA
 qol.na<-function(range, tar_cols,df=QOL_fresh){for (i in 1:nrow(QOL_fresh)){
   QOL_fresh[i, tar_cols]<-
     sapply(QOL_fresh[i, tar_cols], function(x){
       ifelse (!x %in% range & !is.na(x) ,x<-NA,x<-x)})}
   return(QOL_fresh)}
+
+
+
+#STEP1: Select one RC form which may consist of multiple AC forms.
+#STEP1.1 Select all useful variables. Give every row a matching_id. Split variables into ordinary variables and checkbox variables. Save data with checkbox variables for step 10. Match variable later using matching_id
+for (form_i in 1:length(forms)) {
+  formname <- forms[form_i]
+  vm_col <- which(var_map$Form_name==formname)
+  fm_dir<-unique(var_map$path[vm_col])
+  # import data from access and match variables  # TO BE GENERALIZED 
+  # IF if multiple forms are transformed into one form in redcap, combine them by ID and check if they have the same ID  
+  if (length(fm_dir)>1){
+    
+  }else{
+    
+  }
+
+
+  
+  raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
+  #rename the variables to something more reasonable (i.e. var names in redcap): 
+  QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
+                             TIME.BEGAN, QOLBA1:TIME.ENDED)
+  #get variables for qol
+  rd.var.map("qol")->qolvarmap
+  #change variable names to match redcap
+  names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
+
+## replace log: identify wrong values/datatypes, correct and report 
+
+
+
+
+##STEP2 change data type 
+# identify all non-integer/numeric col
+#Dates (change date to date (YYYY-MM-DD))
+
+
+
+##STEP3 Report 999 AND if replace_999=T, replace 999's with NA
+if (length(which(QOL_fresh==999))>0){
+  log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
+    report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],
+                 wrong_val = 999, which_form = 'QOL', rbind = F,
+                 comments = ifelse(replace_999,'Replaced with NA','Not replaced with NA yet'))
+  })))) # TO BE GENERALIZAED
+  if(replace_999){QOL_fresh[which(QOL_fresh==999,arr.ind = T)]<-NA}
+  }else {message(paste('Form','QOL','does not have any value of 999'))}
+
+##STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map'
+#STEP4.1 systematically shifted (eg: 1-false; 2-true)
+#range_fix
+
+#STEP4.2 unreasonable date
+
+#STEP4.3 special issues (occur in only one form)
+sp1var<-subset(var_map,fix_what=='special_1',select = redcap_var)[[1]]
+QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
+
+#STEP4.4 calculated_field= don't transfer this one
+#range_allowed (redcap range is WIDER than Access range)
+
+
+
+
+##STEP5 
+#Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
+if(!replace_999){message('Warn: 999 has not been replaced yet.')}
+
+for (j in 1:length(colnames(QOL_fresh))) {
+  if (!(colnames(QOL_fresh)[j] %in% bsoc$metadata$field_name)){ # variable should be in redcap 
+    log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='INVALID_FIELD_NAME',which_var = colnames(QOL_fresh)[j],comments = 'Not a fieldname found in metadata')
+  } else{
+    rg<-bsrc.getchoicemapping(variablenames = colnames(QOL_fresh)[j],metadata = bsoc$metadata)[[1]]
+    if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='OKAY-NO_RANGE',which_var = colnames(QOL_fresh)[j],comments = 'This variable has no range') # variable should have a range 
+    } else {
+      if (any(is.na(as.integer(rg)))){ # the range should be integer 
+        stop(message(paste('The range of variable',colnames(QOL_fresh)[j],'is not integer or contain NA. Stop the function.')))
+      }else{
+        rg<-as.integer(rg)
+        i<-which(!((QOL_fresh[[j]] %in% rg) | is.na(QOL_fresh[[j]]))) # report values that is not in the range. NA is acceptable 
+        if (length(i)==0){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = 'QOL',id='GOOD',which_var = colnames(QOL_fresh)[j],comments = 'GOOD. All values are within the range.')
+        }else{
+          log_out_of_range<-report_wrong(report = log_out_of_range,id=QOL_fresh[i,1],which_form = 'QOL', which_var = colnames(QOL_fresh)[j],wrong_val = QOL_fresh[i,j],
+                                         comments = paste('Correct range:', do.call('paste',as.list(rg))))
+}}}}}
+
+
+
+##STEP7 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
+#If almost all of them have the same issue it may be very likely to be systematic. 
+
+
+
+##STEP8 fix issues identified in STEP7
+
+#STEP10 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
+#STEP10.2 match checkbox variabels with other variabels using matching_id
+
+
+}
+#}
+
+
+
+
+#####################################end of the function#########################################
+
+
+
+
+
+
+
+
+
+
+
+
+#### original codes   
 
 # import data from access and match variables  # TO BE GENERALIZED 
 QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
@@ -60,32 +219,6 @@ QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL,
 rd.var.map("qol")->qolvarmap
 #change variable names to match redcap
 names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
-
-
-## identify wrong values/datatypes, correct and report 
-log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # initialize
-
-#change data type 
-# identify all non-integer/numeric col
-
-#Report 999 AND if replace_w_na=T, replace change 999's to NA
-log_replace<-rbind(log_replace,(do.call("rbind",apply(which(QOL_fresh==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
-  report_wrong(report = log_replace, id=QOL_fresh[indeX[1],1],which_var = colnames(QOL_fresh)[indeX[2]],
-               wrong_val = 999, which_form = 'QOL', rbind = F,
-               comments = ifelse(replace_w_na,'Replaced with NA','Not replaced with NA yet'))
-})))) # TO BE GENERALIZAED
-if(replace_w_na){QOL_fresh[which(QOL_fresh==999)]<-NA}
-
-
-
-
-#}
-
-
-
-#### original codes   
-
 
 
 
