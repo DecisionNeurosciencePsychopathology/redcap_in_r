@@ -539,8 +539,27 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
   }
   return(ifrun)
 }
+##############################
+
+rc_na_checkboxremove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
+  if(mod) {
+    message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
+    raw[raw==""]<-NA
+    if (length(grep("___",names(raw))) > 0){
+      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+    }
+    value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
+    message("Out of ",length(value_vari)," value variables, observation must retain at least ",at_least," valid value.")
+    raw_new <- raw[which(rowSums(is.na(raw[value_vari])) < (length(value_vari) - (at_least + calmove) )),]
+  } else {raw_new <- raw}
+  
+  return(raw_new)
+}
+
+
+
 ###############################
-bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,aggressivecog=1, no_calc=T,batch_size=1000L,...) {
+bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
   
   #Get necessary data
   if (online) {
@@ -623,15 +642,14 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
     }
     
     tempch<-metadata[which(metadata$form_name %in% formname),]
-    
     if (no_calc){
       message("Calculated fields are excluded. Set no_calc to FALSE to include them.")
-      calmove<-length(which(tempch$field_type=="calc"))
+      cal_vari<-tempch$field_name[which(tempch$field_type=="calc")]
+      raw <- raw[,which(!names(raw) %in% cal_vari)]
+      calmove <- length(cal_vari)
     } else {calmove<-0}
-    if (mod) {
-      raw<-rc_na_checkboxremove(raw)
-    }
-    new_raw<-raw[rowSums(is.na(raw[,3:length(names(raw))])) < (length(names(raw))- (2+aggressivecog+calmove)),]
+
+    new_raw<-rc_na_checkboxremove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
   }
   else {message("Form [",formname,"] can not be loacted.")}

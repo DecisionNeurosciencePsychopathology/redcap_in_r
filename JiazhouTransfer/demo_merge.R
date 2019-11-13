@@ -1,7 +1,7 @@
 ####Jiazhou's mergeing script
 masterdemo_db <-bsrc.conredcap2(protocol = ptcs$masterdemo,batch_size = 1000L)
-curdb<-new.env()
-load("/Users/jiazhouchen/Box/skinner/data/RedCap Data/MasterDemo/Backup/conredcap.backup.rdata",envir = curdb)
+#curdb<-new.env()
+#load("/Users/jiazhouchen/Box/skinner/data/RedCap Data/MasterDemo/Backup/conredcap.backup.rdata",envir = curdb)
 masterdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = F,batch_size = 1000L,curdb = curdb,mod = T)
 
 bs_demo<-bsrc.getform(protocol = ptcs$bsocial,formname = "record_registration",online = T,batch_size = 1000L)
@@ -69,12 +69,6 @@ for(i in 3:4) {
 bs_tocheck_sp$registration_phonenum <- bs_tocheck_sp$registration_phonenum[bs_tocheck_sp$registration_phonenum$NEW!=bs_tocheck_sp$registration_phonenum$REF,]
 
 
-
-
-
-
-
-
 bsrc.transformGroup <- function(from = NULL, from.type=c("bsocial","protect","masterdemo"),to.type=NULL){
   
   
@@ -83,5 +77,20 @@ bsrc.transformGroup <- function(from = NULL, from.type=c("bsocial","protect","ma
   
   
 }
+
+#Check
+bsrc.missingessential<-function(masterdemo,vars=c()){
+    
+}
+
+
+
+
+
+
+ema_prog<-do.call(rbind,ema$fulldata.ema$progress_data)
+
+mean(ema_prog[ema_prog$daysinstudy == 21 & ema_prog$Type=="Total","porp"])
+
 
 
