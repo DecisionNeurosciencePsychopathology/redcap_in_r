@@ -21,8 +21,8 @@ library(chron)
         if (any(sapply(QOL_fresh[i, cols], function(x){
           !x %in% range & !is.na(x)
           }))){
-          QOL_fresh$probs4[i]<-1}
-        else{QOL_fresh$probs4[i]<-0}} 
+          QOL_fresh$probs[i]<-1}
+        else{QOL_fresh$probs[i]<-0}} 
         return(QOL_fresh)}
   #Changes these values to NA
   qol.na<-function(range, cols){for (i in 1:nrow(QOL_fresh)){
@@ -144,8 +144,7 @@ library(chron)
     as.data.frame(names(QOL_fresh))->r
     
     
-    
-    
+
     
     
     
