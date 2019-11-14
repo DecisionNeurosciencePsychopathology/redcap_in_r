@@ -235,10 +235,22 @@ bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL
 }
 
 #####################Sync Stuff #############################
-
-
-
-
+# bsrc.sync<-function(ptc.from=NULL){}
+# 
+# ptc.from = ptcs$masterdemo
+# ptc.to = ptcs$bsocial
+# id.var = "registration_redcapid"
+# id.from = "registration_redcapid" 
+# id.to = "registration_redcapid"
+# ref_df = data.frame(from = c("reg_condate_bsocial"),to=c("registration_consentdate"),stringsAsFactors = F)
+# add.new.id = FALSE
+# 
+# df_from<-redcap_read(fields = c(id.var,ref_df$from),redcap_uri = ptc.from$redcap_uri,token = ptc.from$token,batch_size = 1000L)
+# lapply(1:nrow(ref_df),function(rx){
+# 
+#   
+#   
+# })
 
 
 

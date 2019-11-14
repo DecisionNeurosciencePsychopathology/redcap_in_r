@@ -207,6 +207,17 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_o
 }
 
 
+redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
+  ds_sp<-split(ds,do.call(paste,c(ds[id.var],sep="_")))
+  gt <- lapply(ds_sp,function(gx){gx[!apply(gx,2,is.na)]})
+  gt_u_names<-unique(lapply(gt,names))
+  gt_u_index <- sapply(gt,function(gtx){match(list(names(gtx)),gt_u_names)})
+  gyat<-lapply(1:length(gt_u_names),function(g){
+    message("uploading ",g," out of ",length(gt_u_names))
+    redcap_upload(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
+  })
+  return(list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F)))
+}
 
 
 ###############Get Event Mapping from RedCap:
@@ -541,7 +552,7 @@ bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
 }
 ##############################
 
-rc_na_checkboxremove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
+rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
   if(mod) {
     message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
     raw[raw==""]<-NA
@@ -549,8 +560,10 @@ rc_na_checkboxremove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
       raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
     }
     value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
-    message("Out of ",length(value_vari)," value variables, observation must retain at least ",at_least," valid value.")
-    raw_new <- raw[which(rowSums(is.na(raw[value_vari])) < (length(value_vari) - (at_least + calmove) )),]
+    
+    valid_nums<-which(rowSums(is.na(raw[value_vari])) < (length(value_vari) - (at_least) ))
+    message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
+    raw_new <- raw[valid_nums,]
   } else {raw_new <- raw}
   
   return(raw_new)
@@ -649,7 +662,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
       calmove <- length(cal_vari)
     } else {calmove<-0}
 
-    new_raw<-rc_na_checkboxremove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
+    new_raw<-rc_na_remove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
   }
   else {message("Form [",formname,"] can not be loacted.")}

@@ -16,6 +16,9 @@ sp_lookup<-lapply(split(lookuptable,lookuptable$ID),function(krz){
   }
   return(krz)
 })
+
+fixed_para <- c("CDATE","MISSCODE","CONTACT TYPE","OUTCOME","MISSINGNESS","LOCATION1","LOCATION2","COMMENT",)
+
 protect<-bsrc.checkdatabase2(ptcs$protect)
 masterdemo<-bsrc.checkdatabase2(ptcs$masterdemo,online = T,batch_size=1000L)
 
@@ -23,6 +26,8 @@ metals<-list(
   evtmap=redcap.eventmapping(redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)$data,
   varimap=REDCapR::redcap_metadata_read(redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)$data
 )
+
+
 
 p2backuppath<-file.path(dirname(ptcs$protect$rdpath),"Backup")
 

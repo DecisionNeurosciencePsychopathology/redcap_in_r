@@ -12,7 +12,7 @@ bsrc.verify<-function(df_new=NULL,df_ref=NULL,id.var=NULL){
   df_comp<-reshape2::dcast(df_outcomp,formula =  as.formula(paste(paste(c(id.var,"variable"),collapse = "+"),"~ TYPE")),value.var = "value",fill = NA)
   
   is_both_na <- is.na(df_comp$NEW) & is.na(df_comp$REF)
-  is_same_value <- df_comp$NEW == df_comp$REF
+  is_same_value <- tolower(as.character(df_comp$NEW)) == tolower(as.character(df_comp$REF))
   is_same_value[is.na(is_same_value)] <- is_both_na[is.na(is_same_value)]
   
   df_comp_sp<-split(df_comp,ifelse(is_same_value,"SAME","DIFF"))
