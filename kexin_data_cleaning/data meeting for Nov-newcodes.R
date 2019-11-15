@@ -56,14 +56,14 @@ PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),]
 PT<-PT[-unique(which(PT[,grep('reg_term_excl_',var_pt)]==1,arr.ind = T)[,1]),] # remove all unusable data based on 'reg_term_excl_
 
 #KSOCIAL checks (must be in KSOCIAL, can also be in BSOCIAL)
-K[which(K$registration_ptcstat___ksocial==1),]->K
-K[-which(K$reg_term_reason_ksocial==3),]->K
-K[-which(K$reg_term_excl_ksocial==1),]->K
+K[which(K$registration_ptcstat___ksocial==1 & !is.na(K$registration_ptcstat___ksocial==1)),]->K
+K[which(K$reg_term_reason_ksocial!=3 | is.na(K$reg_term_reason_ksocial)),]->K
+K[which(K$reg_term_excl_ksocial!=1 | is.na(K$reg_term_excl_ksocial)),]->K
 
 #BSOCIAL checks
-BS[which(BS$registration_ptcstat___bsocial==1),]->BS
-BS[-which(BS$reg_term_reason_bsocial==3),]->BS
-BS[-which(K$reg_term_excl_ksocial==1),]->BS
+BS[which(BS$registration_ptcstat___bsocial==1 & !is.na(BS$registration_ptcstat___bsocial==1)),]->BS
+BS[which(BS$reg_term_reason_bsocial!=3 | is.na(BS$reg_term_reason_bsocial)),]->BS
+BS[which(BS$reg_term_excl_bsocial!=1 | is.na(BS$reg_term_excl_bsocial)),]->BS
 
 
 #####check cleaning##########
@@ -79,7 +79,7 @@ sum(PT$reg_term_excl_protect2==1,na.rm = T)
 sum(PT$reg_term_excl_protect==1,na.rm = T)
 sum(PT$reg_term_excl_suicid2==1,na.rm = T)
 sum(PT$reg_term_excl_suicide==1,na.rm = T)
-View(PT[which(PT$reg_term_excl_protect3==1 | PT$reg_term_excl_protect2==1 | PT$reg_term_excl_protect==1 | PT$reg_term_excl_suicid2==1 | PT$reg_term_excl_suicide==1),]) #18 people exluded from analysis 
+#View(PT[which(PT$reg_term_excl_protect3==1 | PT$reg_term_excl_protect2==1 | PT$reg_term_excl_protect==1 | PT$reg_term_excl_suicid2==1 | PT$reg_term_excl_suicide==1),]) #18 people exluded from analysis 
 
 ##Ksocial
 sum(duplicated(K$registration_redcapid)) 
@@ -90,12 +90,19 @@ sum(is.na(K$registration_dob))
 sum(K$reg_term_excl_ksocial==1,na.rm = T)
 
 ##Bsocial
-sum(duplicated(BS$registration_redcapid)) 
-sum(BS$registration_group==89) 
+sum(duplicated(BS$registration_redcapid))
+sum(BS$reg_term_excl_bsocial==1,na.rm = T)
 sum(is.na(BS$registration_redcapid)) 
+#IDs of the participants with no group status
 sum(is.na(BS$registration_group))
+BS[which(is.na(BS$registration_group)),"registration_redcapid"]
+#Remove ineligible
+sum(BS$registration_group==89 & !is.na(BS$registration_group==89))
+BS[-which(BS$registration_group==89 & !is.na(BS$registration_group==89)),]->BS
+#One person with missing dob, new person, remove (no initials or ANYTHING)
 sum(is.na(BS$registration_dob))
-sum(BS$reg_term_excl_ksocial==1,na.rm = T)
+BS[-which(is.na(BS$registration_dob)),]->BS
+
 
 
 ##################
@@ -109,22 +116,55 @@ sum(is.na(PT$mincondate))# should be 0. no NA in 'mincondate'
 #curdb<-md
 #PREPARE LISTS FOR PLOTTING 
 plot_prep<-function(subreg, curdb){#add Group to df 
-groupmap<-bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)
-subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = T)
-onlygroup<-list(x1="Group",x2=NULL)
-#Gender
-subreg$Gender<-subreg$registration_gender
-gendergroup<-list(x1="Gender",x2="Group")
-#Age
-subreg$ageyrs<-lubridate::as.period(lubridate::interval(as.Date(subreg$registration_dob),as.Date(subreg$mincondate)))$year
-agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
-subreg$`Age`<-as.character(agemap$yrlable[findInterval(subreg$ageyrs,agemap$yrstar)])
-agegroup<-list(x1="Age",x2="Group")
-return(subreg)}
+    as.Date(subreg$mincondate)->subreg$mincondate
+    groupmap<-bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)
+    subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = T)
+    onlygroup<-list(x1="Group",x2=NULL)
+    #Gender
+    subreg$Gender<-subreg$registration_gender
+    gendergroup<-list(x1="Gender",x2="Group")
+    #Age
+    subreg$ageyrs<-lubridate::as.period(lubridate::interval(as.Date(subreg$registration_dob),as.Date(subreg$mincondate)))$year
+    agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
+    subreg$`Age`<-as.character(agemap$yrlable[findInterval(subreg$ageyrs,agemap$yrstar)])
+    agegroup<-list(x1="Age",x2="Group")
+    return(subreg)
+    return(onlygroup)
+    return(gendergroup)
+    return(agegroup)}
 
-plot_prep(PT,md)
+
+#Protect (all)
+  #Plots
+  plot_prep(PT,md)->Pall
+  do_for_asub(Pall,tit = 'Protect (all)',plotpath = "/Users/mogoverde/Desktop",filename = 'Protect(all)byGroup_age_gender.jpeg')
+
+
+#Plot prep for BSOCIAL
 names(BS)[grepl("condate",names(BS))]<-"mincondate"
-plot_prep(BS,md)
+plot_prep(BS,md)->Ball
+list.files(path=paste0(root, "matlab task data/bpd_clock"))
+
+#Get people who have scanned
+root="/Users/mogoverde/Box/skinner/data/"
+list.files(path=paste0(root, "matlab task data/bpd_clock"))->Bclock
+list.files(path=paste0(root, "matlab task data/bpd_spott"))->Bspott
+list.files(path=paste0(root, "eprime/bpd_trust"))->Btrust
+
+
+#Plot prep for KSOCIAL
+names(K)[grepl("condate",names(K))]<-"mincondate"
+plot_prep(K,md)->Kall
+
+#Get which participants completed each task
+list.files(path=paste0(root, "matlab task data/bpd_clock"))
+
+
+
+
+
+
+
 
 
 #JIAZHOU'S UTILITY FUNCTION
@@ -167,7 +207,7 @@ graph_data_meet<-function(datalist=NULL,xdata=NULL,title=NULL,save=F,savepath=NU
 }
 
 #plotting 
-do_for_asub(subreg,tit = 'Protect (all)',plotpath = "C:/Users/buerkem/OneDrive - UPMC/Desktop",filename = 'Protect(all)byGroup_age_gender.jpeg')
+
 #save_seperate_plot(subreg,tit = 'Protect (all)',plotpath = "~/Documents/github/UPMC/data meeting/",filename = 'Protect(all)byGroup_age_gender.jpeg')
 
 #newconsent<-subreg[which(as.Date(subreg$registration_consentdate)>startdate & !subreg$registration_group %in% c(88,89)),]
