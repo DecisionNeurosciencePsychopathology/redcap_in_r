@@ -179,7 +179,8 @@ plot_prep(BS,md)->Ball
   list.files(path=paste0(root, "matlab task data/bpd_spott"))->Bspott
   list.files(path=paste0(root, "eprime/bpd_trust"))->Btrust
   #Anyone who was scanned
-  unique(append(append(Bclock, Btrust),Bspott))->Bmriid
+  unique(append(Bclock, Btrust))->BKtasks
+  unique(append(BKtasks,Bspott))->Bmriid
   as.numeric(Bmriid)->Bmriid
   as.numeric(Bspott)->Bspott
   #Make df for ID matching (SPOTT seperately)
@@ -213,16 +214,27 @@ plot_prep(BS,md)->Ball
                 filename = 'BsocialemabyGroup_age_gender.jpeg')
    
 #Plot prep for KSOCIAL
-names(K)[grepl("condate",names(K))]<-"mincondate"
-plot_prep(K,md)->Kall
-
-#Get which participants completed each task
-list.files(path=paste0(root, "matlab task data/ksoc_clock"))->Kclock
-list.files(path=paste0(root, "eprime/ksoc_trust"))->Ktrust
-
-Kclock[which(!Kclock %in% Kall$registration_redcapid)]
-Ktrust[which(!Ktrust %in% Kall$registration_redcapid)]
-
+  names(K)[grepl("condate",names(K))]<-"mincondate"
+  plot_prep(K,md)->Kall
+  #Get which participants completed each task (K Only)
+  list.files(path=paste0(root, "matlab task data/ksoc_clock"))->Kclock
+  list.files(path=paste0(root, "eprime/ksoc_trust"))->Ktrust
+  #Any ids not in Kall
+  Kclock[which(!Kclock %in% Kall$registration_redcapid)] #should be 0
+  Ktrust[which(!Ktrust %in% Kall$registration_redcapid)] #should be 0
+  #B/Ksocial pts (gathered from BSOCIAL section)  
+    as.numeric(BKtasks)->BKtasks
+    #Make df for ID matching
+    data.frame(ID=BKtasks, extra=T)->BKtasksid
+    bsrc.findid(BKtasksid,idmap = idmap,id.var = "ID")->BKmddf
+    BKmddf[which(!BKmddf$ifexist),] #should be none
+    BKmddf$masterdemoid->BKid
+    unique(append(append(Kclock,Ktrust),BKid))->Kmri
+    #Plotting and df
+    Kall[which(Kall$registration_redcapid %in% Kmri),]->Kmriall
+    do_for_asub(Kmriall,tit = 'KSOCIAL',plotpath = plotpath,
+                filename = 'KsocialbyGroup_age_gender.jpeg')
+    
 
 
 
