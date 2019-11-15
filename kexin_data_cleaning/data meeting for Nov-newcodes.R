@@ -4,13 +4,14 @@ source("~/Documents/github/UPMC/startup.R")
 
 protocol.cur <- ptcs$masterdemo
 md <- bsrc.checkdatabase2(online = F)
+plotpath="/Users/mogoverde/Desktop"
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md)
 #ptcname: ksocial, bsocial,protect3,protect2,protect,suicid2,suicide,EMA,EXPLORE
 #Grabs the variable names based on protocol
 varnames<-function(ptcname){
-  id<-c('registration_redcapid', 'registration_demostatus','registration_group','registration_dob','registration_gender',
+  id<-c('registration_redcapid', 'registration_wpicid', 'registration_demostatus','registration_group','registration_dob','registration_gender',
         paste0(c('registration_ptcstat___','reg_condate_','reg_term_yesno_','reg_term_reason_','reg_term_excl_'),ptcname))
   if(ptcname=='protect3'){return(c(id,'reg_status_protect3','reg_p3catchup'))
   }else if(ptcname=='protect2'){return(c(id,'reg_status_protect2'))
@@ -134,32 +135,93 @@ plot_prep<-function(subreg, curdb){#add Group to df
     return(agegroup)}
 
 
-#Protect (all)
-  #Plots
-  plot_prep(PT,md)->Pall
-  do_for_asub(Pall,tit = 'Protect (all)',plotpath = "/Users/mogoverde/Desktop",filename = 'Protect(all)byGroup_age_gender.jpeg')
+#Protect data frame use
+  #Protect all
+    #Plots
+    plot_prep(PT,md)->Pall
+    do_for_asub(Pall,tit = 'Protect (all)',plotpath = plotpath,filename = 'Protect(all)byGroup_age_gender.jpeg')
+  #Only P3
+    #get P3 only
+    Pall[which(!is.na(Pall$registration_ptcstat___protect3) & Pall$registration_ptcstat___protect3==1),]->P3
+    #Plots
+    do_for_asub(P3,tit = 'Protect 3',plotpath = plotpath,filename = 'Protect3byGroup_age_gender.jpeg')
+  #Get EXPLORE scanned
+    #Get files from box
+    root="/Users/mogoverde/Box/skinner/data/"
+    list.files(path=paste0(root, "eprime/shark"))->Eshark
+    list.files(path=paste0(root, "eprime/clock_reversal"))->Eclock
+    #Remove the non-ID files (only a problem with clock)
+    as.numeric(Eclock)[-which(is.na(as.numeric(Eclock)))]->Eclock
+    as.numeric(Eshark)->Eshark
+    #ID mapping
+    idmap<-md$data[c("registration_redcapid","registration_wpicid","registration_soloffid")]
+     names(idmap)<-c("masterdemoid","wpicid","soloffid")
+    #Get list of shark OR clock IDs
+     unique(append(Eshark, Eclock))->Eallid
+     #Make df for ID matching
+     data.frame(ID=Eallid, extra=T)->Eallid
+     #Grab new ids as masterdemoids
+      bsrc.findid(Eallid,idmap = idmap,id.var = "ID")$masterdemoid->Eallmd
+    #Check
+      sum(!Eallmd %in% Pall$registration_redcapid) #Should be =0, all IDs should be in Pall
+    #Get EXPLORE pts from those in Protect
+    Pall[which(Pall$registration_redcapid %in% Eallmd),]->Eall
+    do_for_asub(Eall,tit = 'EXPLORE',plotpath = plotpath,
+                filename = 'ExplorebyGroup_age_gender.jpeg')
+  
 
-
-#Plot prep for BSOCIAL
+#BSOCIAL data frame use
 names(BS)[grepl("condate",names(BS))]<-"mincondate"
 plot_prep(BS,md)->Ball
-list.files(path=paste0(root, "matlab task data/bpd_clock"))
 
-#Get people who have scanned
-root="/Users/mogoverde/Box/skinner/data/"
-list.files(path=paste0(root, "matlab task data/bpd_clock"))->Bclock
-list.files(path=paste0(root, "matlab task data/bpd_spott"))->Bspott
-list.files(path=paste0(root, "eprime/bpd_trust"))->Btrust
-
-
+  #Get people who have scanned from Box
+  list.files(path=paste0(root, "matlab task data/bpd_clock"))->Bclock
+  list.files(path=paste0(root, "matlab task data/bpd_spott"))->Bspott
+  list.files(path=paste0(root, "eprime/bpd_trust"))->Btrust
+  #Anyone who was scanned
+  unique(append(append(Bclock, Btrust),Bspott))->Bmriid
+  as.numeric(Bmriid)->Bmriid
+  as.numeric(Bspott)->Bspott
+  #Make df for ID matching (SPOTT seperately)
+  data.frame(ID=Bmriid, extra=T)->Bmriid
+  data.frame(ID=Bspott, extra=T)->Bspottid
+  #ID match
+  bsrc.findid(Bmriid,idmap = idmap,id.var = "ID")->Bmrimddf
+  #Bmrimddf[-which(Bmrimddf$ID=="120517"),]
+  Bmrimddf[which(!Bmrimddf$ifexist),] #Should be no one
+  Bmrimddf$masterdemoid
+  bsrc.findid(Bspottid,idmap = idmap,id.var = "ID")->Bspottmddf
+  Bspottmddf[which(!Bspottmddf$ifexist),] #Should be no one
+  #Plotting and final df
+  Ball[which(Ball$registration_redcapid %in% Bmrimddf$masterdemoid),]->Bmriall
+    do_for_asub(Bmriall,tit = 'BSOCIAL MRI',plotpath = plotpath,
+                filename = 'BsocialmribyGroup_age_gender.jpeg')
+  Ball[which(Ball$registration_redcapid %in% Bspottmddf$masterdemoid),]->Bspottall
+    do_for_asub(Bspottall,tit = 'BSOCIAL SPOTT',plotpath = plotpath,
+                filename = 'BsocialspottbyGroup_age_gender.jpeg')
+  #Get people in EMA
+    bsrc.attachngrab(rdpaths$ema)->ema
+    ema$fulldata.ema$info->emainfo
+    table(emainfo$Status)
+    #Check IDs
+    emainfo[which(!emainfo$RedcapID %in% Ball$registration_redcapid),"RedcapID"]
+    #Remove one person for being ineligible
+    emainfo[-which(emainfo$RedcapID=="440057"),]->emainfo
+    #Plotting and df
+    Ball[which(Ball$registration_redcapid %in% emainfo$RedcapID),]->Bemaall
+    do_for_asub(Bemaall,tit = 'BSOCIAL EMA',plotpath = plotpath,
+                filename = 'BsocialemabyGroup_age_gender.jpeg')
+   
 #Plot prep for KSOCIAL
 names(K)[grepl("condate",names(K))]<-"mincondate"
 plot_prep(K,md)->Kall
 
 #Get which participants completed each task
-list.files(path=paste0(root, "matlab task data/bpd_clock"))
+list.files(path=paste0(root, "matlab task data/ksoc_clock"))->Kclock
+list.files(path=paste0(root, "eprime/ksoc_trust"))->Ktrust
 
-
+Kclock[which(!Kclock %in% Kall$registration_redcapid)]
+Ktrust[which(!Ktrust %in% Kall$registration_redcapid)]
 
 
 
