@@ -4,7 +4,10 @@ source("~/Documents/github/UPMC/startup.R")
 
 protocol.cur <- ptcs$masterdemo
 md <- bsrc.checkdatabase2(online = F)
-plotpath="/Users/mogoverde/Desktop"
+#plotpath="/Users/mogoverde/Desktop"
+plotpath="/Documents/github/UPMC/data meeting" #Kexin
+#PT3 recruitment milestone
+recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milestones for MH085651 - Decision Process of Late-Life Suicide.csv",stringsAsFactors = F)
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md)
@@ -22,16 +25,6 @@ varnames<-function(ptcname){
   }else{return(id)}
 }
 
-#varnames<-list(#recuirtment = c('registration_recruisource','registration_recruitother'),
- #              ksocial=c('reg_condate_ksocial','reg_term_yesno_ksocial','reg_term_reason_ksocial'),
-  #             bsocil=c('reg_condate_bsocial','reg_term_yesno_bsocial','reg_term_reason_bsocial'),
-    #           protect3=c('reg_condate_protect3','reg_status_protect3','reg_p3catchup','reg_term_yesno_protect3','reg_term_reason_protect3'),
-     #          protect2=c('reg_condate_protect2','reg_status_protect2','reg_term_yesno_protect2','reg_term_reason_protect2'),
-      #         protect1=c('reg_condate_protect','reg_status_protect','reg_term_yesno_protect','reg_term_reason_protect'),
-       #        suicid2=c('reg_condate_suicid2','reg_status_suicid2','reg_term_yesno_suicid2','reg_term_reason_suicid2'),
-        #       suicid1=c('reg_condate_suicide','reg_status_suicide','reg_term_yesno_suicide','reg_term_reason_suicide'),
-         #      EMA=c('reg_condate_bsocial','reg_term_yesno_bsocial','reg_term_reason_bsocial'),
-          #     EXPLORE=c('reg_condate_explore','reg_term_yesno_explore','reg_term_reason_explore'))
 #PROTECT - ALL
 var_pt<-unique(c(varnames('protect3'),varnames('protect2'),varnames('protect'),varnames('suicide'),varnames('suicid2')))
 varnames("ksocial")->var_k
@@ -140,11 +133,6 @@ plot_prep<-function(subreg, curdb){#add Group to df
     #Plots
     plot_prep(PT,md)->Pall
     do_for_asub(Pall,tit = 'Protect (all)',plotpath = plotpath,filename = 'Protect(all)byGroup_age_gender.jpeg')
-  #Only P3
-    #get P3 only
-    Pall[which(!is.na(Pall$registration_ptcstat___protect3) & Pall$registration_ptcstat___protect3==1),]->P3
-    #Plots
-    do_for_asub(P3,tit = 'Protect 3',plotpath = plotpath,filename = 'Protect3byGroup_age_gender.jpeg')
   #Get EXPLORE scanned
     #Get files from box
     root="/Users/mogoverde/Box/skinner/data/"
@@ -236,7 +224,53 @@ plot_prep(BS,md)->Ball
                 filename = 'KsocialbyGroup_age_gender.jpeg')
     
 
+# recruitment graph for pt3 and bsocial
+  #Only P3
+  Pall[which(!is.na(Pall$registration_ptcstat___protect3) & Pall$registration_ptcstat___protect3==1),]->P3 #get P3 only
+  #Plots
+  do_for_asub(P3,tit = 'Protect 3',plotpath = plotpath,filename = 'Protect3byGroup_age_gender.jpeg') #group by 
+  
+####################Jiazhou's plotting#################
+  newconsent<-P3
+  newconsent$date<-as.Date(newconsent$reg_condate_protect3)
+  sortedpos<-sort.int(newconsent$date,index.return=T)$ix #############HERE!!!
+  newconsent<-newconsent[sortedpos,]
+  newconsent$Actual<-1:length(newconsent$date)
+  newconsent$month<-month(newconsent$date)
+  #newconsent$year<-year(newconsent$date)
+  newconsent<-newconsent[which(lubridate::as.period(lubridate::interval(as.Date(Sys.Date()),as.Date(newconsent$date)))$year >= 0),]
+  newconsent<-newconsent[which(!duplicated(newconsent$month,fromLast=T)),]
+  #IDENTICAL
+  seqdate<-seq.Date(from=startdate,to=enddate,by="days")
+  totalseq<-seq(from=0,to=projection$totaln,length.out = length(seqdate))
+  total<-as.data.frame(seqdate)
+  total$accu<-totalseq
+  
+  new.start<-newconsent$date[1]
+  new.end<-newconsent$date[length(newconsent$date)]
+  new.plan<-total[which(total$seqdate %in% new.start):which(total$seqdate %in% new.end),]
+  names(new.plan)<-c("date","Projection")
+  
+  subconsen<-data.frame(date=newconsent$date,Actual=newconsent$Actual)
+  merged.new<-merge(subconsen,new.plan,by=1,all = T)
+  merged.new.melt <- na.omit(reshape2::melt(merged.new, id.var='date'))
+  names(merged.new.melt)<-c("date","Number Type","count")
+  #merged.new.melt$label[merged.new.melt$`Number Type`!="Actual"]
+  
+  
+  new.plot<- ggplot(merged.new.melt, aes(x=date, y=count, label=count, color=`Number Type`)) +
+    ggtitle("New BPD Participant")+
+    theme(plot.title = element_text(hjust = 0.5))+
+    geom_line() +
+    geom_point(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),])+
+    scale_color_manual(values=c('red', 'gray')) +
+    xlab(paste("Current Difference: ",round(merged.new$Actual[length(merged.new$date)]-merged.new$Projection[length(merged.new$date)]))) + 
+    ylab("Number of Participants") +
+    scale_x_date(date_labels = "%B", date_breaks = "1 month") +
+    geom_label(data = merged.new.melt[which(merged.new.melt$`Number Type` == "Actual"),], aes(label=count))+
+    geom_label(data = merged.new.melt[max(which(merged.new.melt$`Number Type` == "Projection")),], aes(label=round(count)))
 
+#######################################################
 
 
 
