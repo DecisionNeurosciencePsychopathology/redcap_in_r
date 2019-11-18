@@ -166,32 +166,39 @@ for (form_i in 1:7) {
       }
       #if(any(!sapply(temp_comm_col_list,function(x){identical(temp_comm_col_list[[1]],x)}))){stop(message(paste("Combining forms for",formname,"Common cols not identical.")))} #Check if common cols have identical values
       comb_fm_list<-lapply(comb_fm_list,function(x){x<-dplyr::inner_join(x,new_comm_col)}) #remove some rows where the common rows have different values across forms
-      #STEP1.2.5 get 'raw' -- all vars from multiple forms. IDs are unique. 
+      #STEP1.2.5 get 'raw' -- necessary vars from all multiple forms. IDs are unique. 
       raw<-comb_fm_list[[1]]
       for (comb_i in 2:length(comb_fm_list)){raw<-dplyr::left_join(raw,comb_fm_list[[comb_i]],by=comm_var)}
       if(!nrow(raw)==nrow(new_comm_col)){stop(message(paste("Some thing is wrong with",formname,"when combining forms. Check codes.")))}
       
-    }else{#STEP1.3 get 'raw'--all vars. IDs can be duplicated 
+    }else{#STEP1.3 get 'raw'-- necessary vars. IDs can be duplicated 
       raw <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F) #grab form 
+      raw<-raw[,which(colnames(raw)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
     }
     #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx varsto df: 'raw_chk'
     raw_nonch<-raw[,which(colnames(raw)%in%acvar_nonch)] #keep only non-checkbx variables 
-    if(!is.null(acvar_chk)){raw_chk<<-raw[,which(colnames(raw)%in%acvar_chk)]}
+    if(!is.null(acvar_chk)){
+      raw_chk<-raw[1]
+      raw_chk<-cbind(raw_chk,raw[,which(colnames(raw)%in%acvar_chk)])
+      raw_chk$matching_id<-1:nrow(raw) #give checkbox df a matching id
+    }
     #STEP1.5 remove calculated fields 
     cal_var<-subset(vm,fix_what=='calculated_field')$access_var
     if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
     #STEP1.6 get 'raw_nonch' for non-chckbx vars: rename AC var using RC varnames
     VMAP<-subset(vm,select=c(access_var,redcap_var),is.checkbox=='FALSE')
-    #STEP special: for IPDE, keep some original access variable names to fix "check_equal", "multi_field", "special_2" issues later
+    ##STEP special: for IPDE, keep some original access variable names to fix "check_equal", "multi_field", "special_2" issues later
     if(formname=="IPDE"){for (tempvar in c("APDa5","APDa6","BPD3","BPD4","SPD5","STPD8")){VMAP[which(VMAP$access_var==tempvar),2]<-tempvar}}
     colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var)
     if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
+    if(!is.null(acvar_chk)){raw_nonch$matching_id<-1:nrow(raw)} #get non-check df a matching id if needed
     
     vm<<-vm
     formname<<-formname
-    acvar_chk<<-acvar_chk
-    deleted_rows<<-deleted_rows
+    if(!is.null(acvar_chk)){acvar_chk<<-acvar_chk}
     rawdata<<-raw
+    deleted_rows<<-deleted_rows
+    if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
     raw_nonch<<-raw_nonch
     log_replace<<-log_replace
   }# the function is writen and editted in another script. Above is a copy of the script
@@ -202,19 +209,19 @@ for (form_i in 1:7) {
   #Dates (change date to date (YYYY-MM-DD))
   
   ##STEP3 get 'fresh_nonch'. Report 999 AND if replace_999=T, replace 999's with NA
-  STEP3<-function(){
-    if (length(which(raw_nonch==999))>0){
-      log_replace<-rbind(log_replace,(do.call("rbind",apply(which(raw_nonch==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
-        report_wrong(report = log_replace, id=raw_nonch[indeX[1],1],which_var = colnames(raw_nonch)[indeX[2]],
+  STEP3<-function(df=raw_nonch){
+    if (length(which(df==999))>0){
+      log_replace<-rbind(log_replace,(do.call("rbind",apply(which(df==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
+        report_wrong(report = log_replace, id=df[indeX[1],1],which_var = colnames(df)[indeX[2]],
                      wrong_val = 999, which_form = formname, rbind = F,
                      comments = ifelse(replace_999,'Replaced with NA','Not replaced with NA yet'))
       })))) 
-      if(replace_999){raw_nonch[which(raw_nonch==999,arr.ind = T)]<-NA}
+      if(replace_999){df[which(df==999,arr.ind = T)]<-NA}
     }else {message(paste('Form',formname,'does not have any value of 999'))}
     log_replace<<-log_replace
-    fresh_nonch<<-raw_nonch
+    return(df)
   }
-  STEP3()
+  fresh_nonch<-STEP3()
   ##STEP fix data with systematic issues (eg: shifted range) identified in 'var_map'
   STEP4<-function(){
     #STEP4.1 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
@@ -296,6 +303,7 @@ for (form_i in 1:7) {
     fresh_nonch<<-fresh_nonch
     log_out_of_range<<-log_out_of_range
   }
+  STEP4()
   
   ##STEP5 
   #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
@@ -322,19 +330,46 @@ for (form_i in 1:7) {
   }
   STEP5()
   
-  
-  
-  ##STEP7 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
+  ##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
   #If almost all of them have the same issue it may be very likely to be systematic. 
   
+  ##STEP7 fix issues identified in STEP7
+  STEP7<-function(){
+    fresh_chk<-STEP3(raw_chk) #replace 999 with NA
+    vm<-subset(vm,is.checkbox=="TRUE") #subset of var_map where is.checkbox = T
+    
+    #STEP7.1
+    #####need to check the values of ac var first!
+    #STEP7.2 redcap checkbox
+    vm_rcchk<-subset(vm,fix_what=="redcap_check") # subset of vm of redcap_check var
+    #STEP7.2.1 cbind the original df with an empty dataframe containing rc col
+    newcolname<-append(colnames(fresh_chk),unique(vm_rcchk$redcap_var))#get the colname for the new df
+    fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_rcchk$redcap_var))))) 
+    colnames(fresh_chk)<-newcolname
+    #STEP7.2.2 fill in redcap cols
+    #for each row of fresh_chk, if values of acvar == x1 then values of rcvar == y1
+    for (df_i in 1:nrow(fresh_chk)) { # for every observation, [swtich values from access forms to coresponding values in redcap]  
+      for (vm_i in 1:nrow(vm_rcchk)){ #for every row in var_map (i.e. for every pair of [accessvalue,redcapvalue]), replace access value with redcap value
+        acvar<-vm_rcchk$access_var[vm_i]
+        rcvar<-vm_rcchk$redcap_var[vm_i]
+        if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA
+        }else if (fresh_chk[df_i,acvar]==vm_rcchk$value1[vm_i]){
+          fresh_chk[df_i,rcvar]<-vm_rcchk$value2[vm_i]
+        }}}
+    fresh_chk<<-fresh_chk
+  }
+  if(!is.null(acvar_chk)){STEP7()}
   
   
-  ##STEP8 fix issues identified in STEP7
+  #STEP8 match checkbox variabels with other variabels using matching_id
+  STEP8<-function(){
+    fresh_alldata<-dplyr::inner_join(fresh_nonch,fresh_chk[-1],by = "matching_id")
+    if(!max(fresh_alldata$matching_id)==nrow(fresh_alldata)){stop(message("The last check: something is wrong."))}
+    fresh_alldata<<-fresh_alldata
+  }
+  if(!is.null(acvar_chk)){STEP8()}
   
-  #STEP10 checkbox (redcap_check= redcap is checkbox, access_check=access is checkbox, both_check=both are checkbox)
-  #STEP10.2 match checkbox variabels with other variabels using matching_id
-  
-  
+  assign(paste0("df_",form_i),fresh_alldata)
 }
 #}
 
