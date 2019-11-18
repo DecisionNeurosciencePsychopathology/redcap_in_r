@@ -73,10 +73,10 @@ for (form_i in 1:7) {
   #STEP1: Select a RC form, get an integrated RC form with complete variables, right variable names, splited ordinary variables with checkbox variables, removed calculated variables 
   STEP1<-function(){
     #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
-    formname <<- forms[form_i] #formname(a character)
-    vm<<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
+    formname <- forms[form_i] #formname(a character)
+    vm<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
-    acvar_chk<<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
+    acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
     fm_dir<-unique(vm$path) #path of forms
     if (any(is.na(vm$path))){
       stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
@@ -187,6 +187,9 @@ for (form_i in 1:7) {
     colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var)
     if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
     
+    vm<<-vm
+    formname<<-formname
+    acvar_chk<<-acvar_chk
     deleted_rows<<-deleted_rows
     rawdata<<-raw
     raw_nonch<<-raw_nonch
@@ -215,56 +218,83 @@ for (form_i in 1:7) {
   ##STEP fix data with systematic issues (eg: shifted range) identified in 'var_map'
   STEP4<-function(){
     #STEP4.1 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
-    fixmap<-subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)) 
-    if(nrow(fixmap)>0) {for (i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
-      valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[i],")"))),ncol = 2,byrow = T)
-      if (all(is.na(fresh_nonch[[fixmap$redcap_var[i]]]))){
-        message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[i],'" so no need to do "range_fix"'))
+    fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
+    if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
+      valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
+      if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
+        message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
       }else{
-        fresh_nonch[fixmap$redcap_var[i]]<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[i]]],from = valuemap[,1], to = valuemap[,2])
+        fresh_nonch[fixmap$redcap_var[step4_i]]<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2])
       }}}
     #STEP4.2 range_allowed: The range in Redcap allows more values than we accept from what should have been the range in redcap. Specifies the new range
-    fixmap<-subset(vm,fix_what=='range_allowed',select = c(redcap_var,instructions))
-    if(nrow(fixmap)>0) {for (i in 1:nrow(fixmap)){ #if there's 'range_allowed' problem, fix the problem one variable by one var
-      thecol<-fresh_nonch[fixmap$redcap_var[i]] # the col with the problem 
+    fixmap<-unique(subset(vm,fix_what=='range_allowed',select = c(redcap_var,instructions)))
+    if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ #if there's 'range_allowed' problem, fix the problem one variable by one var
+      thecol<-fresh_nonch[fixmap$redcap_var[step4_i]] # the col with the problem 
       if(!is.numeric(thecol[[1]])){ # values in the col should be all numeric (or NA)
-        stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[i],'" so "range_allowed" cannot be fixed')))
+        stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[step4_i],'" so "range_allowed" cannot be fixed')))
       }else{
-        eval(parse(text=paste0('rg<-seq(',fixmap$instructions[i],')'))) #get rg: range specified in var_map
+        eval(parse(text=paste0('rg<-seq(',fixmap$instructions[step4_i],')'))) #get rg: range specified in var_map
         row_i<-which(!((thecol[[1]] %in% rg) | is.na(thecol[[1]]))) # report values that is not in the range. NA is acceptable 
         if (length(row_i)==0){
-          message(paste('Fixing issue "range_allowed" GOOD.:', formname,fixmap$redcap_var[i],'are within the range (NA is allowed).'))
+          message(paste('Fixing issue "range_allowed" GOOD.:', formname,fixmap$redcap_var[step4_i],'are within the range (NA is allowed).'))
         }else{
-          log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[i],wrong_val = thecol[row_i,1],
+          log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
                                          comments = 'range_allowed')
-          message('Fixing issue "range_allowed" GOOD.: Some values are out of range. Refer to log_out_of_range for more details.')
+          message('Fixing issue "range_allowed". Some values are out of range. Refer to log_out_of_range for more details.')
         }}}}
     #STEP4.3 date: must be converted to date (YYYY-MM-DD)
-    fixmap<-subset(vm,fix_what=='date',select = c(redcap_var,instructions))
-    if(nrow(fixmap)>0) {for (i in 1:nrow(fixmap)){ # if there's 'date' problem
-      message(paste0('Fixing "date" for Form "',formname,'" column "',fixmap$redcap_var[i],'" ... The process may break if the data is weird.'))
-      fresh_nonch[fixmap$redcap_var[i]]<-as.Date(fresh_nonch[fixmap$redcap_var[i]][[1]],format = fixmap[i,2])
+    fixmap<-unique(subset(vm,fix_what=='date',select = c(redcap_var,instructions)))
+    if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
+      fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(fresh_nonch[fixmap$redcap_var[step4_i]][[1]],format = fixmap$instructions[step4_i])
     }}
-    
     #STEP 4.4 check_equal: These two values in access should be equal before being imported. Throw an error if they are different
-    fixmap<-subset(vm,fix_what=='check_equal',select = c(redcap_var,instructions))
-    if(nrow(fixmap)>0) {for (i in 1:nrow(fixmap)){ #if there's 'check_equal' problem, fix the problem one variable by one var
-      
-      stop(message(paste0('Fixing "check_equal" for Form "',formname,'" column "',fixmap$redcap_var[i],'". Some values are not equal. Refer to log_out_of_range for details.')))
+    fixmap<-subset(vm,fix_what=='check_equal',select = c(access_var,instructions))
+    if (nrow(fixmap)>0){ #if there's 'check_equal' problem, fix the problem one variable by one var
+      fixmap$instructions<-gsub("=",",",fixmap$instructions)
+      for (step4_i in 1:nrow(fixmap)){
+        temp_check<-subset(fresh_nonch,select = eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))))
+        if(!all(temp_check[[1]]==temp_check[[2]])){stop(message(paste0(formname,"'s ",fixmap$instructions[step4_i]," are not equal.")))}
+        rm(temp_check)
+      }}
+    #STEP4.5 One access variable goes into multiple redcap variables
+    fixmap<-subset(vm,fix_what=='multi_field',select = c(access_var,instructions))
+    if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
+      newvar<-gsub(" ","",strsplit(fixmap$instructions[step4_i],",")[[1]]) #new rc var
+      fresh_nonch<-cbind(fresh_nonch,replicate(length(newvar),fresh_nonch[fixmap$access_var[step4_i]])) #duplicate the ac col and then rbind the cols to the original df
+      colnames(fresh_nonch)<-append(colnames(fresh_nonch),newvar) #update the colnames to include the new rc var
     }}
-    fresh_nonch[fixmap]<-as.Date(fresh_nonch$ipde_date,fixmap[1,2])
+    #STEP4.6 special_3: range_fix+range_allowed , 1=1, 2=2, 3=3, 4=5 (5 out of range)
+    fixmap<-unique(subset(vm,fix_what=='special_3',select = c(redcap_var,instructions)))
+    if(nrow(fixmap)>0) { #if there's 'special_3' problem
+      #range_allowed
+      thecol<-fresh_nonch[fixmap$redcap_var[step4_i]] # the col with the problem 
+      if(!is.numeric(thecol[[1]])){ # values in the col should be all numeric (or NA)
+        stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[step4_i],'" so "special_3" cannot be fixed')))
+      }else{
+        rg<-1:4 #get rg: range specified in var_map
+        row_i<-which(!((thecol[[1]] %in% rg) | is.na(thecol[[1]]))) # report values that is not in the range. NA is acceptable 
+        if (length(row_i)==0){
+          message(paste('Fixing issue "special_3: range_fix+range_allowed." GOOD.:', formname,fixmap$redcap_var[step4_i],'are within the range (NA is allowed).'))
+        }else{
+          log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
+                                         comments = 'speical_3')
+          message('Fixing issue "special_3". Some values are out of range. Refer to log_out_of_range for more details.')
+        }}
+      #range_fix- copied the codes in step 4.1
+      valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
+      if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
+        message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
+      }else{
+        fresh_nonch[fixmap$redcap_var[step4_i]]<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2])
+      }}
     
+    #STEP4.7 special_1 needs to be changed to time (HH:SS)
+    sp1var<-subset(vm,fix_what=='special_1',select = redcap_var)[[1]]
+    if(length(sp1var)>1){fresh_nonch[,sp1var]<-as.data.frame(apply(fresh_nonch[,sp1var],2,function(x){gsub('1899-12-30','',x)}))}
     
-    #STEP4.5 
-    #STEP4.2 unreasonable date
-    #STEP4.3 special issues (occur in only one form)
-    #sp1var<-subset(vm,fix_what=='special_1',select = redcap_var)[[1]]
-    #QOL_fresh[,sp1var]<-as.data.frame(apply(QOL_fresh[,sp1var],2,function(x){gsub('1899-12-30','',x)}))
-    
-    #STEP4.4 calculated_field= don't transfer this one
-    #range_allowed (redcap range is WIDER than Access range)
     
     fresh_nonch<<-fresh_nonch
+    log_out_of_range<<-log_out_of_range
   }
   
   ##STEP5 
