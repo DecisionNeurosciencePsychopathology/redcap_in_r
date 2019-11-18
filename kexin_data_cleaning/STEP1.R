@@ -153,32 +153,39 @@ for (form_i in 1:length(forms)) {
       }
       #if(any(!sapply(temp_comm_col_list,function(x){identical(temp_comm_col_list[[1]],x)}))){stop(message(paste("Combining forms for",formname,"Common cols not identical.")))} #Check if common cols have identical values
       comb_fm_list<-lapply(comb_fm_list,function(x){x<-dplyr::inner_join(x,new_comm_col)}) #remove some rows where the common rows have different values across forms
-      #STEP1.2.5 get 'raw' -- all vars from multiple forms. IDs are unique. 
+      #STEP1.2.5 get 'raw' -- necessary vars from all multiple forms. IDs are unique. 
       raw<-comb_fm_list[[1]]
       for (comb_i in 2:length(comb_fm_list)){raw<-dplyr::left_join(raw,comb_fm_list[[comb_i]],by=comm_var)}
       if(!nrow(raw)==nrow(new_comm_col)){stop(message(paste("Some thing is wrong with",formname,"when combining forms. Check codes.")))}
       
-    }else{#STEP1.3 get 'raw'--all vars. IDs can be duplicated 
+    }else{#STEP1.3 get 'raw'-- necessary vars. IDs can be duplicated 
       raw <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F) #grab form 
+      raw<-raw[,which(colnames(raw)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
     }
     #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx varsto df: 'raw_chk'
     raw_nonch<-raw[,which(colnames(raw)%in%acvar_nonch)] #keep only non-checkbx variables 
-    if(!is.null(acvar_chk)){raw_chk<<-raw[,which(colnames(raw)%in%acvar_chk)]}
+    if(!is.null(acvar_chk)){
+      raw_chk<-raw[1]
+      raw_chk<-cbind(raw_chk,raw[,which(colnames(raw)%in%acvar_chk)])
+      raw_chk$matching_id<-1:nrow(raw) #give checkbox df a matching id
+      }
     #STEP1.5 remove calculated fields 
     cal_var<-subset(vm,fix_what=='calculated_field')$access_var
     if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
     #STEP1.6 get 'raw_nonch' for non-chckbx vars: rename AC var using RC varnames
     VMAP<-subset(vm,select=c(access_var,redcap_var),is.checkbox=='FALSE')
-    #STEP special: for IPDE, keep some original access variable names to fix "check_equal", "multi_field", "special_2" issues later
+    ##STEP special: for IPDE, keep some original access variable names to fix "check_equal", "multi_field", "special_2" issues later
     if(formname=="IPDE"){for (tempvar in c("APDa5","APDa6","BPD3","BPD4","SPD5","STPD8")){VMAP[which(VMAP$access_var==tempvar),2]<-tempvar}}
     colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var)
     if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
+    if(!is.null(acvar_chk)){raw_nonch$matching_id<-1:nrow(raw)} #get non-check df a matching id if needed
     
     vm<<-vm
     formname<<-formname
-    acvar_chk<<-acvar_chk
-    deleted_rows<<-deleted_rows
+    if(!is.null(acvar_chk)){acvar_chk<<-acvar_chk}
     rawdata<<-raw
+    deleted_rows<<-deleted_rows
+    if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
     raw_nonch<<-raw_nonch
     log_replace<<-log_replace
   }
