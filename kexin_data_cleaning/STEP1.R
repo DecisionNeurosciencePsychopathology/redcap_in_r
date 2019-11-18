@@ -60,10 +60,10 @@ for (form_i in 1:length(forms)) {
   #TEMPfor (form_i in 8) {
   STEP1<-function(){
     #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
-    formname <<- forms[form_i] #formname(a character)
-    vm<<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
+    formname <- forms[form_i] #formname(a character)
+    vm<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
-    acvar_chk<<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
+    acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
     fm_dir<-unique(vm$path) #path of forms
     if (any(is.na(vm$path))){
       stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
@@ -174,6 +174,9 @@ for (form_i in 1:length(forms)) {
     colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var)
     if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
     
+    vm<<-vm
+    formname<<-formname
+    acvar_chk<<-acvar_chk
     deleted_rows<<-deleted_rows
     rawdata<<-raw
     raw_nonch<<-raw_nonch
