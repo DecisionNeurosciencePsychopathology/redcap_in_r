@@ -4,8 +4,10 @@ source("~/Documents/github/UPMC/startup.R")
 
 protocol.cur <- ptcs$masterdemo
 md <- bsrc.checkdatabase2(online = F)
-#plotpath="/Users/mogoverde/Desktop"
+#plotpath="/Users/mogoverde/Desktop" #Morgan WFH
+#plotpath="C:/Users/buerkem/OneDrive - UPMC/Desktop" #Morgan Work
 plotpath="/Documents/github/UPMC/data meeting" #Kexin
+
 #PT3 recruitment milestone
 recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milestones for MH085651 - Decision Process of Late-Life Suicide.csv",stringsAsFactors = F)
 
@@ -227,6 +229,10 @@ plot_prep(BS,md)->Ball
 # recruitment graph for pt3 and bsocial
   #Only P3
   Pall[which(!is.na(Pall$registration_ptcstat___protect3) & Pall$registration_ptcstat___protect3==1),]->P3 #get P3 only
+  #Number of P3 not carried over from P2
+  sum(P3$reg_p3catchup=="00")
+  P3[which(P3$reg_p3catchup=="P2"),c("registration_redcapid","ageyrs")]
+  sum(P3$ageyrs>=55)
   #Plots
   do_for_asub(P3,tit = 'Protect 3',plotpath = plotpath,filename = 'Protect3byGroup_age_gender.jpeg') #group by 
   
