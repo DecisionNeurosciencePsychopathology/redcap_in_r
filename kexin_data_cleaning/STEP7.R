@@ -17,7 +17,7 @@ for (df_i in 1:nrow(fresh_chk)) { # for every observation, [swtich values from a
     acvar<-vm_rcchk$access_var[vm_i]
     rcvar<-vm_rcchk$redcap_var[vm_i]
     if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA
-    }else if (fresh_chk[df_i,acvar]==vm_rcchk$value1[vm_i]){
+    }else if (as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]){
       fresh_chk[df_i,rcvar]<-vm_rcchk$value2[vm_i]
     }}}
 fresh_chk<<-fresh_chk
