@@ -189,6 +189,7 @@ for (form_i in 1:length(forms)) {
     if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
     raw_nonch<<-raw_nonch
     log_replace<<-log_replace
+    log_comb_fm<<-log_comb_fm
     message(paste0(formname,": STEP1 done."))
   }
   
