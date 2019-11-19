@@ -61,6 +61,7 @@ for (form_i in 1:length(forms)) {
   STEP1<-function(){
     #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
     formname <- forms[form_i] #formname(a character)
+    message(paste0("Cleaning form:",formname," now..."))
     vm<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
     acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
@@ -128,7 +129,7 @@ for (form_i in 1:length(forms)) {
           temp_repo<-dplyr::anti_join(x[1:2],iddate)
           if(nrow(temp_repo)>1){report_wrong(id=temp_repo[[1]],which_var = comm_var[2], wrong_val = temp_repo[[2]],which_form = formname,comments = "The date is changed when combing with other forms",report = log_replace,rbind = F)}
         })) 
-        if(is.null(log_replace)){
+        if(is.null(new_log_replace)){
           message(paste("No date data is replaced when combining forms for", formname))
         }else{message(paste("Some date data is replaced when combining forms for", formname,". Refer to log_replace for details."))}
         log_replace<-rbind(log_replace,new_log_replace)
@@ -168,7 +169,7 @@ for (form_i in 1:length(forms)) {
       raw_chk<-raw[1]
       raw_chk<-cbind(raw_chk,raw[,which(colnames(raw)%in%acvar_chk)])
       raw_chk$matching_id<-1:nrow(raw) #give checkbox df a matching id
-      }
+    }
     #STEP1.5 remove calculated fields 
     cal_var<-subset(vm,fix_what=='calculated_field')$access_var
     if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
@@ -182,12 +183,13 @@ for (form_i in 1:length(forms)) {
     
     vm<<-vm
     formname<<-formname
-    if(!is.null(acvar_chk)){acvar_chk<<-acvar_chk}
+    acvar_chk<<-acvar_chk
     rawdata<<-raw
     deleted_rows<<-deleted_rows
     if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
     raw_nonch<<-raw_nonch
     log_replace<<-log_replace
+    message(paste0(formname,": STEP1 done."))
   }
   
 } # remove this 
