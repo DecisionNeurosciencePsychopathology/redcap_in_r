@@ -126,9 +126,24 @@ for(i in 3:4) {
 }
 bs_tocheck_sp$registration_phonenum <- bs_tocheck_sp$registration_phonenum[bs_tocheck_sp$registration_phonenum$NEW!=bs_tocheck_sp$registration_phonenum$REF,]
 
-#########Essential checks:
-masterdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L,curdb = curdb,mod = T,at_least = 0)
 
+####################################
+#Get missing info from B-Social? 
+bs_lg_demo<-read.csv("/Users/jiazhouchen/Box/skinner/projects_analyses/Project\ BPD\ Longitudinal/BPD\ Database/JC/DEMO.csv",stringsAsFactors = F)
+bs_lg_demo$X<-NULL
+bs_lg_demo<-bsrc.findid(df = bs_lg_demo,idmap = idmap,id.var = "ID")
+bs_lgk_demo<-bs_lg_demo[which(bs_lg_demo$masterdemo_id %in% lack_info_sp$bsocial$registration_redcapid),]
+bs_lgk_demo<-na.omit(bs_lgk_demo[c("masterdemo_id","BDAY","SEX")])
+bs_lgk_demo$SEX <- ifelse(bs_lgk_demo$SEX==1,2,1)
+names(bs_lgk_demo) <- c("registration_redcapid","registration_dob","registration_birthsex")
+
+bslgk_demo_v<-bsrc.verify(df_new = bs_lgk_demo,df_ref = masterdemo,id.var = "registration_redcapid")
+bslgk_demo_dx<-bslgk_demo_v$DIFF[is.na(bslgk_demo_v$DIFF$REF),]
+bslgk_demo_dcast<-reshape2::dcast(bslgk_demo_dx,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
+redcap_seq_uplaod(ds = bslgk_demo_dcast,id.var="registration_redcapid",redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+####Change birthsex:
+masterdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L,curdb = curdb,mod = T,at_least = 0)
 masterdemo$sab<-NA
 masterdemo$sab[is.na(masterdemo$registration_birthsex)]<-substr(masterdemo$registration_gender[is.na(masterdemo$registration_birthsex)],1,1)
 masterdemo$sab[masterdemo$sab=="F"]<-1
@@ -138,6 +153,9 @@ masterdemo$registration_birthsex[is.na(masterdemo$registration_birthsex)] <- mas
 
 redcap_upload(masterdemo[which(!is.na(masterdemo$registration_birthsex)),c("registration_redcapid","registration_birthsex")],redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
+
+######Masterdemo check:
+#########Essential checks:
 masterdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L,curdb = curdb,mod = T,at_least = -1)
 masterdemo$registration_ptcstat <- unlist(bsrc.checkbox(variablename = "registration_ptcstat",dfx = masterdemo,returndf = F,cleandf = T)$Checkbox_list,use.names = F)
 IDvar="registration_redcapid"
@@ -154,23 +172,30 @@ for (vx in c(essential_vars,"registration_ptcstat")) {
 lack_info<-essen_df[which(rowSums(is.na(essen_df))!=0),]
 lack_info_sp <- split(lack_info,lack_info$registration_ptcstat)
 
-#Get info from B-Social? 
-bs_lg_demo<-read.csv("/Users/jiazhouchen/Box/skinner/projects_analyses/Project\ BPD\ Longitudinal/BPD\ Database/JC/DEMO.csv",stringsAsFactors = F)
-bs_lg_demo$X<-NULL
-bs_lg_demo<-bsrc.findid(df = bs_lg_demo,idmap = idmap,id.var = "ID")
-bs_lgk_demo<-bs_lg_demo[which(bs_lg_demo$masterdemo_id %in% lack_info_sp$bsocial$registration_redcapid),]
-bs_lgk_demo<-na.omit(bs_lgk_demo[c("masterdemo_id","BDAY","SEX")])
-bs_lgk_demo$SEX <- ifelse(bs_lgk_demo$SEX==1,2,1)
-names(bs_lgk_demo) <- c("registration_redcapid","registration_dob","registration_birthsex")
-
-bslgk_demo_v<-bsrc.verify(df_new = bs_lgk_demo,df_ref = masterdemo,id.var = "registration_redcapid")
-bslgk_demo_dx<-bslgk_demo_v$DIFF[is.na(bslgk_demo_v$DIFF$REF),]
-bslgk_demo_dcast<-reshape2::dcast(bslgk_demo_dx,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
-redcap_seq_uplaod(ds = bslgk_demo_dcast,id.var="registration_redcapid",redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
-
+#Check variables 
 for (vx in names(masterdemo)) {
   if(length(which(is.na(masterdemo[[vx]])))>1){
   message("variable: ",vx,", has ",length(which(is.na(masterdemo[[vx]])))," number of missing values.")
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

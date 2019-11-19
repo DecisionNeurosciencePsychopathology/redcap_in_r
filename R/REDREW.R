@@ -930,7 +930,8 @@ bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T
                     Checkbox_ifmultiple=dfx[[paste(variablename,"__ifmultiple",sep = "")]]))}
 }
 ####### get choice mapping and its list varient
-bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
+bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,
+                                varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
   if (is.null(variablenames)){stop("No variable name provided. Give me at least one name please!")}
   if (is.null(metadata)){
     curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
@@ -940,16 +941,20 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
   names(metasub)<-c("fieldname","fieldtype","choice")
   variname.list<-as.list(variablenames)
   xzej<-lapply(variname.list,FUN = function(x){
+    #print(x)
     argk<-which(metasub$fieldname==x)
     if (metasub$fieldtype[argk] %in% c("dropdown","checkbox","radio")){
       tarstr<-metasub$choice[argk]
+      tarstr<-gsub("[^ ] \\|[^ ]"," | ",tarstr)
       firstspilt<-strsplit(tarstr,split = " | ",fixed = T)[[1]]
+      if(length(grep(", ",firstspilt))!=length(firstspilt)) {firstspilt<-gsub(",",",  ",firstspilt)}
       secondspilt<-strsplit(firstspilt,split = ", ")
       choice.code<-as.character(sapply(secondspilt,"[[",1))
       choice.string<-as.character(sapply(secondspilt,"[[",2))
       xk<-data.frame(choice.code,choice.string)
       xk$choice.code<-as.character(xk$choice.code)
       xk$choice.string<-as.character(xk$choice.string)
+      xk$choice.string[xk$choice.string==" "]<-""
       return(xk)
     } else if (metasub$fieldtype[argk] %in% c("yesno")) {
       xk<-data.frame(choice.code=c(1,0),choice.string=c("Yes","No"))
@@ -967,7 +972,7 @@ bsrc.reg.group<-function(x,protocol,reverse=F){
            f.to = c("HC","LL ATT","HL ATT","NON-ATT","NOTSURE BPD","INELIGIBLE")},
          "ksocial"={
            f.from = c(1:7,88,89) 
-           f.to = c("HC","DEP","DO NOT USE","IDE","ATT","LL ATT","HL ATT","NOT SURE","INELIGIBLE")
+           f.to = c("HC","DEP","DO NOT USE","IDE","ATT","LL ATT","HL ATT","NOTSURE PROTECT","INELIGIBLE")
          })
   if (reverse) {
     f.from->from.x

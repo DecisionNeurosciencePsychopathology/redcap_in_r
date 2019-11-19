@@ -54,7 +54,7 @@ proc.rc.medlist <- function(med_dfx=NULL,get_RxName=T) {
 
 
 idmap <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L)[c("registration_redcapid","registration_wpicid","registration_soloffid")]
-names(idmap) <- c("masterdemoid","wpicid","soloffid")
+names(idmap)<-c("masterdemo_id","wpic_id","soloff_id")
 
 protect_med<-bsrc.getform(protocol = ptcs$protect,formname = "ongoing_medication_list",aggressivecog = 0,online = T,mod = F,no_calc = F)
 save(protect_med,file = "protect_med_backup.rdata")
@@ -91,7 +91,7 @@ med_dfx_spa<-do.call(rbind,lapply(med_dfx_sp,function(dk){
 med_dfx_sp<-bsrc.findid(df = med_dfx_spa,idmap = idmap,id.var = "registration_redcapid")
 message(paste(unique(med_dfx_sp$registration_redcapid[!med_dfx_sp$ifexist]),collapse=", ")," has no masterdemo record double check! Remove for now.")
 
-med_dfx_sp$registration_redcapid<-med_dfx_sp$masterdemoid
+med_dfx_sp$registration_redcapid<-med_dfx_sp$masterdemo_id
 med_dfx_sp<-med_dfx_sp[med_dfx_sp$ifexist,]
 
 med_rej_sp <-split(med_dfx_sp,med_dfx_sp$registration_redcapid)
@@ -103,7 +103,49 @@ gx<-lapply(med_rej_sp,function(dfRej){
 
 bsocial_incompete<-c(221456,221790,221872)
 
+################################
+###############SUI HX###########
+################################
+bsrc.procmeta <- function(metadata = NULL){
+  cb_indx<-which(metadata$field_type %in% c("checkbox"))
+  all_varinames<-metadata$field_name[-cb_indx]
+  gx<-bsrc.getchoicemapping(variablenames = metadata$field_name[cb_indx],metadata = metadata)
+  checkbox_vars<-sapply(names(gx),function(ax){paste(ax,gx[[ax]]$choice.code,sep = "___")})
+  return(list(metadata=metadata,checkbox_vars=checkbox_vars))
+}
 
+
+
+###The base will be b-social attempt history:
+msdm_db<-bsrc.checkdatabase2(protocol = ptcs$masterdemo)
+p_meta<-bsrc.procmeta(metadata = msdm_db$metadata)
+sahx_bs <- bsrc.getform(protocol = ptcs$bsocial,formname = "suicide_history",online = T,batch_size = 1000L,mod = T,at_least = 2) #Online version is used to ensure MOST up-to-date data
+sahx_bs<-bsrc.findid(df = sahx_bs,idmap = idmap,id.var = "registration_redcapid")
+message(paste(unique(sahx_bs$registration_redcapid[!sahx_bs$ifexist]),collapse=", ")," has no masterdemo record double check! Remove for now.")
+sahx_bs$registration_redcapid<-sahx_bs$masterdemo_id
+sahx_bs<-sahx_bs[sahx_bs$ifexist,which(!names(sahx_bs) %in% c("redcap_event_name","masterdemo_id","wpic_id","soloff_id","ogid","ifexist"))]
+sahx_backup<-bsrc.conredcap2(protocol = ptcs$masterdemo,batch_size = 1000L)
+redcap_upload(ds_to_write = sahx_bs,batch_size = 100L,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+#Make a copy of bsocial
+file.copy(from = ptcs$bsocial$rdpath,
+          to = file.path(dirname(ptcs$bsocial$rdpath),"Operations","bsocial_backup_111919_beforeRemovingSUX.rdata"),overwrite = F)
+##Now intergrate protect:
+sahx_pt <- bsrc.getform(protocol = ptcs$protect,formname = "ongoing_suicide_hx_lethality",online = T,batch_size = 1000L,mod = T,at_least = 1)
+sahx_pt<-bsrc.findid(df = sahx_pt,idmap = idmap,id.var = "registration_redcapid")
+###Checks 
+message(paste(unique(sahx_pt$registration_redcapid[!sahx_pt$ifexist]),collapse=", ")," has no masterdemo record double check! Remove for now.")
+message(paste(unique(sahx_pt$registration_redcapid[which(sahx_pt$registration_redcapid != sahx_pt$masterdemo_id)]),
+              collapse=", ")," has different id to masterdemo record double check! Remove for now.")
+
+sahx_pt$registration_redcapid<-sahx_pt$masterdemo_id
+sahx_pt<-sahx_pt[sahx_pt$ifexist,which(!names(sahx_pt) %in% c("redcap_event_name","masterdemo_id","wpic_id","soloff_id","ogid","ifexist"))]
+
+cur_sahx_msdm <- bsrc.getform(protocol = ptcs$masterdemo,formname = "suicide_history",online = T,batch_size = 1000L,mod = T,at_least = 1)
+
+
+
+
+sahx_bs_v<-bsrc.verify(df_new = sahx_bs,df_ref = msdm_db$data,id.var = "registration_redcapid")
 
 
 
