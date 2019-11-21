@@ -124,6 +124,10 @@ sum(is.na(PT$mincondate))# should be 0. no NA in 'mincondate'
 plot_prep<-function(subreg, curdb){#add Group to df 
     as.Date(subreg$mincondate)->subreg$mincondate
     groupmap<-bsrc.getchoicemapping("registration_group",metadata = curdb$metadata)
+    groupmap$choice.string<-gsub("Healthy control","1Healthy control",groupmap$choice.string)
+    groupmap$choice.string<-gsub("Depressed Control","2Depressed Control",groupmap$choice.string)
+    groupmap$choice.string<-gsub("Ideator","3Ideator",groupmap$choice.string)
+    groupmap$choice.string<-gsub("Non-Suicidal Patient (BPD NON-ATT)","5Non-Suicidal Patient (BPD NON-ATT)",groupmap$choice.string)
     subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = T)
     onlygroup<-list(x1="Group",x2=NULL)
     #Gender
@@ -134,10 +138,15 @@ plot_prep<-function(subreg, curdb){#add Group to df
     agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
     subreg$`Age`<-as.character(agemap$yrlable[findInterval(subreg$ageyrs,agemap$yrstar)])
     agegroup<-list(x1="Age",x2="Group")
+
+    onlygroup<<-onlygroup
+    #return(onlygroup)
+    gendergroup<<-gendergroup
+    #return(gendergroup)
+    agegroup<<-agegroup
+    #return(agegroup)
     return(subreg)
-    return(onlygroup)
-    return(gendergroup)
-    return(agegroup)}
+    }
 
 #JIAZHOU'S UTILITY FUNCTION
 do_for_asub<-function(xdata=NULL,lxyz=c("only","gender","age"),tit="B-Social New Consent",plotpath=NULL,filename=NULL){
@@ -269,6 +278,10 @@ plot_prep(BS,md)->Ball
     do_for_asub(Kmriall,tit = 'KSOCIAL',plotpath = plotpath,
                 filename = 'KsocialbyGroup_age_gender.jpeg')
     
+#Numbers output functions:
+#Calculate ratio of K to B pts
+    sum(table(unique(Kmriall$registration_redcapid)))==nrow(Kmriall) #Should be T, checks if duplicated IDs
+    message("Ratio of K participants to BSOCIAL:",sum(is.na(Kmriall$registration_ptcstat___bsocial)),"/",nrow(Kmriall))
 
 # recruitment graph for pt3 
   #Only P3
@@ -277,7 +290,7 @@ plot_prep(BS,md)->Ball
   newP3<-subset(P3all,reg_p3catchup==0) # get new P3
   #Number of P3 not carried over from P2
   sum(P3all$reg_p3catchup=="0",na.rm = T)
-  P3[which(P3all$reg_p3catchup=="P2"),c("registration_redcapid","ageyrs")]
+  P3all[which(P3all$reg_p3catchup=="P2"),c("registration_redcapid","ageyrs")]
   sum(P3all$ageyrs>=55)
   
   recr_pt3[1]<-as.Date(recr_pt3[[1]])
