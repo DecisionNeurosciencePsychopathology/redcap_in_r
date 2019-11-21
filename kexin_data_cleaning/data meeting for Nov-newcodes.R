@@ -24,8 +24,10 @@ varnames<-function(ptcname){
   }else if(ptcname=='suicid2'){return(c(id,'reg_status_suicid2'))
   }else if(ptcname=='suicide'){return(c(id,'reg_status_suicide'))
   }else if(ptcname=='ksocial'){return(c(id,'registration_ptcstat___bsocial'))
-  }else{return(id)}
+  }else if (ptcname=='bsocial'){return(c(id, 'registration_lethality'))}
+  else{return(id)}
 }
+
 
 #PROTECT - ALL
 var_pt<-unique(c(varnames('protect3'),varnames('protect2'),varnames('protect'),varnames('suicide'),varnames('suicid2')))
@@ -129,6 +131,8 @@ plot_prep<-function(subreg, curdb){#add Group to df
     groupmap$choice.string<-gsub("Ideator","3Ideator",groupmap$choice.string)
     groupmap$choice.string<-gsub("Non-Suicidal Patient (BPD NON-ATT)","5Non-Suicidal Patient (BPD NON-ATT)",groupmap$choice.string)
     subreg$`Group`<- plyr::mapvalues(x = subreg$registration_group, from = groupmap$choice.code, to = as.character(groupmap$choice.string),warn_missing = T)
+    if(any(subreg$'Group'=="Non-Suicidal Patient (BPD NON-ATT)")){
+      subreg[which(subreg$'Group'=="Attempter"),"Group"]<-subreg[which(subreg$'Group'=="Attempter"),"registration_lethality"]}
     onlygroup<-list(x1="Group",x2=NULL)
     #Gender
     subreg$Gender<-subreg$registration_gender
@@ -184,7 +188,9 @@ graph_data_meet<-function(datalist=NULL,xdata=NULL,title=NULL,save=F,savepath=NU
   #Protect all
     #Plots
     plot_prep(PT,md)->Pall
-    do_for_asub(Pall,tit = 'Protect (all)',plotpath = plotpath,filename = 'Protect(all)byGroup_age_gender.jpeg')
+    #do_for_asub(Pall,tit = 'Protect (all)',plotpath = plotpath,filename = 'Protect(all)byGroup_age_gender.jpeg')
+    Pall[-which(Pall$ageyrs<50),]->Pall2
+    do_for_asub(Pall2,tit = 'Protect (all)',plotpath = plotpath,filename = 'Protect(all)byGroup_age_gender.jpeg')
   #Get EXPLORE scanned
     #Get files from box
     #root="/Users/mogoverde/Box/skinner/data/" #Morgan 
@@ -275,13 +281,14 @@ plot_prep(BS,md)->Ball
     unique(append(append(Kclock,Ktrust),BKid))->Kmri
     #Plotting and df
     Kall[which(Kall$registration_redcapid %in% Kmri),]->Kmriall
-    do_for_asub(Kmriall,tit = 'KSOCIAL',plotpath = plotpath,
-                filename = 'KsocialbyGroup_age_gender.jpeg')
+    Kmriall2<-subset(Kmriall,ageyrs>=25)
+    do_for_asub(Kmriall2,tit = 'KSOCIAL(over 25 yrs old)',plotpath = plotpath,
+                filename = 'KsocialbyGroup_age_gender2.jpeg')
     
 #Numbers output functions:
 #Calculate ratio of K to B pts
-    sum(table(unique(Kmriall$registration_redcapid)))==nrow(Kmriall) #Should be T, checks if duplicated IDs
-    message("Ratio of K participants to BSOCIAL:",sum(is.na(Kmriall$registration_ptcstat___bsocial)),"/",nrow(Kmriall))
+    sum(table(unique(Kmriall2$registration_redcapid)))==nrow(Kmriall2) #Should be T, checks if duplicated IDs
+    message("Ratio of K participants to BSOCIAL:",sum(is.na(Kmriall2$registration_ptcstat___bsocial)),"/",nrow(Kmriall2))
 
 # recruitment graph for pt3 
   #Only P3
