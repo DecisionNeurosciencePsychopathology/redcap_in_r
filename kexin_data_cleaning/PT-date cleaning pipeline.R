@@ -4,6 +4,8 @@ source('~/Documents/github/UPMC/startup.R')
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
+combine<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/combing forms.csv',stringsAsFactors = FALSE)
+combine[which(combine=="",arr.ind = T)]<-NA
 
 #Initialize reports 
 log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
@@ -12,7 +14,10 @@ log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
 log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 deleted_rows<-list()
+comb_rows<-list # IDDATE absent in at least one form when combining 
 #####################################start of the function#########################################
 # rctransfer.dataclean <- function(
 # [VARIABLES]
