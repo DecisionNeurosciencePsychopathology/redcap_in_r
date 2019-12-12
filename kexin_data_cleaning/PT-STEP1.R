@@ -1,12 +1,13 @@
-rm(list = ls())
+#rm(list = ls())
 #################################### SAME #################################### 
 ## startup
 setwd("~/Documents/redcap_in_r/kexin_data_cleaning/")
-source('~/Documents/github/UPMC/startup.R')
+#source('~/Documents/github/UPMC/startup.R')
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
 var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt2.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
+var_map$baseline<-"TRUE" #temperary
 var_map$baseline<-as.logical(var_map$baseline)
 colnames(var_map)[grep("path",colnames(var_map))]<-"path" #temperary
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
@@ -19,7 +20,7 @@ combine[which(combine=="",arr.ind = T)]<-NA
 # if redcap_var and access_var both exist, is.checkbox cannot be NA
 chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
 chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing
-var_map<-var_map[-as.numeric(rownames(chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),])),] #temperary
+#var_map<-var_map[-as.numeric(rownames(chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),])),] #temperary
 # vice versa 
 chckmg<-subset(var_map,select = c('redcap_var','access_var','is.checkbox','FIX'),!is.na(is.checkbox)&as.logical(FIX))
 #which(is.na(chckmg),arr.ind = T) # should give us nothing. if yes, try run the following line of code 
@@ -31,7 +32,7 @@ sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplica
 #var_map[[8]]<-sapply(var_map[[8]], function(x) gsub("\"", "", x))###TEMP
 ## TEMP so that NA in 'is.checkbox' means that 
 
-remove_dupid = FALSE # if T, only keep duplicated id with the earliest date 
+remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
 skipotherforms = TRUE
 #Initialize reports 
 log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
@@ -73,88 +74,112 @@ rm(all_formnm)
 
 #STEP1: Select a RC form, get an integrated RC form with complete variables, right variable names, splited ordinary variables with checkbox variables. 
 for (form_i in 1:length(forms)) {
-  STEP1<-function(){
-    #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
-    formname <- forms[form_i] 
-    cat(paste0("Cleaning form: ",formname," now...\n"))
-    fm_dir<-paste0(formname,".csv")
-    vm<-subset(var_map, path==fm_dir) #subset of var mapping for the current form
-    if(!(sum(vm$baseline)==0|sum(vm$baseline)==nrow(vm))){stop(message("check the column 'baseline' in the var map"))
-    }else{ifbl<-any(vm$baseline)}
+  #  STEP1<-function(){
+  #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
+  formname <- forms[form_i] 
+  cat(paste0("Cleaning form: ",formname," now...\n"))
+  fm_dir<-paste0(formname,".csv")
+  vm<-subset(var_map, path==fm_dir) #subset of var mapping for the current form
+  if(!(sum(vm$baseline)==0|sum(vm$baseline)==nrow(vm))){stop(message("check the column 'baseline' in the var map"))
+  }else{ifbl<-any(vm$baseline)}
+  
+  if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
+    acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
+    acvar_chk<-unique(na.omit(with(vm,split(access_var,is.checkbox))$'TRUE')) #checkbox var
+    wrongvar<-intersect(acvar_chk,acvar_nonch) # check that no access var is both checkbx var and nonchck var 
+    if(length(wrongvar)>0){stop(paste0("Access variable ",paste(wrongvar,collapse = ", ")," in form ", formname, "is marked as both checkbox and non-chckbox variable in the var map."))}
+    if (any(is.na(vm$path))){
+      stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
+    }else{if(any(!file.exists(paste0(rootdir,fm_dir)))){stop(message('At least one row of path in var mapping does not exist.'))}}#path must be valid
+    #STEP1.2 Get raw. Grab forms, remove unecessary people and variables
+    RAWDATA <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F)#grab form 
+    colnames(RAWDATA)<-gsub("^X","",colnames(RAWDATA)) # raname colnames to remove "X" in "X1", "X2"...
+    RAWDATA<-RAWDATA[which(RAWDATA$ID%in%allsub$ID),] #remove people not in our study
+    w_acvar<-setdiff(colnames(RAWDATA),vm$access_var)#all access variesbles should be in var map
+    if(length(w_acvar)>0){message(paste("Warning:",paste(w_acvar,collapse = ","),"cannot be found in the var_map."))} # report ^
+    w_rcvar<-setdiff(na.omit(vm$access_var),colnames(RAWDATA))# all access_var in var mapping should be in actual Access forms
+    if(length(w_rcvar)>0){stop(message(paste("Stop:",paste(w_rcvar,collapse = ", "),"in the var_map does not match any variables in the forms.")))} # report^
+    RAWDATA<-RAWDATA[,which(colnames(RAWDATA)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
+    #STEP1.3 no NA in ID or CDATE. create IDDATE. IDDATE must be unique
+    RAWDATA[which(RAWDATA=="",arr.ind = T)]<-NA
+    if(any(is.na(RAWDATA$ID)|is.na(RAWDATA$CDATE))){stop(message(paste("NA in ID or CDATE of RAWDATA. Form:",formname)))}
+    if("CDATE"%in%colnames(RAWDATA)){ #if the dataframe has CDATE
+      #confm<-readline(prompt = paste0("Enter T to confirm CDATE '",RAWDATA[1,"CDATE"],"' follows the format %mm/%dd/%yy: ")) # confirm the format of CDATE
+      if(as.logical(confm)){
+        RAWDATA$CDATE<-as.Date(RAWDATA$CDATE,format = "%m/%d/%y")
+        RAWDATA$CDATECOPY<-RAWDATA$CDATE # create a col CDATECOPY so that after var mapping the form still has a col called CDATE 
+      }}else{message(paste0("Warn: ",formname," does not have CDATE."))}
+    RAWDATA$IDDATE<-paste0(RAWDATA$ID,RAWDATA$CDATE)
+    RAWDATA<-unique(RAWDATA) #remove duplicated rows before checking duplicated IDDATE 
+    if(ifbl){
+      dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$ID)),"ID"])# shoule have no duplicates in ID
+      if(length(dup_id)>0){
+        message(paste0("Warn: ",formname," is a baseline form and has duplicated ID. Please refer to formname_dup_id_rows.csv. The rows are removed."))
+        reportdup<-RAWDATA[which(RAWDATA$ID%in%dup_id),]
+        reportdup<-reportdup[order(reportdup$ID),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
+        write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))
+        RAWDATA<-RAWDATA[-which(RAWDATA$ID%in%dup_id),]}      #remove duplicated rows 
+    }else{
+      dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$IDDATE)),"IDDATE"])# shoule have no duplicates in IDDATE
+      if(length(dup_id)>0){
+        message(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv. The rows are removed."))
+        reportdup<-RAWDATA[which(RAWDATA$IDDATE%in%dup_id),]
+        reportdup<-reportdup[order(reportdup$IDDATE),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
+        write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))
+        RAWDATA<-RAWDATA[-which(RAWDATA$IDDATE%in%dup_id),]}      #remove duplicated rows
+    }
+    #SPECIAL for SCID: add back some records with dup id that Morgan manually find 
+    if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG")){
+      special<-read.csv(paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/DEC12 MANUALLY/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
+      special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
+      special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
+      if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
+        RAWDATA<-rbind(RAWDATA,special)
+        message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
+        }else{stop(message("Something is wrong"))}
+    }
+    #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
+    if(!is.null(acvar_chk)){
+      raw_nonch<-RAWDATA[,-which(colnames(RAWDATA)%in%acvar_chk)] #keep only non-checkbx variables 
+      raw_chk<-RAWDATA[c("ID","CDATE","IDDATE",acvar_chk)]
+    }else{raw_nonch<-RAWDATA}
+    #STEP1.5 remove calculated fields 
+    cal_var<-subset(vm,fix_what=='calculated_field')$access_var
+    if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
+    #STEP1.6 get 'raw_nonch' for non-chckbx vars: rename AC var using RC varnames NOTE: ONE ACVAR CAN MATCH MULTIPLE RCVAR
+    VMAP<-unique(subset(vm,select=c(access_var,redcap_var),is.checkbox=='FALSE'&!is.na(redcap_var)))
+    if(any(duplicated(na.omit(VMAP$access_var)))){message(paste("Variable mapping... \nWarning: some access variable matches multiple redcap variabels in form",formname))} #check if one ac var matches multiple rc var 
+    colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var,warn_missing = F)
+    colnames(raw_nonch)[grep("^CDATE",colnames(raw_nonch))]<-"CDATE"
+    if(!all(colnames(raw_nonch)%in%c(VMAP$redcap_var,"CDATE","IDDATE","MISSCODE"))){stop(message(paste0(formname," has an error when checking: new colnames should contain only CDATE, IDDATE, and redcap variables")))} # check: new colnames should contain only CDATE, IDDATE, and redcap variables 
+    raw_nonch<-cbind(raw_nonch[,-which(colnames(raw_nonch)=="CDATE")],CDATE=raw_nonch$CDATE) # keep only one col of CDATE
+    if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
+    #STEP1.7 copy the column CDATE and rename as cdate_formname
+    raw_nonch<-cbind(raw_nonch,newcol=raw_nonch$CDATE)
+    colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))
     
-    if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
-      acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
-      acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
-      if (any(is.na(vm$path))){
-        stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
-      }else{if(any(!file.exists(paste0(rootdir,fm_dir)))){stop(message('At least one row of path in var mapping does not exist.'))}}#path must be valid
-      #STEP1.2 Get raw. Grab forms, remove unecessary people and variables
-      rawdata <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F)#grab form 
-      colnames(rawdata)<-gsub("^X","",colnames(rawdata)) # raname colnames to remove "X" in "X1", "X2"...
-      rawdata<-rawdata[which(rawdata$ID%in%allsub$ID),] #remove people not in our study
-      w_acvar<-setdiff(colnames(rawdata),vm$access_var)#all access variesbles should be in var map
-      if(length(w_acvar)>0){message(paste("Warning:",paste(w_acvar,collapse = ","),"cannot be found in the var_map."))} # report ^
-      w_rcvar<-setdiff(na.omit(vm$access_var),colnames(rawdata))# all access_var in var mapping should be in actual Access forms
-      if(length(w_rcvar)>0){stop(message(paste("Stop:",paste(w_rcvar,collapse = ", "),"in the var_map does not match any variables in the forms.")))} # report^
-      rawdata<-rawdata[,which(colnames(rawdata)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
-      #STEP1.3 no NA in ID or CDATE. create IDDATE. IDDATE must be unique
-      rawdata[which(rawdata=="",arr.ind = T)]<-NA
-      if(any(is.na(rawdata$ID)|is.na(rawdata$CDATE))){stop(message(paste("NA in ID or CDATE of rawdata. Form:",formname)))}
-      if("CDATE"%in%colnames(rawdata)){ #if the dataframe has CDATE
-        confm<-readline(prompt = paste0("Enter T to confirm CDATE '",rawdata[1,"CDATE"],"' follows the format %mm/%dd/%yy: ")) # confirm the format of CDATE
-        if(as.logical(confm)){rawdata$CDATE<-as.Date(rawdata$CDATE,format = "%m/%d/%y")}}else{message(paste0("Warn: ",formname," does not have CDATE."))}
-      rawdata$IDDATE<-paste0(rawdata$ID,rawdata$CDATE)
-      rawdata<-unique(rawdata) #remove duplicated rows before checking duplicated IDDATE 
-      if(ifbl){
-        dup_id<-unique(rawdata[which(duplicated(rawdata$ID)),"ID"])# no duplicates in ID
-        if(length(dup_id)>0){
-          message(paste0("Warn: ",formname," is a baseline form and has duplicated ID. Please refer to formname_dup_id_rows.csv."))
-          write.csv(rawdata[which(rawdata$ID%in%dup_id),],file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))}
-        #remove duplicated rows 
-      }else{
-        dup_id<-unique(rawdata[which(duplicated(rawdata$IDDATE)),"IDDATE"])# no duplicates in IDDATE
-        if(length(dup_id)>0){
-          message(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv."))
-          write.csv(rawdata[which(rawdata$IDDATE%in%dup_id),],file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))} 
-        # remove duplicated rows 
-      }
-      #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
-      if(!is.null(acvar_chk)){
-        raw_nonch<-rawdata[,-which(colnames(rawdata)%in%acvar_chk)] #keep only non-checkbx variables 
-        raw_chk<-rawdata[c("ID","CDATE","IDDATE",acvar_chk)]
-      }else{raw_nonch<-rawdata}
-      #STEP1.5 remove calculated fields 
-      cal_var<-subset(vm,fix_what=='calculated_field')$access_var
-      if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
-      #STEP1.6 get 'raw_nonch' for non-chckbx vars: rename AC var using RC varnames NOTE: ONE ACVAR CAN MATCH MULTIPLE RCVAR
-      VMAP<-unique(subset(vm,select=c(access_var,redcap_var),is.checkbox=='FALSE'&!is.na(redcap_var)))
-      if(any(duplicated(na.omit(VMAP$access_var)))){message(paste("Variable mapping... \nWarning: some access variable matches multiple redcap variabels in form",formname))} #check if one ac var matches multiple rc var 
-      colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var,warn_missing = F)
-      if(!all(colnames(raw_nonch)%in%c(VMAP$redcap_var,"CDATE","IDDATE","MISSCODE"))){stop(message(paste0(formname," has an error when checking: new colnames should contain only CDATE, IDDATE, and redcap variables")))} # check: new colnames should contain only CDATE, IDDATE, and redcap variables 
-      if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
-      #STEP1.7 copy the column CDATE and rename as cdate_formname
-      raw_nonch<-cbind(raw_nonch,newcol=raw_nonch$CDATE)
-      colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))
-      
-      cat(paste0(formname,": STEP1 done.\n"))
-      vm<<-vm
-      formname<<-formname
-      acvar_chk<<-acvar_chk
-      rawdata<<-raw
-      deleted_rows<<-deleted_rows
-      if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
-      raw_nonch<<-raw_nonch
-      log_replace<<-log_replace
-      log_comb_fm<<-log_comb_fm
-      
-    }else{cat(paste0(formname," is not a baseline form. Skiped it.\n"))
-      ifbl<<-ifbl
-      skipotherforms<<-skipotherforms}
+    cat(paste0(formname,": STEP1 done.\n"))
+    vm<<-vm
+    formname<<-formname
+    acvar_chk<<-acvar_chk
+    RAWDATA<<-RAWDATA
+    #deleted_rows<<-deleted_rows
+    if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
+    raw_nonch<<-raw_nonch
+    log_replace<<-log_replace
+    log_comb_fm<<-log_comb_fm
+    ifbl<<-ifbl
+    skipotherforms<<-skipotherforms
     
-    
-    
-    
-  }}
+  }else{cat(paste0(formname," is not a baseline form. Skiped it.\n"))
+    ifbl<<-ifbl
+    skipotherforms<<-skipotherforms}
+  
+  
+  
+  
+  #  }
+}
 
 #} # remove this 
 

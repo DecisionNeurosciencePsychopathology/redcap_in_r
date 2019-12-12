@@ -3,7 +3,7 @@ setwd("~/Documents/redcap_in_r/kexin_data_cleaning/")
 source('~/Documents/github/UPMC/startup.R')
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt2.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 var_map$baseline<-as.logical(var_map$baseline)
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
@@ -26,14 +26,14 @@ log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=a
 # rctransfer.dataclean <- function(
 # [VARIABLES]
 #curdb = bsoc
-protocol.cur <- ptcs$bsocial
+#protocol.cur <- ptcs$bsocial
 #db = 
 #bsoc<- bsrc.checkdatabase2()
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 skipotherforms = TRUE
-replace_999 = TRUE # by defult, replace all 999 with NA 
-remove_dupid = FALSE # if T, only keep duplicated id with the earliest date 
+#replace_999 = TRUE # by defult, replace all 999 with NA 
+remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
 replace_w_na = TRUE
 #) {
 
@@ -97,45 +97,64 @@ for (form_i in 1:length(forms)) {
     
     if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
       acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
-      acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
+      acvar_chk<-unique(na.omit(with(vm,split(access_var,is.checkbox))$'TRUE')) #checkbox var
+      wrongvar<-intersect(acvar_chk,acvar_nonch) # check that no access var is both checkbx var and nonchck var 
+      if(length(wrongvar)>0){stop(paste0("Access variable ",paste(wrongvar,collapse = ", ")," in form ", formname, "is marked as both checkbox and non-chckbox variable in the var map."))}
       if (any(is.na(vm$path))){
         stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
       }else{if(any(!file.exists(paste0(rootdir,fm_dir)))){stop(message('At least one row of path in var mapping does not exist.'))}}#path must be valid
       #STEP1.2 Get raw. Grab forms, remove unecessary people and variables
-      rawdata <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F)#grab form 
-      colnames(rawdata)<-gsub("^X","",colnames(rawdata)) # raname colnames to remove "X" in "X1", "X2"...
-      rawdata<-rawdata[which(rawdata$ID%in%allsub$ID),] #remove people not in our study
-      w_acvar<-setdiff(colnames(rawdata),vm$access_var)#all access variesbles should be in var map
+      RAWDATA <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F)#grab form 
+      colnames(RAWDATA)<-gsub("^X","",colnames(RAWDATA)) # raname colnames to remove "X" in "X1", "X2"...
+      RAWDATA<-RAWDATA[which(RAWDATA$ID%in%allsub$ID),] #remove people not in our study
+      w_acvar<-setdiff(colnames(RAWDATA),vm$access_var)#all access variesbles should be in var map
       if(length(w_acvar)>0){message(paste("Warning:",paste(w_acvar,collapse = ","),"cannot be found in the var_map."))} # report ^
-      w_rcvar<-setdiff(na.omit(vm$access_var),colnames(rawdata))# all access_var in var mapping should be in actual Access forms
+      w_rcvar<-setdiff(na.omit(vm$access_var),colnames(RAWDATA))# all access_var in var mapping should be in actual Access forms
       if(length(w_rcvar)>0){stop(message(paste("Stop:",paste(w_rcvar,collapse = ", "),"in the var_map does not match any variables in the forms.")))} # report^
-      rawdata<-rawdata[,which(colnames(rawdata)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
+      RAWDATA<-RAWDATA[,which(colnames(RAWDATA)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
       #STEP1.3 no NA in ID or CDATE. create IDDATE. IDDATE must be unique
-      rawdata[which(rawdata=="",arr.ind = T)]<-NA
-      if(any(is.na(rawdata$ID)|is.na(rawdata$CDATE))){stop(message(paste("NA in ID or CDATE of rawdata. Form:",formname)))}
-      if("CDATE"%in%colnames(rawdata)){ #if the dataframe has CDATE
-        confm<-readline(prompt = paste0("Enter T to confirm CDATE '",rawdata[1,"CDATE"],"' follows the format %mm/%dd/%yy: ")) # confirm the format of CDATE
-        if(as.logical(confm)){rawdata$CDATE<-as.Date(rawdata$CDATE,format = "%m/%d/%y")}}else{message(paste0("Warn: ",formname," does not have CDATE."))}
-      rawdata$IDDATE<-paste0(rawdata$ID,rawdata$CDATE)
-      rawdata<-unique(rawdata) #remove duplicated rows before checking duplicated IDDATE 
+      RAWDATA[which(RAWDATA=="",arr.ind = T)]<-NA
+      if(any(is.na(RAWDATA$ID)|is.na(RAWDATA$CDATE))){stop(message(paste("NA in ID or CDATE of RAWDATA. Form:",formname)))}
+      if("CDATE"%in%colnames(RAWDATA)){ #if the dataframe has CDATE
+        #confm<-readline(prompt = paste0("Enter T to confirm CDATE '",RAWDATA[1,"CDATE"],"' follows the format %mm/%dd/%yy: ")) # confirm the format of CDATE
+        if(as.logical(confm)){
+          RAWDATA$CDATE<-as.Date(RAWDATA$CDATE,format = "%m/%d/%y")
+          RAWDATA$CDATECOPY<-RAWDATA$CDATE # create a col CDATECOPY so that after var mapping the form still has a col called CDATE 
+        }}else{message(paste0("Warn: ",formname," does not have CDATE."))}
+      RAWDATA$IDDATE<-paste0(RAWDATA$ID,RAWDATA$CDATE)
+      RAWDATA<-unique(RAWDATA) #remove duplicated rows before checking duplicated IDDATE 
       if(ifbl){
-        dup_id<-unique(rawdata[which(duplicated(rawdata$ID)),"ID"])# no duplicates in ID
+        dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$ID)),"ID"])# shoule have no duplicates in ID
         if(length(dup_id)>0){
-          message(paste0("Warn: ",formname," is a baseline form and has duplicated ID. Please refer to formname_dup_id_rows.csv."))
-          write.csv(rawdata[which(rawdata$ID%in%dup_id),],file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))}
-        #remove duplicated rows 
+          message(paste0("Warn: ",formname," is a baseline form and has duplicated ID. Please refer to formname_dup_id_rows.csv. The rows are removed."))
+          reportdup<-RAWDATA[which(RAWDATA$ID%in%dup_id),]
+          reportdup<-reportdup[order(reportdup$ID),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
+          write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))
+          RAWDATA<-RAWDATA[-which(RAWDATA$ID%in%dup_id),]}      #remove duplicated rows 
       }else{
-        dup_id<-unique(rawdata[which(duplicated(rawdata$IDDATE)),"IDDATE"])# no duplicates in IDDATE
+        dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$IDDATE)),"IDDATE"])# shoule have no duplicates in IDDATE
         if(length(dup_id)>0){
-          message(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv."))
-          write.csv(rawdata[which(rawdata$IDDATE%in%dup_id),],file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))} 
-        # remove duplicated rows 
+          message(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv. The rows are removed."))
+          reportdup<-RAWDATA[which(RAWDATA$IDDATE%in%dup_id),]
+          reportdup<-reportdup[order(reportdup$IDDATE),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
+          write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))
+          RAWDATA<-RAWDATA[-which(RAWDATA$IDDATE%in%dup_id),]}      #remove duplicated rows
+      }
+      #SPECIAL for SCID: add back some records with dup id that Morgan manually find 
+      if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG")){
+        special<-read.csv(paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/DEC12 MANUALLY/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
+        special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
+        special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
+        if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
+          RAWDATA<-rbind(RAWDATA,special)
+          message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
+        }else{stop(message("Something is wrong"))}
       }
       #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
       if(!is.null(acvar_chk)){
-        raw_nonch<-rawdata[,-which(colnames(rawdata)%in%acvar_chk)] #keep only non-checkbx variables 
-        raw_chk<-rawdata[c("ID","CDATE","IDDATE",acvar_chk)]
-      }else{raw_nonch<-rawdata}
+        raw_nonch<-RAWDATA[,-which(colnames(RAWDATA)%in%acvar_chk)] #keep only non-checkbx variables 
+        raw_chk<-RAWDATA[c("ID","CDATE","IDDATE",acvar_chk)]
+      }else{raw_nonch<-RAWDATA}
       #STEP1.5 remove calculated fields 
       cal_var<-subset(vm,fix_what=='calculated_field')$access_var
       if(length(cal_var)>0){raw_nonch<-raw_nonch[,-which(colnames(raw_nonch)%in%cal_var)]}
@@ -143,7 +162,9 @@ for (form_i in 1:length(forms)) {
       VMAP<-unique(subset(vm,select=c(access_var,redcap_var),is.checkbox=='FALSE'&!is.na(redcap_var)))
       if(any(duplicated(na.omit(VMAP$access_var)))){message(paste("Variable mapping... \nWarning: some access variable matches multiple redcap variabels in form",formname))} #check if one ac var matches multiple rc var 
       colnames(raw_nonch)<-plyr::mapvalues(colnames(raw_nonch),from = VMAP$access_var, to = VMAP$redcap_var,warn_missing = F)
+      colnames(raw_nonch)[grep("^CDATE",colnames(raw_nonch))]<-"CDATE"
       if(!all(colnames(raw_nonch)%in%c(VMAP$redcap_var,"CDATE","IDDATE","MISSCODE"))){stop(message(paste0(formname," has an error when checking: new colnames should contain only CDATE, IDDATE, and redcap variables")))} # check: new colnames should contain only CDATE, IDDATE, and redcap variables 
+      raw_nonch<-cbind(raw_nonch[,-which(colnames(raw_nonch)=="CDATE")],CDATE=raw_nonch$CDATE) # keep only one col of CDATE
       if(any(duplicated(colnames(raw_nonch)))){stop(message(paste0("Stop: ",formname,": Duplicated colnames.")))}
       #STEP1.7 copy the column CDATE and rename as cdate_formname
       raw_nonch<-cbind(raw_nonch,newcol=raw_nonch$CDATE)
@@ -153,12 +174,14 @@ for (form_i in 1:length(forms)) {
       vm<<-vm
       formname<<-formname
       acvar_chk<<-acvar_chk
-      rawdata<<-raw
-      deleted_rows<<-deleted_rows
+      RAWDATA<<-RAWDATA
+      #deleted_rows<<-deleted_rows
       if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
       raw_nonch<<-raw_nonch
       log_replace<<-log_replace
       log_comb_fm<<-log_comb_fm
+      ifbl<<-ifbl
+      skipotherforms<<-skipotherforms
       
     }else{cat(paste0(formname," is not a baseline form. Skiped it.\n"))
       ifbl<<-ifbl
@@ -167,141 +190,9 @@ for (form_i in 1:length(forms)) {
   }# the function is writen and editted in another script. Above is a copy of the script
   STEP1() # get 'raw_nonch': redcap variables, 
   if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
-    ##STEP3 get 'fresh_nonch'. Report 999 AND if replace_999=T, replace 999's with NA
-    STEP3<-function(df=raw_nonch){
-      if (length(which(df==999))>0){
-        log_replace<-rbind(log_replace,(do.call("rbind",apply(which(df==999,arr.ind = T),1,function(indeX){ # TO BE GENERALIZED
-          report_wrong(report = log_replace, id=df[indeX[1],1],which_var = colnames(df)[indeX[2]],
-                       wrong_val = 999, which_form = formname, rbind = F,
-                       comments = ifelse(replace_999,'Replaced with NA','Not replaced with NA yet'))
-        })))) 
-        if(replace_999){df[which(df==999,arr.ind = T)]<-NA}
-      }else {message(paste('Form',formname,'does not have any value of 999'))}
-      log_replace<<-log_replace
-      return(df)
-    }
-    fresh_nonch<-STEP3(); message(paste0(formname,": STEP3 done."))
-    ##STEP fix data with systematic issues (eg: shifted range) identified in 'var_map'
+    ##STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map'
     STEP4<-function(){
-      cat(paste0(formname,": performning STEP4 now...\n"))
-      #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
-      fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
-      if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
-        valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
-        if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
-          message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
-        }else{
-          fresh_nonch[fixmap$redcap_var[step4_i]]<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2],warn_missing = T)
-        }}}
-      #STEP4.02 range_allowed: The range in Redcap allows more values than we accept from what should have been the range in redcap. Specifies the new range
-      fixmap<-unique(subset(vm,fix_what=='range_allowed',select = c(redcap_var,instructions)))
-      if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ #if there's 'range_allowed' problem, fix the problem one variable by one var
-        thecol<-fresh_nonch[fixmap$redcap_var[step4_i]] # the col with the problem 
-        if(!is.numeric(thecol[[1]])){ # values in the col should be all numeric (or NA)
-          stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[step4_i],'" so "range_allowed" cannot be fixed')))
-        }else{
-          eval(parse(text=paste0('rg<-seq(',fixmap$instructions[step4_i],')'))) #get rg: range specified in var_map
-          row_i<-which(!((thecol[[1]] %in% rg) | is.na(thecol[[1]]))) # report values that is not in the range. NA is acceptable 
-          if (length(row_i)==0){
-            message(paste('Fixing issue "range_allowed" GOOD.:', formname,fixmap$redcap_var[step4_i],'are within the range (NA is allowed).'))
-          }else{
-            log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
-                                           comments = 'range_allowed')
-            fresh_nonch[row_i,fixmap$redcap_var[step4_i]]<-NA
-            log_replace<-report_wrong(id=fresh_nonch[row_i,1],which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "range_allowed": Out of the range.The value is replaced with NA',report = log_replace)
-            message('Fixing issue "range_allowed": Some values are out of range. Refer to log_out_of_range for more details. The out-of-range values are replcaed with NA.')
-          }}}}
-      #STEP4.03 special_3: range_fix+range_allowed , 1=1, 2=2, 3=3, 4=5 (5 out of range)
-      fixmap<-unique(subset(vm,fix_what=='special_3',select = c(redcap_var,instructions)))
-      if(nrow(fixmap)>0) { #if there's 'special_3' problem
-        #range_allowed
-        thecol<-fresh_nonch[fixmap$redcap_var[1]] # the col with the problem 
-        if(!is.numeric(thecol[[1]])){ # values in the col should be all numeric (or NA)
-          stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[step4_i],'" so "special_3" cannot be fixed')))
-        }else{
-          rg<-1:4 #get rg: range specified in var_map
-          row_i<-which(!((thecol[[1]] %in% rg) | is.na(thecol[[1]]))) # report values that is not in the range. NA is acceptable 
-          if (length(row_i)==0){
-            message(paste('Fixing issue "special_3: range_fix+range_allowed." GOOD.:', formname,fixmap$redcap_var[step4_i],'are within the range (NA is allowed).'))
-          }else{
-            log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
-                                           comments = 'speical_3')
-            fresh_nonch[row_i,fixmap$redcap_var[step4_i]]<-NA
-            log_replace<-report_wrong(id=fresh_nonch[row_i,1],which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "special_3": Out of the range.The value is replaced with NA',report = log_replace)
-            message('Fixing issue "special_3". Some values are out of range. Refer to log_out_of_range for more details. The out-of-range values are replcaed with NA.')
-          }}
-        #range_fix- copied the codes in step 4.1
-        valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
-        if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
-          message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
-        }else{
-          fresh_nonch[fixmap$redcap_var[step4_i]]<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2],warn_missing = T)
-        }}
-      #STEP4.04 date: must be converted to date (YYYY-MM-DD)
-      fixmap<-unique(subset(vm,fix_what=='date',select = c(redcap_var,instructions)))
-      if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
-        fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(fresh_nonch[fixmap$redcap_var[step4_i]][[1]],format = fixmap$instructions[step4_i])
-      }}
-      #STEP 4.05 SPECIAL check_equal: These two values in access should be equal before being imported. Throw an error if they are different
-      fixmap<-subset(vm,fix_what=='check_equal',select = c(access_var,instructions))
-      if (nrow(fixmap)>0){ #if there's 'check_equal' problem, fix the problem one variable by one var
-        fixmap$instructions<-gsub("=",",",fixmap$instructions)
-        reportrow<-which(!fresh_nonch$SPD5==fresh_nonch$STPD8)
-        if(length(reportrow)>0){
-          log_replace<-report_wrong(id = fresh_nonch[reportrow,1], which_var = "SPD5", wrong_val = fresh_nonch$SPD5[reportrow], which_form = formname, comments = "check_equal: SPD5<>STPD8", report = log_replace) #report
-          log_replace<-report_wrong(id = fresh_nonch[reportrow,1], which_var = "STPD8", wrong_val = fresh_nonch$STPD8[reportrow], which_form = formname, comments = "check_equal: SPD5<>STPD8", report = log_replace) #report
-          fresh_nonch$SPD5[reportrow]<-NA #replace with NA
-          fresh_nonch$STPD8[reportrow]<-NA #replace with NA
-          #for (step4_i in 1:nrow(fixmap)){ # generalized codes but not replace with NA
-          #  temp_check<-subset(fresh_nonch,select = eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))))
-          #  if(!all(temp_check[[1]]==temp_check[[2]])){stop(message(paste0(formname,"'s ",fixmap$instructions[step4_i]," are not equal.")))}
-          #  rm(temp_check)
-          #}
-        }}
-      #STEP4.06 multi_field: One access variable goes into multiple redcap variables
-      fixmap<-subset(vm,fix_what=='multi_field',select = c(access_var,instructions))
-      if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
-        newvar<-gsub(" ","",strsplit(fixmap$instructions[step4_i],",")[[1]]) #new rc var
-        newcolnames<-append(colnames(fresh_nonch),newvar) #update the colnames to include the new rc var
-        fresh_nonch<-cbind(fresh_nonch,replicate(length(newvar),fresh_nonch[fixmap$access_var[step4_i]])) #duplicate the ac col and then rbind the cols to the original df
-        colnames(fresh_nonch)<-newcolnames 
-      }}
-      #STEP4.07 special_4: This value goes into multiple redcap values, also value needs to be changed
-      fixmap<-unique(subset(vm,fix_what=='special_4',select = c(access_var,instructions,value1)))
-      if(nrow(fixmap)>0) { # if there's 'special_4' problem
-        # replace values (range_fix)
-        valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[1],")"))),ncol = 2,byrow = T)
-        if (all(is.na(fresh_nonch[[fixmap$access_var[1]]]))){ 
-          message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[1],'" so no need to do value replacement for "special_4"'))
-        }else{
-          temp_dupcol<-plyr::mapvalues(fresh_nonch[[fixmap$access_var[1]]],from = valuemap[,1], to = valuemap[,2],warn_missing = T)
-          # multi_field
-          newvar<-gsub(" ","",strsplit(fixmap$value1[1],",")[[1]]) #new rc var
-          newcolnames<-append(colnames(fresh_nonch),newvar)
-          fresh_nonch<-cbind(fresh_nonch,replicate(length(newvar),temp_dupcol)) #duplicate the ac col and then rbind the cols to the original df
-          colnames(fresh_nonch)<-newcolnames #update the colnames to include the new rc var
-        }}
-      #STEP4.08 special_1 needs to be changed to time (HH:SS)
-      sp1var<-subset(vm,fix_what=='special_1',select = redcap_var)[[1]]
-      if(length(sp1var)>1){fresh_nonch[,sp1var]<-as.data.frame(apply(fresh_nonch[,sp1var],2,function(x){gsub('1899-12-30','',x)}))}
-      #STEP4.09 SPECIAL value_set: import this value for EVERYONE who we import this form for
-      fixmap<-unique(subset(vm,fix_what=='value_set',select = c(redcap_var,instructions)))
-      if(nrow(fixmap)>0) { # if there's 'value_set' problem
-        fresh_nonch$"ipde_excludeitem"<-replicate(nrow(fresh_nonch),1)
-      }
-      #STEP4.10 special_5: if demo_childnum=0, give 0, otherwise give 1
-      fixmap<-unique(subset(vm,fix_what=='special_5',select = c(redcap_var,instructions,value1,value2)))
-      if(nrow(fixmap)>0) { # if there's 'special_5' problem
-        for (df_row in 1:nrow(fresh_nonch)){
-          if (is.na(fresh_nonch$demo_childnum[df_row])){fresh_nonch$demo_ynchild[df_row]<-NA
-          }else{
-            fresh_nonch$demo_ynchild[df_row]<-ifelse(as.numeric(fresh_nonch$demo_childnum[df_row])==0,0,1)
-          }}}
       
-      fresh_nonch<<-fresh_nonch
-      log_out_of_range<<-log_out_of_range
-      log_replace<<-log_replace
-      message(paste0(formname,": STEP4 done."))
     }
     STEP4()
     
