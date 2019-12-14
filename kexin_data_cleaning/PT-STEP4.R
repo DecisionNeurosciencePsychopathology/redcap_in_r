@@ -1,6 +1,6 @@
 fresh_nonch<-raw_nonch #temperary
 #STEP4<-function(){
-cat(paste0(formname,": performning STEP4 now...\n"))
+cat(paste("#",form_i,formname,"- performning STEP4 now...\n"))
 #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
 fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
 if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
