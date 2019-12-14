@@ -29,7 +29,7 @@ log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=a
 #curdb = bsoc
 #protocol.cur <- ptcs$bsocial
 #db = 
-#bsoc<- bsrc.checkdatabase2()
+pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 skipotherforms = TRUE
@@ -41,6 +41,9 @@ replace_w_na = FALSE
 ## verify Morgan's var_map. 
 ####for the col is.box. NA should mean represent unecessary variables. i.e. 
 # if redcap_var and access_var both exist, is.checkbox cannot be NA
+na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(pt$data))]
+
+var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(pt$data)),] #temperary remove rc var that cannot be found in the protect data
 chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
 chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing
 # vice versa 
@@ -191,10 +194,10 @@ for (form_i in 1:length(forms)) {
   }# the function is writen and editted in another script. Above is a copy of the script
   STEP1() # get 'raw_nonch': redcap variables, 
   if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
-    fresh_nonch<-raw_nonch
     ##STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map'
     STEP4<-function(){
-      cat(paste0(formname,": performning STEP4 now...\n"))
+      fresh_nonch<-raw_nonch
+      cat(paste("#",form_i,formname,"- performning STEP4 now...\n"))
       #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
       fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
       if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
@@ -251,36 +254,28 @@ for (form_i in 1:length(forms)) {
       cat(paste0(formname,": STEP4 done.\n"))
     }
     STEP4()
-    
+
     ##STEP5 
     #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
     STEP5<-function(){
-      message(paste0(formname,": performning STEP5 now..."))
-      if(!replace_999){message('Warn: 999 has not been replaced yet.')}
+      cat(paste("#",form_i,formname,"- performning STEP5 now...\n"))
+      vm<-subset(vm,redcap_var%in%colnames(pt$data)) #temperary
+      fresh_nonch<-fresh_nonch[,which(colnames(fresh_nonch)%in%colnames(pt$data))] #temperary
       for (j in 1:length(colnames(fresh_nonch))) { # get the range by col (variable) and then get the rows of out-of-range values
-        if (colnames(fresh_nonch)[j]=="matching_id"){break()}
-        if(colnames(fresh_nonch)[j]%in%vm$redcap_var){ #skip access var in the current form 
-          rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = bsoc$metadata)[[1]] # get the range 
-          if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range') # variable should have a range 
-          } else { # check range for those variables that have a range 
-            if(formname=="IPDE"){ # for "IPDE", the range is often "2"   "1"   "0"   "NaN", which is okay
-              ifelse(j==107,rg<-c(1,0),rg<-c(2,1,0))
-            }else{
-              if(any(is.na(as.integer(rg)))){stop(message(paste('The range of variable',colnames(fresh_nonch)[j],'is not integer or contain NA. Stop the function.')))}# the range should be integer 
-              rg<-as.integer(rg)}
-            #get the rows of out-of-range values; replace and report out-of-range values
-            i<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]]))) # report values that is not in the range. NA is acceptable 
-            if (length(i)==0){
-              message(paste('GOOD. All values of', formname, colnames(fresh_nonch)[j],'are within the range.'))
-              log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname,id='GOOD',which_var = colnames(fresh_nonch)[j],comments = 'GOOD. All values are within the range.')
-            }else{
-              log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = formname, which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
-                                             comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Replaced with NA.'))
-              log_replace<-report_wrong(id=fresh_nonch[i,1],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'Step5: Out of range values.',report = log_replace)
-              fresh_nonch[i,j]<-NA
-              message(paste0('Some values from ',formname," ", colnames(fresh_nonch)[j], ' are out of range. Refer to log_out_of_range for more details.'))
-            }
-          }
+        if(!colnames(fresh_nonch)[j]%in%vm$redcap_var){next()} #skip access var in the current form 
+        rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = pt$metadata)[[1]] # get the range 
+        if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range');next()} # variable should have a range 
+        #get the rows of out-of-range values; replace and report out-of-range values
+        i<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]]))) # report values that is not in the range. NA is acceptable 
+        if (length(i)==0){
+          cat(paste('GOOD. All values of', formname, colnames(fresh_nonch)[j],'are within the range.\n'))
+          log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname,id='GOOD',which_var = colnames(fresh_nonch)[j],comments = 'GOOD. All values are within the range.')
+        }else{
+          log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = formname, which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
+                                         comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Not replaced with NA.'))
+          #log_replace<-report_wrong(id=fresh_nonch[i,1],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'Step5: Out of range values.',report = log_replace)
+          #fresh_nonch[i,j]<-NA
+          message(paste0('Warn: Some values from ',formname," ", colnames(fresh_nonch)[j], ' are out of range. Refer to log_out_of_range for more details.'))
         }
       }
       fresh_nonch<<-fresh_nonch
@@ -293,7 +288,7 @@ for (form_i in 1:length(forms)) {
     ##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
     #If almost all of them have the same issue it may be very likely to be systematic. 
     
-    ##STEP7 for checkbox -- fix issues identified in STEP7
+    ##STEP7 for checkbox
     STEP7<-function(){
       fresh_chk<-STEP3(raw_chk) #replace 999 with NA
       vm<-subset(vm,is.checkbox=="TRUE") #subset of var_map where is.checkbox = T
