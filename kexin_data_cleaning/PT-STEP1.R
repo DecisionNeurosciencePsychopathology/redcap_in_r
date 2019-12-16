@@ -157,6 +157,10 @@ for (form_i in 1:length(forms)) {
     #STEP1.7 copy the column CDATE and rename as cdate_formname
     raw_nonch<-cbind(raw_nonch,newcol=raw_nonch$CDATE)
     colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))
+    #STEP1.8 SPECIAL for some forms that have "condition" issue, merge the checkbox df with certain non-chk access var. 
+    if ("condition" %in% vm$fix_what){
+      raw_chk<-cbind(raw_chk,RAWDATA[,subset(vm,fix_what=="condition",select = value1)[[1]]])
+    }
     
     cat(paste0(formname,": STEP1 done.\n"))
     vm<<-vm
