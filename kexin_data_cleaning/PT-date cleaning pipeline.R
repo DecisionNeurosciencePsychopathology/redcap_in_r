@@ -29,7 +29,7 @@ log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=a
 #curdb = bsoc
 #protocol.cur <- ptcs$bsocial
 #db = 
-pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
+#pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 skipotherforms = TRUE
@@ -43,7 +43,7 @@ replace_w_na = FALSE
 # if redcap_var and access_var both exist, is.checkbox cannot be NA
 na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(pt$data))]
 
-var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(pt$data)),] #temperary remove rc var that cannot be found in the protect data
+#var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(pt$data)),] #temperary remove rc var that cannot be found in the protect data
 chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
 chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing
 # vice versa 
@@ -173,6 +173,10 @@ for (form_i in 1:length(forms)) {
       #STEP1.7 copy the column CDATE and rename as cdate_formname
       raw_nonch<-cbind(raw_nonch,newcol=raw_nonch$CDATE)
       colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))
+      #STEP1.8 SPECIAL for some forms that have "condition" issue, merge the checkbox df with certain non-chk access var. 
+      if ("condition" %in% vm$fix_what){
+        raw_chk<-cbind(raw_chk,RAWDATA[,subset(vm,fix_what=="condition",select = value1)[[1]]])
+      }
       
       cat(paste0(formname,": STEP1 done.\n"))
       vm<<-vm
@@ -201,7 +205,7 @@ for (form_i in 1:length(forms)) {
       #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
       fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
       if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
-        valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
+       valuemap<-matrix(gsub(" ","",strsplit(fixmap$instructions[step4_i],",")[[1]]),ncol = 2,byrow = T)
         if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
           message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
         }else{
@@ -259,10 +263,9 @@ for (form_i in 1:length(forms)) {
     #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
     STEP5<-function(){
       cat(paste("#",form_i,formname,"- performning STEP5 now...\n"))
-      vm<-subset(vm,redcap_var%in%colnames(pt$data)) #temperary
-      fresh_nonch<-fresh_nonch[,which(colnames(fresh_nonch)%in%colnames(pt$data))] #temperary
       for (j in 1:length(colnames(fresh_nonch))) { # get the range by col (variable) and then get the rows of out-of-range values
         if(!colnames(fresh_nonch)[j]%in%vm$redcap_var){next()} #skip access var in the current form 
+        if (grepl("___",colnames(fresh_nonch)[j])){next()} # skip checkbox var brougt in during fixing "value_set2"
         rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = pt$metadata)[[1]] # get the range 
         if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range');next()} # variable should have a range 
         #get the rows of out-of-range values; replace and report out-of-range values
@@ -290,28 +293,120 @@ for (form_i in 1:length(forms)) {
     
     ##STEP7 for checkbox
     STEP7<-function(){
-      fresh_chk<-STEP3(raw_chk) #replace 999 with NA
+      cat(paste("#",form_i,formname,"- performning STEP7 now...\n"))
+      fresh_chk<-raw_chk
       vm<-subset(vm,is.checkbox=="TRUE") #subset of var_map where is.checkbox = T
+      
       #STEP7.1
-      #####need to check the values of ac var first!
+      #####need to check the values of ac var first!????
       #STEP7.2 redcap checkbox
       vm_rcchk<-subset(vm,fix_what=="redcap_check") # subset of vm of redcap_check var
-      #STEP7.2.1 cbind the original df with an empty dataframe containing rc col
-      newcolname<-append(colnames(fresh_chk),unique(vm_rcchk$redcap_var))#get the colname for the new df
-      fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_rcchk$redcap_var))))) 
-      colnames(fresh_chk)<-newcolname
-      #STEP7.2.2 fill in redcap cols
-      #for each row of fresh_chk, if values of acvar == x1 then values of rcvar == y1
-      for (df_i in 1:nrow(fresh_chk)) { # for every observation, [swtich values from access forms to coresponding values in redcap]  
-        for (vm_i in 1:nrow(vm_rcchk)){ #for every row in var_map (i.e. for every pair of [accessvalue,redcapvalue]), replace access value with redcap value
-          acvar<-vm_rcchk$access_var[vm_i]
-          rcvar<-vm_rcchk$redcap_var[vm_i]
-          if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA
-          }else if (as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]){
-            fresh_chk[df_i,rcvar]<-vm_rcchk$value2[vm_i]
-          }}}
+      if (nrow(vm_rcchk)>0){
+        #STEP7.2.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),unique(vm_rcchk$redcap_var))#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_rcchk$redcap_var))))) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.2.2 fill in redcap cols
+        #for each row of fresh_chk, if values of acvar == x1 then values of rcvar == y1
+        for (df_i in 1:nrow(fresh_chk)) { # for every observation, [swtich values from access forms to coresponding values in redcap]  
+          for (vm_i in 1:nrow(vm_rcchk)){ #for every row in var_map (i.e. for every pair of [accessvalue,redcapvalue]), replace access value with redcap value
+            acvar<-vm_rcchk$access_var[vm_i]
+            rcvar<-vm_rcchk$redcap_var[vm_i]
+            if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
+              iftrue<-as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],0)
+            }}}
+      }
+      #STEP7.3 access checkbox
+      vm_achk<-subset(vm,fix_what=="access_check") # subset of vm of redcap_check var
+      if (nrow(vm_achk)>0){
+        #STEP7.3.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),unique(vm_achk$redcap_var))#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_achk$redcap_var))))) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.3.2 fill in redcap cols
+        #for each row of fresh_chk, if values of acvar contains x1 then values of rcvar == x2, otherwise rcvar == x3
+        for (df_i in 1:nrow(fresh_chk)){
+          for (vm_i in 1:nrow(vm_achk)){
+            acvar<-vm_achk$access_var[vm_i]
+            rcvar<-vm_achk$redcap_var[vm_i]
+            if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
+              iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],vm_achk$value3[vm_i])
+            }}}
+      }
+      #STEP7.4 both_check1 both access and redcap are checkboxes, not case sensitive, if not in value1, then value 2 
+      vm_achk<-subset(vm,fix_what=="both_check1") # subset of vm of redcap_check var
+      if (nrow(vm_achk)>0){
+        #STEP7.4.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),unique(vm_achk$redcap_var))#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_achk$redcap_var))))) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.4.2 fill in redcap cols
+        #for each row of fresh_chk, if not contain value1, then value 2 
+        for (df_i in 1:nrow(fresh_chk)){
+          for (vm_i in 1:nrow(vm_achk)){
+            acvar<-vm_achk$access_var[vm_i]
+            rcvar<-vm_achk$redcap_var[vm_i]
+            if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
+              iftrue<-!grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+            }}}
+      }
+      #STEP7.5 both_check2 both access and redcap are checkboxes, not case sensitive, if in value1, then value 2 
+      vm_achk<-subset(vm,fix_what=="both_check2") # subset of vm of redcap_check var
+      if (nrow(vm_achk)>0){
+        #STEP7.5.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),unique(vm_achk$redcap_var))#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_achk$redcap_var))))) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.5.2 fill in redcap cols
+        #for each row of fresh_chk, if contain value1, then value 2 
+        for (df_i in 1:nrow(fresh_chk)){
+          for (vm_i in 1:nrow(vm_achk)){
+            acvar<-vm_achk$access_var[vm_i]
+            rcvar<-vm_achk$redcap_var[vm_i]
+            if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
+              iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+            }}}
+      }
+      #STEP7.6 condition if value1=value2, match here, otherwise assign value 3
+      vm_achk<-subset(vm,fix_what=="condition") # subset of vm of redcap_check var
+      if (nrow(vm_achk)>0){
+        #STEP7.6.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),unique(vm_achk$redcap_var))#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,data.frame(matrix(NA, nrow = nrow(fresh_chk), ncol = length(unique(vm_achk$redcap_var))))) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.6.2 fill in redcap cols
+        #for each row of fresh_chk, if value1=value2, match here, otherwise assign value 3
+        for (df_i in 1:nrow(fresh_chk)){
+          for (vm_i in 1:nrow(vm_achk)){
+            #for (vm_i in 1:12){
+            acvar0<-vm_achk$value1[vm_i]
+            acvar<-vm_achk$access_var[vm_i]
+            rcvar<-vm_achk$redcap_var[vm_i]
+            if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
+              iftrue<-fresh_chk[df_i,acvar0]==vm_achk$value2[vm_i]
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,fresh_chk[df_i,acvar],vm_achk$value3[vm_i])
+            }}}
+      }
+      #STEP7.7 SPECIAL special_6 range fix and make copies of this variable
+      vm_achk<-subset(vm,fix_what=="special_6") # subset of vm of redcap_check var
+      if (nrow(vm_achk)>0){
+        #STEP7.7.1 cbind the original df with an empty dataframe containing rc col
+        newcolname<-append(colnames(fresh_chk),vm_achk$redcap_var)#get the colname for the new df
+        fresh_chk<-cbind(fresh_chk,fresh_chk$EATYP,fresh_chk$EATYP,fresh_chk$EATYP) 
+        colnames(fresh_chk)<-newcolname
+        #STEP7.7.1 range fix 
+        for (step4_i in 1:nrow(vm_achk)){
+          valuemap<-matrix(gsub(" ","",strsplit(vm_achk$instructions[step4_i],",")[[1]]),ncol = 2,byrow = T)
+          fresh_chk[vm_achk$redcap_var[step4_i]]<-plyr::mapvalues(fresh_chk[[vm_achk$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2],warn_missing = F)
+        }
+      }
+      
       fresh_chk<<-fresh_chk
-      message(paste0(formname,": STEP7 done."))
+      cat(paste("#",form_i,formname,"- STEP7 done.\n"))
     }
     if(!is.null(acvar_chk)){STEP7()}
     
