@@ -21,6 +21,8 @@ log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as
                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
                            which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+log_branching <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                            which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 #deleted_rows<-list()
 #comb_rows<-list() # IDDATE absent in at least one form when combining 
 #####################################start of the function#########################################
@@ -76,7 +78,7 @@ report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = N
                          report = wrong_val_report,rbind=T){
   new_repo <- data.frame(id = id, stringsAsFactors = F)
   new_repo[1:nrow(new_repo),2]<- which_var
-  new_repo[1:nrow(new_repo),3]<- wrong_val
+  new_repo[1:nrow(new_repo),3]<- as.character(wrong_val)
   new_repo[1:nrow(new_repo),4]<- which_form
   new_repo[1:nrow(new_repo),5]<- comments
   colnames(new_repo)<-c('id','var_name','wrong_val', 'which_form','comments')
@@ -205,7 +207,7 @@ for (form_i in 1:length(forms)) {
       #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
       fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
       if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
-       valuemap<-matrix(gsub(" ","",strsplit(fixmap$instructions[step4_i],",")[[1]]),ncol = 2,byrow = T)
+        valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T) # don't use str split because we want NA rather than "NA"
         if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
           message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
         }else{
@@ -258,7 +260,7 @@ for (form_i in 1:length(forms)) {
       cat(paste0(formname,": STEP4 done.\n"))
     }
     STEP4()
-
+    
     ##STEP5 
     #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
     STEP5<-function(){
@@ -291,7 +293,7 @@ for (form_i in 1:length(forms)) {
     ##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
     #If almost all of them have the same issue it may be very likely to be systematic. 
     
-    ##STEP7 for checkbox
+    ##STEP7 for checkbox (fix_what1)
     STEP7<-function(){
       cat(paste("#",form_i,formname,"- performning STEP7 now...\n"))
       fresh_chk<-raw_chk
@@ -316,6 +318,7 @@ for (form_i in 1:length(forms)) {
               iftrue<-as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]
               fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],0)
             }}}
+        cat("redcap_check done.")
       }
       #STEP7.3 access checkbox
       vm_achk<-subset(vm,fix_what=="access_check") # subset of vm of redcap_check var
@@ -334,6 +337,7 @@ for (form_i in 1:length(forms)) {
               iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
               fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],vm_achk$value3[vm_i])
             }}}
+        cat("access_check done.")
       }
       #STEP7.4 both_check1 both access and redcap are checkboxes, not case sensitive, if not in value1, then value 2 
       vm_achk<-subset(vm,fix_what=="both_check1") # subset of vm of redcap_check var
@@ -352,6 +356,7 @@ for (form_i in 1:length(forms)) {
               iftrue<-!grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
               fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
             }}}
+        cat("both_check done.")
       }
       #STEP7.5 both_check2 both access and redcap are checkboxes, not case sensitive, if in value1, then value 2 
       vm_achk<-subset(vm,fix_what=="both_check2") # subset of vm of redcap_check var
@@ -370,6 +375,7 @@ for (form_i in 1:length(forms)) {
               iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
               fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
             }}}
+        cat("both_check done.")
       }
       #STEP7.6 condition if value1=value2, match here, otherwise assign value 3
       vm_achk<-subset(vm,fix_what=="condition") # subset of vm of redcap_check var
@@ -390,6 +396,7 @@ for (form_i in 1:length(forms)) {
               iftrue<-fresh_chk[df_i,acvar0]==vm_achk$value2[vm_i]
               fresh_chk[df_i,rcvar]<-ifelse(iftrue,fresh_chk[df_i,acvar],vm_achk$value3[vm_i])
             }}}
+        cat("condition done.")
       }
       #STEP7.7 SPECIAL special_6 range fix and make copies of this variable
       vm_achk<-subset(vm,fix_what=="special_6") # subset of vm of redcap_check var
@@ -400,7 +407,7 @@ for (form_i in 1:length(forms)) {
         colnames(fresh_chk)<-newcolname
         #STEP7.7.1 range fix 
         for (step4_i in 1:nrow(vm_achk)){
-          valuemap<-matrix(gsub(" ","",strsplit(vm_achk$instructions[step4_i],",")[[1]]),ncol = 2,byrow = T)
+          valuemap<-matrix(eval(parse(text = paste0("c(",vm_achk$instructions[step4_i],")"))),ncol = 2,byrow = T)
           fresh_chk[vm_achk$redcap_var[step4_i]]<-plyr::mapvalues(fresh_chk[[vm_achk$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2],warn_missing = F)
         }
       }
@@ -410,24 +417,50 @@ for (form_i in 1:length(forms)) {
     }
     if(!is.null(acvar_chk)){STEP7()}
     
-    
-    #STEP8 for checkbox -- match checkbox variabels with other variabels using matching_id
+    #STEP8 match checkbox variabels with other variabels using matching_id or IDDATE
     STEP8<-function(){
       if(is.null(acvar_chk)){
         fresh_alldata<-fresh_nonch
+        cat("STEP8 done. No checkbox col needs to be merged.\n")
       }else{
-        fresh_alldata<-dplyr::inner_join(fresh_nonch,fresh_chk[-1],by = "matching_id")
-        if(!max(fresh_alldata$matching_id)==nrow(fresh_alldata)){stop(message("The last check: something is wrong."))}
+        fresh_alldata<-dplyr::full_join(fresh_nonch,fresh_chk[-1],by = c("CDATE","IDDATE"))
+        if(!nrow(fresh_chk)==nrow(fresh_alldata)|!nrow(fresh_nonch)==nrow(fresh_alldata)){stop(message("STEP8: something is wrong."))}
         fresh_alldata<<-fresh_alldata
-        message("STEP8 done.")
+        cat("STEP8 done. Checkbox col and non-check box cols have been merged.\n")
       }
       fresh_alldata<<-fresh_alldata
-      message(paste0(formname,": STEP8 done. - DATA CLEANING COMPLETED!"))
     }
     STEP8()
     
-    assign(paste0("df_",form_i),fresh_alldata)
-    write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/form_",form_i,".csv"))
+    #STEP9 branching (fix_what2)
+    STEP9<-function(){
+      #branch if value4!=value5, there should be NO data in this variable
+      vm_br<-subset(vm,fix_what2=="branch")
+      if (nrow(vm_br)>0){ for (df_i in 1:nrow(fresh_alldata)){
+        for (vm_i in 1:nrow(vm_br)){
+          brlogic<-sum(fresh_alldata[df_i,vm_br$value4[vm_i]]==vm_br$value5[vm_i],na.rm = T)==1 # branching logic: if T then branch (i.e. have data in the redcap variable); if F or NA then NOT branch.
+          if(!sum(brlogic+is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]]),na.rm = T)==1){ # we only want either branchinglogic or is.na(rc value) ==T (only one can be true)
+            log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = "Branch1", report = log_branching)}
+          #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
+          #unique(fresh_nonch$staupxtra_sep_which)
+        }}
+      }
+      vm_br<-subset(vm,fix_what2=="branch_2")
+      if (nrow(vm_br)>0){ for (df_i in 1:nrow(fresh_alldata)){
+        for (vm_i in 1:nrow(vm_br)){
+          brlogic<-sum(with(fresh_alldata,eval(parse(text = vm_br$value4))),na.rm = T)==1 # branching logic: if T then branch (i.e. have data in the redcap variable); if F or NA then NOT branch.
+          if(!sum(brlogic+is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]]),na.rm = T)==1){ # we only want either branchinglogic or is.na(rc value) ==T (only one can be true)
+            log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = "Branch2", report = log_branching)}
+          #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
+          #unique(fresh_nonch$staupxtra_sep_which)
+        }}}
+      log_branching<<-log_branching
+    }
+    STEP9()
+    
+    #assign(paste0("df_",form_i),fresh_alldata)
+    write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/form_",formname,"_",Sys.Date(),".csv"))
+    
     #  write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm_",form_i,".csv"))
     #  write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range_",form_i,".csv"))
     #  write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_",form_i,".csv"))
@@ -438,9 +471,11 @@ for (form_i in 1:length(forms)) {
 # check IDDATE following combining_form.csv (eg: some forms should have identical IDDATE, every IDDATE has all forms?). Refer to combine and check forms.R
 
 
-write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm.csv"))
-write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range.csv"))
-write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_.csv"))
+#write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm.csv"))
+write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_out_of_range_",Sys.Date(),".csv"))
+write.csv(unique(log_branching),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_branching_",Sys.Date(),".csv"))
+#write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_.csv"))
+
 for (del_i in 1:length(deleted_rows)){
   write.csv(deleted_rows[[del_i]],file = paste0("~/Documents/github/UPMC/TRANSFER/DeletedRows_",names(deleted_rows)[del_i],".csv"))
   rm(del_i)
