@@ -5,7 +5,8 @@ rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
 var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt2.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
-var_map$baseline<-"TRUE"
+#var_map$path<-gsub("\"","",var_map$path) #temperary: remove quotation marks from paths 
+var_map$baseline<-"TRUE"#temperary
 var_map$baseline<-as.logical(var_map$baseline)
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
 var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
@@ -71,6 +72,8 @@ if (is.null(forms)){
   forms<-unique(forms[!is.na(forms)])
 } 
 rm(all_formnm)
+
+
 
 ## PREPARE functions
 # make a fun to report abnormal values 
@@ -148,8 +151,9 @@ for (form_i in 1:length(forms)) {
       }
       #SPECIAL for SCID: add back some records with dup id that Morgan manually find 
       if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG")){
-        special<-read.csv(paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/DEC12 MANUALLY/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
+        special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
         special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
+        special[which(special=="",arr.ind = T)]<-NA
         special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
         if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
           RAWDATA<-rbind(RAWDATA,special)
@@ -265,27 +269,47 @@ for (form_i in 1:length(forms)) {
     #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
     STEP5<-function(){
       cat(paste("#",form_i,formname,"- performning STEP5 now...\n"))
+      deleted_rows<-fresh_nonch[1,];deleted_rows<-deleted_rows[-1,]
+      if(sum(apply(fresh_nonch,2,function(x){as.character(x)==""}),na.rm = T)>0){stop(message("Warning: The df contains \"\". Check your codes!"))} # all "" should be replaced with NA
+      #which(apply(fresh_nonch,2,function(x){as.character(x)==""}),arr.ind = T) #find out "" 
       for (j in 1:length(colnames(fresh_nonch))) { # get the range by col (variable) and then get the rows of out-of-range values
         if(!colnames(fresh_nonch)[j]%in%vm$redcap_var){next()} #skip access var in the current form 
         if (grepl("___",colnames(fresh_nonch)[j])){next()} # skip checkbox var brougt in during fixing "value_set2"
         rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = pt$metadata)[[1]] # get the range 
         if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range');next()} # variable should have a range 
+        if(("na"%in%rg&sum(is.na(as.integer(rg)))==1)|!any(is.na(rg))){rg<-as.integer(rg)} # turn range as integer if rg contains only "na" and integers  
         #get the rows of out-of-range values; replace and report out-of-range values
         i<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]]))) # report values that is not in the range. NA is acceptable 
+        if(formname=="A_SCIDIV"){# if the the form is "A_SCIDIV", remove the whole row where the value is 0
+          i0<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]])) & fresh_nonch[[j]]==0) # if the wrong value is 0, remove the whole row 
+          log_replace<-report_wrong(id=fresh_nonch[i0,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i0,j], which_form = formname,comments = 'Step5: Out of range values. The rows are removed.',report = log_replace)
+          deleted_rows<-rbind(deleted_rows,fresh_nonch[i0,])
+          fresh_nonch<-fresh_nonch[-i0,]
+          i<-setdiff(i,i0)
+        }
+        i9<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]])) & fresh_nonch[[j]]==9) # if the wrong value is 9, replace them with NA;
+        if(length(i9)>0){
+          log_replace<-report_wrong(id=fresh_nonch[i9,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i9,j], which_form = formname,comments = 'Step5: Out of range values. Replaced with NA',report = log_replace)
+          fresh_nonch[i9,j]<-NA
+          i<-setdiff(i,i9)
+        }
         if (length(i)==0){
           cat(paste('GOOD. All values of', formname, colnames(fresh_nonch)[j],'are within the range.\n'))
           log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname,id='GOOD',which_var = colnames(fresh_nonch)[j],comments = 'GOOD. All values are within the range.')
         }else{
           log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = formname, which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
-                                         comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Not replaced with NA.'))
-          #log_replace<-report_wrong(id=fresh_nonch[i,1],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'Step5: Out of range values.',report = log_replace)
-          #fresh_nonch[i,j]<-NA
+                                         comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Values except 9 are not replaced with NA.'))
           message(paste0('Warn: Some values from ',formname," ", colnames(fresh_nonch)[j], ' are out of range. Refer to log_out_of_range for more details.'))
         }
+        # check 295.3 in scid s211 and 29..0 in scid_xii_c168
+        # check 
+        
+        #fresh_nonch[i,j]<-NA
       }
       fresh_nonch<<-fresh_nonch
       log_out_of_range<<-log_out_of_range
       log_replace<<-log_replace
+      deleted_rows<<-deleted_rows
       cat(paste0(formname,": STEP5 done.\n"))
     }
     STEP5()
@@ -316,7 +340,7 @@ for (form_i in 1:length(forms)) {
             rcvar<-vm_rcchk$redcap_var[vm_i]
             if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
               iftrue<-as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]
-              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],0)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],NA)
             }}}
         cat("redcap_check done.")
       }
@@ -354,7 +378,7 @@ for (form_i in 1:length(forms)) {
             rcvar<-vm_achk$redcap_var[vm_i]
             if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
               iftrue<-!grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
-              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
             }}}
         cat("both_check done.")
       }
@@ -373,7 +397,7 @@ for (form_i in 1:length(forms)) {
             rcvar<-vm_achk$redcap_var[vm_i]
             if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
               iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
-              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+              fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
             }}}
         cat("both_check done.")
       }
@@ -439,8 +463,13 @@ for (form_i in 1:length(forms)) {
       if (nrow(vm_br)>0){ for (df_i in 1:nrow(fresh_alldata)){
         for (vm_i in 1:nrow(vm_br)){
           brlogic<-sum(fresh_alldata[df_i,vm_br$value4[vm_i]]==vm_br$value5[vm_i],na.rm = T)==1 # branching logic: if T then branch (i.e. have data in the redcap variable); if F or NA then NOT branch.
-          if(!sum(brlogic+is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]]),na.rm = T)==1){ # we only want either branchinglogic or is.na(rc value) ==T (only one can be true)
-            log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = "Branch1", report = log_branching)}
+          if(!brlogic&!is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]])){ # report if brlogic ==F but is.na()==F
+            if(!is.na(vm_br$value6[vm_i])&fresh_alldata[df_i,vm_br$redcap_var[vm_i]]==vm_br$value6[vm_i]){ # if the redcap value == value 6 then replace it with NA, otherwise just report 
+              fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA 
+              log_replace<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch1",vm_br$value4[vm_i],"=",fresh_alldata[df_i,vm_br$value4[vm_i]],"Replaced with NA"), report = log_replace)
+            }else{
+              log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch1",vm_br$value4[vm_i],"=",fresh_alldata[df_i,vm_br$value4[vm_i]]), report = log_branching)}
+          }
           #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
           #unique(fresh_nonch$staupxtra_sep_which)
         }}
@@ -449,8 +478,13 @@ for (form_i in 1:length(forms)) {
       if (nrow(vm_br)>0){ for (df_i in 1:nrow(fresh_alldata)){
         for (vm_i in 1:nrow(vm_br)){
           brlogic<-sum(with(fresh_alldata,eval(parse(text = vm_br$value4))),na.rm = T)==1 # branching logic: if T then branch (i.e. have data in the redcap variable); if F or NA then NOT branch.
-          if(!sum(brlogic+is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]]),na.rm = T)==1){ # we only want either branchinglogic or is.na(rc value) ==T (only one can be true)
-            log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = "Branch2", report = log_branching)}
+          if(!brlogic&!is.na(fresh_alldata[df_i,vm_br$redcap_var[vm_i]])){ # report if brlogic ==F but is.na()==F
+            if(!is.na(vm_br$value6[vm_i])&fresh_alldata[df_i,vm_br$redcap_var[vm_i]]==vm_br$value6[vm_i]){ # if the redcap value == value 6 then replace it with NA, otherwise just report 
+              fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA 
+              log_replace<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch2",vm_br$value4[vm_i],"Replaced with NA"), report = log_replace)
+            }else{
+              log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch2",vm_br$value4[vm_i]), report = log_branching)}
+          }
           #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
           #unique(fresh_nonch$staupxtra_sep_which)
         }}}

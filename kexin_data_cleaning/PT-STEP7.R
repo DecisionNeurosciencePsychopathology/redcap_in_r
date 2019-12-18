@@ -20,7 +20,7 @@ if (nrow(vm_rcchk)>0){
       rcvar<-vm_rcchk$redcap_var[vm_i]
       if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
         iftrue<-as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]
-        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],0)
+        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],NA)
       }}}
 cat("redcap_check done.")
   }
@@ -58,7 +58,7 @@ if (nrow(vm_achk)>0){
       rcvar<-vm_achk$redcap_var[vm_i]
       if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
         iftrue<-!grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
-        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
       }}}
   cat("both_check done.")
   }
@@ -77,7 +77,7 @@ if (nrow(vm_achk)>0){
       rcvar<-vm_achk$redcap_var[vm_i]
       if (is.na(fresh_chk[df_i,acvar])){fresh_chk[df_i,rcvar]<-NA} else {
         iftrue<-grepl(vm_achk$value1[vm_i],fresh_chk[df_i,acvar],ignore.case = T)
-        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],0)
+        fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
       }}}
   cat("both_check done.")
   }

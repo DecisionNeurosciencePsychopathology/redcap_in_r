@@ -130,13 +130,14 @@ for (form_i in 1:length(forms)) {
     }
     #SPECIAL for SCID: add back some records with dup id that Morgan manually find 
     if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG")){
-      special<-read.csv(paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/DEC12 MANUALLY/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
+      special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
       special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
+      special[which(special=="",arr.ind = T)]<-NA
       special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
       if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
         RAWDATA<-rbind(RAWDATA,special)
         message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
-        }else{stop(message("Something is wrong"))}
+      }else{stop(message("Something is wrong"))}
     }
     #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
     if(!is.null(acvar_chk)){
