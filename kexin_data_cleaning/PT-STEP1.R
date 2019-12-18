@@ -129,7 +129,7 @@ for (form_i in 1:length(forms)) {
         RAWDATA<-RAWDATA[-which(RAWDATA$IDDATE%in%dup_id),]}      #remove duplicated rows
     }
     #SPECIAL for SCID: add back some records with dup id that Morgan manually find 
-    if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG")){
+    if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){
       special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
       special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
       special[which(special=="",arr.ind = T)]<-NA

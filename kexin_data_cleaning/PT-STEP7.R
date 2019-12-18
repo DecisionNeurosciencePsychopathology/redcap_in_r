@@ -22,8 +22,8 @@ if (nrow(vm_rcchk)>0){
         iftrue<-as.numeric(fresh_chk[df_i,acvar])==vm_rcchk$value1[vm_i]
         fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_rcchk$value2[vm_i],NA)
       }}}
-cat("redcap_check done.")
-  }
+  cat("redcap_check done.")
+}
 #STEP7.3 access checkbox
 vm_achk<-subset(vm,fix_what=="access_check") # subset of vm of redcap_check var
 if (nrow(vm_achk)>0){
@@ -42,7 +42,7 @@ if (nrow(vm_achk)>0){
         fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],vm_achk$value3[vm_i])
       }}}
   cat("access_check done.")
-  }
+}
 #STEP7.4 both_check1 both access and redcap are checkboxes, not case sensitive, if not in value1, then value 2 
 vm_achk<-subset(vm,fix_what=="both_check1") # subset of vm of redcap_check var
 if (nrow(vm_achk)>0){
@@ -61,7 +61,7 @@ if (nrow(vm_achk)>0){
         fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
       }}}
   cat("both_check done.")
-  }
+}
 #STEP7.5 both_check2 both access and redcap are checkboxes, not case sensitive, if in value1, then value 2 
 vm_achk<-subset(vm,fix_what=="both_check2") # subset of vm of redcap_check var
 if (nrow(vm_achk)>0){
@@ -80,7 +80,7 @@ if (nrow(vm_achk)>0){
         fresh_chk[df_i,rcvar]<-ifelse(iftrue,vm_achk$value2[vm_i],NA)
       }}}
   cat("both_check done.")
-  }
+}
 #STEP7.6 condition if value1=value2, match here, otherwise assign value 3
 vm_achk<-subset(vm,fix_what=="condition") # subset of vm of redcap_check var
 if (nrow(vm_achk)>0){
@@ -92,7 +92,7 @@ if (nrow(vm_achk)>0){
   #for each row of fresh_chk, if value1=value2, match here, otherwise assign value 3
   for (df_i in 1:nrow(fresh_chk)){
     for (vm_i in 1:nrow(vm_achk)){
-    #for (vm_i in 1:12){
+      #for (vm_i in 1:12){
       acvar0<-vm_achk$value1[vm_i]
       acvar<-vm_achk$access_var[vm_i]
       rcvar<-vm_achk$redcap_var[vm_i]
@@ -101,7 +101,7 @@ if (nrow(vm_achk)>0){
         fresh_chk[df_i,rcvar]<-ifelse(iftrue,fresh_chk[df_i,acvar],vm_achk$value3[vm_i])
       }}}
   cat("condition done.")
-  }
+}
 #STEP7.7 SPECIAL special_6 range fix and make copies of this variable
 vm_achk<-subset(vm,fix_what=="special_6") # subset of vm of redcap_check var
 if (nrow(vm_achk)>0){
@@ -117,5 +117,5 @@ if (nrow(vm_achk)>0){
 }
 
 fresh_chk<<-fresh_chk
-cat(paste("#",form_i,formname,"- STEP7 done.\n"))
+cat(paste("\n#",form_i,formname,"- STEP7 done.\n"))
 #}

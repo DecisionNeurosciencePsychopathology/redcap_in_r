@@ -1,10 +1,11 @@
 fresh_nonch<-raw_nonch #temperary
 #STEP4<-function(){
+fresh_nonch<-raw_nonch
 cat(paste("#",form_i,formname,"- performning STEP4 now...\n"))
 #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
 fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
 if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
-  valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
+  valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T) # don't use str split because we want NA rather than "NA"
   if (all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){
     message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[step4_i],'" so no need to do "range_fix"'))
   }else{
