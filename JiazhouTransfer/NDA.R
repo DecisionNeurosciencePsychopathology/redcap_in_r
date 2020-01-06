@@ -11,8 +11,8 @@ bsrc.nda.getidmap<-function(boxdir="",masterdemo=NULL,)
 allIDs<-lapply(list.files("~/Box/skinner/administrative/NDA/IDMap/",full.names = T,recursive = F),readxl::read_xlsx)
 ndaIDs<-do.call(rbind,allIDs)
 existingID<-unique(masterdemo$data$registration_ndaguid)
-ndaIDs[!ndaIDs$`Pseudo GUID` %in% existingID,]
-
+IDmap<-ndaIDs[!ndaIDs$`Pseudo GUID` %in% existingID,]
+names(IDmap)<-c("GUID_map_ID","NDA_GUID","Date")
 
 
 bsrc.nda.assignIDs<-function(IDmap=NULL,masterdemoptcs=ptcs$masterdemo,ptcfilter="bsocial",beg_consentdate="2017-08-01",
@@ -20,6 +20,13 @@ bsrc.nda.assignIDs<-function(IDmap=NULL,masterdemoptcs=ptcs$masterdemo,ptcfilter
 
 
 #do the filtering first
+masterdemoptcs<-ptcs$masterdemo
+ptcfilter = "bsocial"
+beg_consentdate = "2019-08-01"
+rcIDvar="registration_redcapid"
+ndaIDvar="registration_ndaguid"
+
+
 ptcdf_a<-masterdemo$data[which(masterdemo$data[[paste("registration_ptcstat",ptcfilter,sep = "___")]]==1),]
 
 ptcdf_b<-ptcdf_a[which(as.Date(ptcdf_a[[paste("reg_condate",ptcfilter,sep = "_")]]) > as.Date(beg_consentdate)),]
@@ -55,8 +62,11 @@ ref_b<-ref_b[!is.na(ref_b$value),]
 ref_b$redcap_event_name<-referencedf$evt[match(ref_b$variable,referencedf$variname)]
 ref_ba<-ref_b[ref_b$redcap_event_name=="baseline_arm_1",]
 #requiredDF$baseline_date<-
+dat_a <- bsrc.getform(curdb = bsocial,formname = "ctq")
+
 
 dat_a$interview_date<-ref_b$value[match(interaction(dat_a$registration_redcapid,dat_a$redcap_event_name),interaction(ref_b$registration_redcapid,ref_b$redcap_event_name))]
+
 
 ContinMap<-InstruMap[which(InstruMap$Required!="Required"),]
 ContinMap$Aliases_List<-strsplit(ContinMap$Aliases,split = ",")
@@ -71,9 +81,16 @@ names(dat_a)[which(!names(dat_a) %in% c(rcIDvar,"redcap_event_name","interview_d
 })
 
 dat_b<-dat_a[which(!is.na(names(dat_a)))]
+dat_b[dat_b==999] <- -99
+dat_merge <- merge(dat_b,requiredDF,by.x = rcIDvar,by.y = "src_subject_id",all.y = T)
+dat_merge$registration_redcapid<-NULL;dat_merge$redcap_event_name<-NULL
+write.csv(dat_merge,file = "ctq_out.csv",row.names = F)
 
 
-requiredMap$ElementName %in% c("subjectkey","src_subject_id","interview_date","interview_age","gender")
+
+
+
+
 }
 
 

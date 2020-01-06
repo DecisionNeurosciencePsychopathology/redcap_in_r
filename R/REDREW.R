@@ -216,7 +216,9 @@ redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
     message("uploading ",g," out of ",length(gt_u_names))
     redcap_upload(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
   })
-  return(list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F)))
+  return(
+    list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F),outcome_message = unlist(sapply(gyat,`[[`,"outcome_message"),use.names = F))
+         )
 }
 
 
@@ -577,7 +579,7 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
   #Get necessary data
   if (online) {
     metadata <- REDCapR::redcap_metadata_read(redcap_uri = protocol$redcap_uri,token = protocol$token,verbose = F)$data
-    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = ptcs$masterdemo$token)
+    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = protocol$token)
     if(nrow(eventdata$data)<1){eventdata<-NULL}
   } else {
     if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
@@ -862,9 +864,8 @@ dnpl.bso.getsahx<-function(curdb=NULL) {
   return(dff)
 }
 ###########################
-bsrc.getSUIHX_index<-function(protocol=protocol.cur,suicide_formname="suicide_history"){
-  metadata<-bsrc.getform(protocol = protocol,formname = suicide_formname,aggressivecog = F,mod = F,online = T,batch_size=1000L)
-  sui_names<-names(metadata)
+bsrc.getSUIHX_index<-function(sahx_df){
+  sui_names<-names(sahx_df)
   index_df<-data.frame(names=sui_names,rxsim1=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
   index_df$SingleEntry<-index_df$names==index_df$rxsim1
   index_df$is_checkbox<-grepl("___",index_df$names)
