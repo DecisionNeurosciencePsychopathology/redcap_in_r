@@ -1,6 +1,6 @@
 ## startup
-rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
-source('~/Documents/github/UPMC/startup.R')
+#rootdir="~/Box/skinner/projects_analyses/suicide_trajectories/data/soloff_csv_new/"
+#source('~/Documents/github/UPMC/startup.R')
 var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 
@@ -18,12 +18,13 @@ deleted_rows<-list()
 #curdb = bsoc
 protocol.cur <- ptcs$bsocial
 #db = 
-bsoc<- bsrc.checkdatabase2()
+#bsoc<- bsrc.checkdatabase2()
+
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 #range
 replace_999 = TRUE # by defult, replace all 999 with NA 
 remove_dupid = FALSE # if T, only keep duplicated id with the earliest date 
-replace_w_na = FALSE
+replace_w_na = TRUE
 #) {
 
 ## verify Morgan's var_map. 
@@ -68,12 +69,13 @@ report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = N
   ifelse(rbind,return(rbind(report,new_repo)),return(new_repo))
 }
 
-#for (form_i in 1:length(forms)) {
-for (form_i in 1:7) {
+for (form_i in 1:length(forms)) {
+  #for (form_i in 8:length(forms)) {
   #STEP1: Select a RC form, get an integrated RC form with complete variables, right variable names, splited ordinary variables with checkbox variables, removed calculated variables 
   STEP1<-function(){
     #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
     formname <- forms[form_i] #formname(a character)
+    message(paste0("Cleaning form:",formname," now..."))
     vm<-subset(var_map, Form_name==formname) #subset of var mapping for the current form
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
     acvar_chk<-with(vm,split(access_var,is.checkbox))$'TRUE' #checkbox var
@@ -141,7 +143,7 @@ for (form_i in 1:7) {
           temp_repo<-dplyr::anti_join(x[1:2],iddate)
           if(nrow(temp_repo)>1){report_wrong(id=temp_repo[[1]],which_var = comm_var[2], wrong_val = temp_repo[[2]],which_form = formname,comments = "The date is changed when combing with other forms",report = log_replace,rbind = F)}
         })) 
-        if(is.null(log_replace)){
+        if(is.null(new_log_replace)){
           message(paste("No date data is replaced when combining forms for", formname))
         }else{message(paste("Some date data is replaced when combining forms for", formname,". Refer to log_replace for details."))}
         log_replace<-rbind(log_replace,new_log_replace)
@@ -195,12 +197,14 @@ for (form_i in 1:7) {
     
     vm<<-vm
     formname<<-formname
-    if(!is.null(acvar_chk)){acvar_chk<<-acvar_chk}
+    acvar_chk<<-acvar_chk
     rawdata<<-raw
     deleted_rows<<-deleted_rows
     if(!is.null(acvar_chk)){raw_chk<<-raw_chk}
     raw_nonch<<-raw_nonch
     log_replace<<-log_replace
+    log_comb_fm<<-log_comb_fm
+    message(paste0(formname,": STEP1 done."))
   }# the function is writen and editted in another script. Above is a copy of the script
   STEP1() # get 'raw_nonch': redcap variables, 
   
@@ -221,9 +225,10 @@ for (form_i in 1:7) {
     log_replace<<-log_replace
     return(df)
   }
-  fresh_nonch<-STEP3()
+  fresh_nonch<-STEP3(); message(paste0(formname,": STEP3 done."))
   ##STEP fix data with systematic issues (eg: shifted range) identified in 'var_map'
   STEP4<-function(){
+    message(paste0(formname,": performning STEP4 now..."))
     #STEP4.01 range_fix: range in access is not the same as range in redcap, specifies first access variable, then redcap variable to change to
     fixmap<-unique(subset(vm,fix_what=='range_fix',select = c(redcap_var,instructions)))
     if(nrow(fixmap)>0) {for (step4_i in 1:nrow(fixmap)){ # if there's 'range_fix' problem
@@ -247,13 +252,15 @@ for (form_i in 1:7) {
         }else{
           log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
                                          comments = 'range_allowed')
-          message('Fixing issue "range_allowed". Some values are out of range. Refer to log_out_of_range for more details.')
+          fresh_nonch[row_i,fixmap$redcap_var[step4_i]]<-NA
+          log_replace<-report_wrong(id=fresh_nonch[row_i,1],which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "range_allowed": Out of the range.The value is replaced with NA',report = log_replace)
+          message('Fixing issue "range_allowed": Some values are out of range. Refer to log_out_of_range for more details. The out-of-range values are replcaed with NA.')
         }}}}
     #STEP4.03 special_3: range_fix+range_allowed , 1=1, 2=2, 3=3, 4=5 (5 out of range)
     fixmap<-unique(subset(vm,fix_what=='special_3',select = c(redcap_var,instructions)))
     if(nrow(fixmap)>0) { #if there's 'special_3' problem
       #range_allowed
-      thecol<-fresh_nonch[fixmap$redcap_var[step4_i]] # the col with the problem 
+      thecol<-fresh_nonch[fixmap$redcap_var[1]] # the col with the problem 
       if(!is.numeric(thecol[[1]])){ # values in the col should be all numeric (or NA)
         stop(message(paste0('Form "',formname,'" has non-numeric values in column "',fixmap$redcap_var[step4_i],'" so "special_3" cannot be fixed')))
       }else{
@@ -264,7 +271,9 @@ for (form_i in 1:7) {
         }else{
           log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[row_i,1],which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
                                          comments = 'speical_3')
-          message('Fixing issue "special_3". Some values are out of range. Refer to log_out_of_range for more details.')
+          fresh_nonch[row_i,fixmap$redcap_var[step4_i]]<-NA
+          log_replace<-report_wrong(id=fresh_nonch[row_i,1],which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "special_3": Out of the range.The value is replaced with NA',report = log_replace)
+          message('Fixing issue "special_3". Some values are out of range. Refer to log_out_of_range for more details. The out-of-range values are replcaed with NA.')
         }}
       #range_fix- copied the codes in step 4.1
       valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))),ncol = 2,byrow = T)
@@ -278,40 +287,49 @@ for (form_i in 1:7) {
     if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
       fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(fresh_nonch[fixmap$redcap_var[step4_i]][[1]],format = fixmap$instructions[step4_i])
     }}
-    #STEP 4.05 check_equal: These two values in access should be equal before being imported. Throw an error if they are different
+    #STEP 4.05 SPECIAL check_equal: These two values in access should be equal before being imported. Throw an error if they are different
     fixmap<-subset(vm,fix_what=='check_equal',select = c(access_var,instructions))
     if (nrow(fixmap)>0){ #if there's 'check_equal' problem, fix the problem one variable by one var
       fixmap$instructions<-gsub("=",",",fixmap$instructions)
-      for (step4_i in 1:nrow(fixmap)){
-        temp_check<-subset(fresh_nonch,select = eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))))
-        if(!all(temp_check[[1]]==temp_check[[2]])){stop(message(paste0(formname,"'s ",fixmap$instructions[step4_i]," are not equal.")))}
-        rm(temp_check)
+      reportrow<-which(!fresh_nonch$SPD5==fresh_nonch$STPD8)
+      if(length(reportrow)>0){
+        log_replace<-report_wrong(id = fresh_nonch[reportrow,1], which_var = "SPD5", wrong_val = fresh_nonch$SPD5[reportrow], which_form = formname, comments = "check_equal: SPD5<>STPD8", report = log_replace) #report
+        log_replace<-report_wrong(id = fresh_nonch[reportrow,1], which_var = "STPD8", wrong_val = fresh_nonch$STPD8[reportrow], which_form = formname, comments = "check_equal: SPD5<>STPD8", report = log_replace) #report
+        fresh_nonch$SPD5[reportrow]<-NA #replace with NA
+        fresh_nonch$STPD8[reportrow]<-NA #replace with NA
+        #for (step4_i in 1:nrow(fixmap)){ # generalized codes but not replace with NA
+        #  temp_check<-subset(fresh_nonch,select = eval(parse(text = paste0("c(",fixmap$instructions[step4_i],")"))))
+        #  if(!all(temp_check[[1]]==temp_check[[2]])){stop(message(paste0(formname,"'s ",fixmap$instructions[step4_i]," are not equal.")))}
+        #  rm(temp_check)
+        #}
       }}
     #STEP4.06 multi_field: One access variable goes into multiple redcap variables
     fixmap<-subset(vm,fix_what=='multi_field',select = c(access_var,instructions))
     if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
       newvar<-gsub(" ","",strsplit(fixmap$instructions[step4_i],",")[[1]]) #new rc var
+      newcolnames<-append(colnames(fresh_nonch),newvar) #update the colnames to include the new rc var
       fresh_nonch<-cbind(fresh_nonch,replicate(length(newvar),fresh_nonch[fixmap$access_var[step4_i]])) #duplicate the ac col and then rbind the cols to the original df
-      colnames(fresh_nonch)<-append(colnames(fresh_nonch),newvar) #update the colnames to include the new rc var
+      colnames(fresh_nonch)<-newcolnames 
     }}
     #STEP4.07 special_4: This value goes into multiple redcap values, also value needs to be changed
     fixmap<-unique(subset(vm,fix_what=='special_4',select = c(access_var,instructions,value1)))
     if(nrow(fixmap)>0) { # if there's 'special_4' problem
       # replace values (range_fix)
       valuemap<-matrix(eval(parse(text = paste0("c(",fixmap$instructions[1],")"))),ncol = 2,byrow = T)
-      if (all(is.na(fresh_nonch[[fixmap$redcap_var[1]]]))){ 
+      if (all(is.na(fresh_nonch[[fixmap$access_var[1]]]))){ 
         message(paste0('Form "',formname,'" has only NA in column "',fixmap$redcap_var[1],'" so no need to do value replacement for "special_4"'))
       }else{
-        temp_dupcol<-plyr::mapvalues(fresh_nonch[[fixmap$redcap_var[1]]],from = valuemap[,1], to = valuemap[,2],warn_missing = T)
+        temp_dupcol<-plyr::mapvalues(fresh_nonch[[fixmap$access_var[1]]],from = valuemap[,1], to = valuemap[,2],warn_missing = T)
         # multi_field
         newvar<-gsub(" ","",strsplit(fixmap$value1[1],",")[[1]]) #new rc var
+        newcolnames<-append(colnames(fresh_nonch),newvar)
         fresh_nonch<-cbind(fresh_nonch,replicate(length(newvar),temp_dupcol)) #duplicate the ac col and then rbind the cols to the original df
-        colnames(fresh_nonch)<-append(colnames(fresh_nonch),newvar) #update the colnames to include the new rc var
+        colnames(fresh_nonch)<-newcolnames #update the colnames to include the new rc var
       }}
     #STEP4.08 special_1 needs to be changed to time (HH:SS)
     sp1var<-subset(vm,fix_what=='special_1',select = redcap_var)[[1]]
     if(length(sp1var)>1){fresh_nonch[,sp1var]<-as.data.frame(apply(fresh_nonch[,sp1var],2,function(x){gsub('1899-12-30','',x)}))}
-    #STEP4.09 value_set: import this value for EVERYONE who we import this form for
+    #STEP4.09 SPECIAL value_set: import this value for EVERYONE who we import this form for
     fixmap<-unique(subset(vm,fix_what=='value_set',select = c(redcap_var,instructions)))
     if(nrow(fixmap)>0) { # if there's 'value_set' problem
       fresh_nonch$"ipde_excludeitem"<-replicate(nrow(fresh_nonch),1)
@@ -327,42 +345,56 @@ for (form_i in 1:7) {
     
     fresh_nonch<<-fresh_nonch
     log_out_of_range<<-log_out_of_range
+    log_replace<<-log_replace
+    message(paste0(formname,": STEP4 done."))
   }
   STEP4()
   
   ##STEP5 
   #Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
   STEP5<-function(){
+    message(paste0(formname,": performning STEP5 now..."))
     if(!replace_999){message('Warn: 999 has not been replaced yet.')}
-    for (j in 1:length(colnames(fresh_nonch))) {
-      rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = bsoc$metadata)[[1]] # get the range 
-      if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range') # variable should have a range 
-      } else {
-        if (any(is.na(as.integer(rg)))){ # the range should be integer 
-          stop(message(paste('The range of variable',colnames(fresh_nonch)[j],'is not integer or contain NA. Stop the function.')))
-        }else{
-          rg<-as.integer(rg)
+    for (j in 1:length(colnames(fresh_nonch))) { # get the range by col (variable) and then get the rows of out-of-range values
+      if (colnames(fresh_nonch)[j]=="matching_id"){break()}
+      if(colnames(fresh_nonch)[j]%in%vm$redcap_var){ #skip access var in the current form 
+        rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = bsoc$metadata)[[1]] # get the range 
+        if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range') # variable should have a range 
+        } else { # check range for those variables that have a range 
+          if(formname=="IPDE"){ # for "IPDE", the range is often "2"   "1"   "0"   "NaN", which is okay
+            ifelse(j==107,rg<-c(1,0),rg<-c(2,1,0))
+          }else{
+            if(any(is.na(as.integer(rg)))){stop(message(paste('The range of variable',colnames(fresh_nonch)[j],'is not integer or contain NA. Stop the function.')))}# the range should be integer 
+            rg<-as.integer(rg)}
+          #get the rows of out-of-range values; replace and report out-of-range values
           i<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]]))) # report values that is not in the range. NA is acceptable 
           if (length(i)==0){
-            message(paste('GOOD. All values of', formname,'are within the range.'))
+            message(paste('GOOD. All values of', formname, colnames(fresh_nonch)[j],'are within the range.'))
             log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname,id='GOOD',which_var = colnames(fresh_nonch)[j],comments = 'GOOD. All values are within the range.')
           }else{
-            log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = 'QOL', which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
-                                           comments = paste('Correct range:', do.call('paste',as.list(rg))))
-            message('Some values are out of range. Refer to log_out_of_range for more details.')
-          }}}}
+            log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = formname, which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
+                                           comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Replaced with NA.'))
+            log_replace<-report_wrong(id=fresh_nonch[i,1],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'Step5: Out of range values.',report = log_replace)
+            fresh_nonch[i,j]<-NA
+            message(paste0('Some values from ',formname," ", colnames(fresh_nonch)[j], ' are out of range. Refer to log_out_of_range for more details.'))
+          }
+        }
+      }
+    }
+    fresh_nonch<<-fresh_nonch
     log_out_of_range<<-log_out_of_range
+    log_replace<<-log_replace
+    message(paste0(formname,": STEP5 done."))
   }
   STEP5()
   
   ##STEP6 identify systematic issues based on the log by calculating the number of observations that have the same issue. 
   #If almost all of them have the same issue it may be very likely to be systematic. 
   
-  ##STEP7 fix issues identified in STEP7
+  ##STEP7 for checkbox -- fix issues identified in STEP7
   STEP7<-function(){
     fresh_chk<-STEP3(raw_chk) #replace 999 with NA
     vm<-subset(vm,is.checkbox=="TRUE") #subset of var_map where is.checkbox = T
-    
     #STEP7.1
     #####need to check the values of ac var first!
     #STEP7.2 redcap checkbox
@@ -382,140 +414,48 @@ for (form_i in 1:7) {
           fresh_chk[df_i,rcvar]<-vm_rcchk$value2[vm_i]
         }}}
     fresh_chk<<-fresh_chk
+    message(paste0(formname,": STEP7 done."))
   }
   if(!is.null(acvar_chk)){STEP7()}
   
   
-  #STEP8 match checkbox variabels with other variabels using matching_id
+  #STEP8 for checkbox -- match checkbox variabels with other variabels using matching_id
   STEP8<-function(){
-    fresh_alldata<-dplyr::inner_join(fresh_nonch,fresh_chk[-1],by = "matching_id")
-    if(!max(fresh_alldata$matching_id)==nrow(fresh_alldata)){stop(message("The last check: something is wrong."))}
+    if(is.null(acvar_chk)){
+      fresh_alldata<-fresh_nonch
+    }else{
+      fresh_alldata<-dplyr::inner_join(fresh_nonch,fresh_chk[-1],by = "matching_id")
+      if(!max(fresh_alldata$matching_id)==nrow(fresh_alldata)){stop(message("The last check: something is wrong."))}
+      fresh_alldata<<-fresh_alldata
+      message("STEP8 done.")
+    }
     fresh_alldata<<-fresh_alldata
+    message(paste0(formname,": STEP8 done. - DATA CLEANING COMPLETED!"))
   }
-  if(!is.null(acvar_chk)){STEP8()}
+  STEP8()
   
   assign(paste0("df_",form_i),fresh_alldata)
+  write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/form_",form_i,".csv"))
+  #  write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm_",form_i,".csv"))
+  #  write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range_",form_i,".csv"))
+  #  write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_",form_i,".csv"))
 }
+
+write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm.csv"))
+write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range.csv"))
+write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_.csv"))
+for (del_i in 1:length(deleted_rows)){
+  write.csv(deleted_rows[[del_i]],file = paste0("~/Documents/github/UPMC/TRANSFER/DeletedRows_",names(deleted_rows)[del_i],".csv"))
+  rm(del_i)
+}
+newdeleted<-do.call("rbind",lapply(deleted_rows[4:13],function(x){x[1:2]}))
+write.csv(newdeleted,file = paste0("~/Documents/github/UPMC/TRANSFER/DeletedRows_IPDE.csv"))
 #}
 
 
 
 
 #####################################end of the function#########################################
-
-
-
-
-
-
-
-
-
-
-
-
-#### original codes   
-
-# import data from access and match variables  # TO BE GENERALIZED 
-QOL_raw <- read.csv(paste0(rootdir,"QOL_raw.csv"), stringsAsFactors = F) 
-#rename the variables to something more reasonable (i.e. var names in redcap): 
-QOL_fresh <- dplyr::select(QOL_raw, ID, #FOLOQOL, DATEQOL, 
-                           TIME.BEGAN, QOLBA1:TIME.ENDED)
-#get variables for qol
-rd.var.map("qol")->qolvarmap
-#change variable names to match redcap
-names(QOL_fresh)<-qolvarmap[-c(18:23, 26, 77)]
-
-
-
-#Range problems:
-##Range problems for DT scale (1-7)
-#which ones don't fit get probs=1
-qol.range(range=c(1:7), c(3, 20:22, 32:35, 38, 39, 
-                          44:46, 70:72, 78:80, 84:86, 88:91))->QOL_fresh
-#which ones don't fit
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 3, 20:22, 32:35, 38, 39, 44:46, 70:72, 78:80, 84:86, 88:91)]->qolprobs
-#Make dataframe of missing original (ID, question, original value, new value)
-qolprobs %>% gather(key="question", value="original",-registration_redcapid)->qolprobs
-qolprobs[which(!qolprobs$original %in% c(1:7) & !is.na(qolprobs$original)),]->qolprobs
-mutate(qolprobs, new=NA)->qolprobs
-#Change the ones that don't fit to NA
-qol.na(range=c(1:7), cols=c(3, 20:22, 32:35, 38, 39, 44:46, 70:72, 78:80, 84:86, 88:91))->QOL_fresh
-
-##Range problems for living situations (1-16)
-qol.range(range=c(1:16), c(4, 8, 10, 12, 14, 16))->QOL_fresh
-#which ones don't fit (No range problems here)
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 4, 8, 10, 12, 14, 16)]->qolprobs2
-
-##Range problems for YES/NO
-qol.range(range=c(0:1,9), c(23:30, 47:60,65:69, 81:82))->QOL_fresh
-#which ones don't fit
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 23:30, 47:60,65:69, 81:82)]->qolprobs3
-#Make dataframe of missing original (ID, question, original value, new value)
-qolprobs3 %>% gather(key="question", value="original",-registration_redcapid)->qolprobs3
-qolprobs3[which(!qolprobs3$original %in% c(0:1) & !is.na(qolprobs3$original)),]->qolprobs3
-mutate(qolprobs3, new=NA)->qolprobs3
-#Change the ones that don't fit to NA
-qol.na(range=c(1:7), cols=c(23:30, 47:60,65:69, 81:82))->QOL_fresh
-
-##Range problems for 1:4 items
-qol.range(range=c(1:4), c(31,64))->QOL_fresh
-#which ones don't fit
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 31, 64)]->qolprobs4
-#Make dataframe of missing original (ID, question, original value, new value)
-qolprobs4 %>% gather(key="question", value="original",-registration_redcapid)->qolprobs4
-qolprobs4[which(!qolprobs4$original %in% c(1:4) & !is.na(qolprobs4$original)),]->qolprobs4
-mutate(qolprobs4, new=NA)->qolprobs4
-#Change the ones that don't fit to NA
-qol.na(range=c(1:4), cols=c(31,64))->QOL_fresh
-
-##Range problems for 0:5 items
-qol.range(range=c(0:5), c(36:37))->QOL_fresh
-#which ones don't fit
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 36:37)]->qolprobs5
-#Make dataframe of missing original (ID, question, original value, new value)
-qolprobs5 %>% gather(key="question", value="original",-registration_redcapid)->qolprobs5
-qolprobs5[which(!qolprobs5$original %in% c(0:5) & !is.na(qolprobs5$original)),]->qolprobs5
-mutate(qolprobs5, new=NA)->qolprobs5
-#Change the ones that don't fit to NA
-qol.na(range=c(0:5), cols=c(36:37))->QOL_fresh
-
-##Range problems for 1:5
-qol.range(range=(1:5), c(40:43, 87))->QOL_fresh
-#which ones don't fit
-QOL_fresh[which(QOL_fresh$probs==1),c(1, 40:43, 87)]->qolprobs6
-#Make dataframe of missing original (ID, question, original value, new value)
-qolprobs6 %>% gather(key="question", value="original",-registration_redcapid)->qolprobs6
-qolprobs6[which(!qolprobs6$original %in% c(1:5) & !is.na(qolprobs6$original)),]->qolprobs6
-mutate(qolprobs6, new=NA)->qolprobs6
-#Change the ones that don't fit to NA
-qol.na(range=c(1:5), cols=c(40:43, 87))->QOL_fresh
-
-##Range problems for 0:2- no issues
-which(!QOL_fresh$qol_i_1 %in% c(1:5))
-
-
-#Put all range problems together    
-qol.range.probs<-rbind(qolprobs, qolprobs3, qolprobs4, qolprobs5, qolprobs6)
-
-#Check for duplicates: in the event that the same ID has two entries within a single follow-up, just take the earliest one
-any(duplicated(QOL_fresh$registration_redcapid))
-
-#FIGURE OUT IDS LAST
-bsrc.findid(QOL_fresh,idmap = idmap,id.var = "registration_redcapid")->QOL_fresh
-if(any(!QOL_fresh$ifexist)){message("ERROR: NOT ALL IDS EXIST IN MASTER DEMO, PLEASE FIX. Here are their soloff ids:")
-  print(QOL_fresh[which(!QOL_fresh$ifexist),"registration_redcapid"])}
-#Figure out NAs    
-qol.remove.na<-function(cols){for (i in 1:nrow(QOL_fresh)){
-  QOL_fresh[i, cols]<-
-    sapply(QOL_fresh[i, cols], function(x){
-      ifelse (is.na(x), x<-999, x<-x)})}
-  return(QOL_fresh)}
-qol.remove.na(c(3, 4, 8, 10, 12, 14, 16, 19:60, 65:73, 78:82, 84:86, 88:91))->QOL_fresh  
-as.data.frame(names(QOL_fresh))->r
-
-
-
 
 
 
