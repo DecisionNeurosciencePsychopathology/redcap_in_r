@@ -579,8 +579,8 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
   #Get necessary data
   if (online) {
     metadata <- REDCapR::redcap_metadata_read(redcap_uri = protocol$redcap_uri,token = protocol$token,verbose = F)$data
-    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = protocol$token)
-    if(nrow(eventdata$data)<1){eventdata<-NULL}
+    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = protocol$token)$data
+    if(nrow(eventdata)<1){eventdata<-NULL}
   } else {
     if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
     stopifnot(exprs = {curdb$success})
@@ -626,7 +626,9 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
       renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = c(fix_variables,lvariname), events = eventname,batch_size = batch_size)
       if (renew$success){
         raw<-renew$data
-      }else {stop("Failed... Try again?")}
+      } else if (nrow(renew$data)==0) {
+        return(NULL)
+      } else {stop("Failed... Try again?")}
       
     } else {
       #Do offline version:
