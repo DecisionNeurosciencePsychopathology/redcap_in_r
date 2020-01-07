@@ -82,7 +82,7 @@ for (form_i in 1:length(forms)) {
   fm_dir<-paste0(formname,".csv")
   vm<-subset(var_map, path==fm_dir) #subset of var mapping for the current form
   if(!(sum(vm$baseline)==0|sum(vm$baseline)==nrow(vm))){stop(message("check the column 'baseline' in the var map"))
-  }else{ifbl<-any(vm$baseline)}
+  }else{ifbl<-any(vm$baseline)} #ifbl: if baseline 
   
   if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
@@ -106,7 +106,7 @@ for (form_i in 1:length(forms)) {
     if(any(is.na(RAWDATA$ID)|is.na(RAWDATA$CDATE))){stop(message(paste("NA in ID or CDATE of RAWDATA. Form:",formname)))}
     if("CDATE"%in%colnames(RAWDATA)){ #if the dataframe has CDATE
       readline(prompt = paste0("Enter any key to confirm CDATE '",RAWDATA[1,"CDATE"],"' is in format month date year.")) # confirm the format of CDATE
-      RAWDATA$CDATE<-as.Date(lubridate::mdy(RAWDATA$CDATE))
+      RAWDATA$CDATE<-mdy(RAWDATA$CDATE)
       RAWDATA$CDATECOPY<-RAWDATA$CDATE # create a col CDATECOPY so that after var mapping the form still has a col called CDATE 
       RAWDATA$IDDATE<-paste0(RAWDATA$ID,RAWDATA$CDATE)
     }else{
@@ -140,16 +140,16 @@ for (form_i in 1:length(forms)) {
         RAWDATA<-RAWDATA[-which(RAWDATA$IDDATE%in%dup_id),]}      #remove duplicated rows
     }
     #SPECIAL for SCID: add back some records with dup id that Morgan manually find. These five forms are the only forms that have duplicaetd IDs. 
-    if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){
-      special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
-      special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
-      special[which(special=="",arr.ind = T)]<-NA
-      special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
-      if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
-        RAWDATA<-rbind(RAWDATA,special)
-        message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
-      }else{stop(message("Something is wrong"))}
-    }
+    #if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){
+    #  special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
+    #  special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
+    #  special[which(special=="",arr.ind = T)]<-NA
+    #  special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
+    #  if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
+    #    RAWDATA<-rbind(RAWDATA,special)
+    #    message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
+    #  }else{stop(message("Something is wrong"))}
+    #}
     #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
     if(!is.null(acvar_chk)){
       raw_nonch<-RAWDATA[,-which(colnames(RAWDATA)%in%acvar_chk)] #keep only non-checkbx variables 
@@ -171,7 +171,7 @@ for (form_i in 1:length(forms)) {
     colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))}
     #STEP1.8 SPECIAL for some forms that have "condition" issue, merge the checkbox df with certain non-chk access var. 
     if ("condition" %in% vm$fix_what){
-      raw_chk<-cbind(raw_chk,RAWDATA[,subset(vm,fix_what=="condition",select = value1)[[1]]])
+      raw_chk<-cbind(raw_chk,RAWDATA[,unique(subset(vm,fix_what=="condition",select = value1)[[1]])])
     }
     
     cat(paste0(formname,": STEP1 done.\n"))

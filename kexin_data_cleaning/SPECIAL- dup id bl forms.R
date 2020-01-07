@@ -11,7 +11,7 @@ var_map[which(var_map=="",arr.ind = T)]<-NA
 #var_map$path<-gsub("\"","",var_map$path) #temperary: remove quotation marks from paths 
 var_map$baseline<-"TRUE"#temperary
 var_map$baseline<-as.logical(var_map$baseline)#temperary
-var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
+#var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
 var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
 combine<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/combing forms.csv',stringsAsFactors = FALSE)
@@ -154,7 +154,7 @@ STEP1<-function(){
     colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))}
     #STEP1.8 SPECIAL for some forms that have "condition" issue, merge the checkbox df with certain non-chk access var. 
     if ("condition" %in% vm$fix_what){
-      raw_chk<-cbind(raw_chk,RAWDATA[,subset(vm,fix_what=="condition",select = value1)[[1]]])
+      raw_chk<-cbind(raw_chk,RAWDATA[,unique(subset(vm,fix_what=="condition",select = value1)[[1]])])
     }
     
     cat(paste0(formname,": STEP1 done.\n"))
