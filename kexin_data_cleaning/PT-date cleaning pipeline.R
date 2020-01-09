@@ -465,7 +465,7 @@ STEP7<-function(){
     fresh_chk$macarthur_3[which(fresh_chk$macarthur_3=="")]<-NA
     fresh_chk$macarthur_3_n[which(fresh_chk$macarthur_3_n=="")]<-NA
   }
-  
+  #STEP7.9 VERSION fixed manually 
   fresh_chk<<-fresh_chk
   cat(paste("\n#",form_i,formname,"- STEP7 done.\n"))
 }
