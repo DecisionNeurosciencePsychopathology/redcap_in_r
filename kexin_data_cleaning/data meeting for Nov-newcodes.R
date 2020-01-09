@@ -427,9 +427,15 @@ emainfo$masterdemoid #ema (bs)
 Kmri #kmri (k)
 
 explore<-subset(PT,registration_redcapid%in%Eallmd)
+explore$Group<-plyr::mapvalues(explore$registration_group,from = c("ATT","IDE","DEP","88","HC"), to = c("3ATT","IDE","DEP","Unsure","1HC"))
+explore$Group[which(explore$registration_group %in% c("IDE","DEP","88"))]<-"2DNA"
 #bspt<-subset(BS,registration_redcapid%in%Bspottmddf$masterdemoid)
 bmri<-subset(BS,masterdemoid%in%Bmrimddf$masterdemoid) #143->136
+bmri$Group<-plyr::mapvalues(bmri$registration_group,from = c("ATT","NON","HC"), to = c("3ATT","2NON","1HC"))
+bmri$Group[which(bmri$registration_lethality=="hl")]<-"4ATT-HL"
+bmri$Group[which(bmri$registration_lethality=="ll")]<-"3ATT-LL"
 emaa<-subset(BS,masterdemoid%in%emainfo$masterdemoid) #193->192 440057 removed due to ineligibility
+emaa$Group<-plyr::mapvalues(emaa$registration_group,from = c("ATT","NON","HC"), to = c("3ATT","2NON","1HC"))
 #kmri<-subset(K,registration_redcapid%in%Kmri) #152->60
 setdiff(Bmrimddf$masterdemoid,bmri$masterdemoid) # id in folders but not consented to BS or ineligible for BS 
 setdiff(Bmrimddf$masterdemoid,bmri$masterdemoid)%in%PT$registration_redcapid 
@@ -455,7 +461,8 @@ any(duplicated(emaa$masterdemoid))
 any(duplicated(explore$registration_redcapid))
 #prepare to get counts 
 agemap<-data.frame(yrlable=c("18-25","26-30","31-40","41-50","51-60","61-70","70+"),yrstar=c(0,26,31,41,51,61,71))
-edumap<-data.frame(edulabel=c("1Below High School or GED: <12","2High School or GED: 12", "3RN Certificate: 13","4Associates / Technical: 14","5Bachelors: 16","6Masters: 18-19","7MD/PhD/MD-PhD: >19"),yrstar=c(0,12,13,14,16,18,20))
+#edumap<-data.frame(edulabel=c("1Below High School or GED: <12","2High School or GED: 12", "3RN Certificate: 13","4Associates / Technical: 14","5Bachelors: 16","6Masters: 18-19","7MD/PhD/MD-PhD: >19"),yrstar=c(0,12,13,14,16,18,20))
+edumap<-data.frame(edulabel=c("1Below Bachelors","2Bachelors or Above: 16"),yrstar=c(0,16))
 category<-c("registration_gender","Age","Age_Label","registration_edu","Education_Reference")
 races<-c("1American Indian or Alaska Native","2Asian","3Black or African American","4Native Hawaiian or Other Pacific Islander","5White")
 
@@ -469,12 +476,12 @@ for (dfname in c("explore","bmri","emaa")){
   df$Education_Reference<-as.character(edumap$edulabel[findInterval(df$registration_edu,edumap$yrstar)])
   
   library(tidyr)
-  result<-data.frame(matrix(c(NA,as.vector(table(df$registration_group,useNA = "always")),NA),nrow = 1))
-  colnames(result)<-c("attributes",unique(df$registration_group),"NA","Total")
+  result<-data.frame(matrix(c(NA,as.vector(table(df$Group,useNA = "always")),NA),nrow = 1))
+  colnames(result)<-c("attributes",sort(unique(df$Group)),"NA","Total")
   result$Total[1]<-sum(result[1,],na.rm = T)
   for (cate in category){
-    newtable<-as.data.frame(table(df[c(cate,"registration_group")],useNA="always"))%>%
-      pivot_wider(id_cols = cate,names_from = "registration_group",values_from = "Freq")
+    newtable<-as.data.frame(table(df[c(cate,"Group")],useNA="always"))%>%
+      pivot_wider(id_cols = cate,names_from = "Group",values_from = "Freq")
     newtable$Total<-rowSums(newtable[-1],na.rm = T)
     subtotal<-c("Total",as.vector(colSums(newtable[-1],na.rm = T)))
     newtable<-rbind(colnames(newtable)[1],newtable)
@@ -485,13 +492,29 @@ for (dfname in c("explore","bmri","emaa")){
   result<-rbind(result,c(NA,rep("Race",length(result)-1)))
   for (racei in 1:5){
     cate2<-paste0("registration_race___",racei)
-    racetable<-table(df[c(cate2,"registration_group")],useNA = "always")
-    racecounts<-as.vector(racetable[which(rownames(racetable)=="1"),])
+    racetable<-table(df[c(cate2,"Group")],useNA = "always")
+    racecounts<-racetable[which(rownames(racetable)=="1"),]
     result<-rbind(result,c(races[racei],racecounts,sum(racecounts,na.rm = T)))
   }
+  # for race 999
+  racetable<-table(df[c("registration_race___999","Group")],useNA = "always")
+  racecounts<-racetable[which(rownames(racetable)=="1"),]
+  result<-rbind(result,c("6No answer",racecounts,sum(racecounts,na.rm = T)))
+  
   result[which(is.na(result),arr.ind = T)]<-""
   assign(paste0("stats_",dfname),result)
   write.csv(result,paste0("~/Documents/github/UPMC/data meeting/Counts_Scanning_for_Mandy_",dfname,".csv"))
 }
+
+#get mean and sd of age 
+for (dfname in c("explore","bmri","emaa")){
+  df<-get(dfname)
+  library(lubridate)
+  df$Age<-as.integer((Sys.Date()-as.Date(df$registration_dob))/365)
+  print(dfname)
+  print(class(df$Age))
+  print(df%>% group_by(Group) %>% summarise(mean=mean(Age,na.rm = T),sd=(sd(Age,na.rm = T))))
+  print(mean(df$Age))
+  print(sd(df$Age))}
 
 
