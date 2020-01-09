@@ -493,5 +493,5 @@ for (dfname in c("explore","bmri","emaa")){
   assign(paste0("stats_",dfname),result)
   write.csv(result,paste0("~/Documents/github/UPMC/data meeting/Counts_Scanning_for_Mandy_",dfname,".csv"))
 }
-View(table(df[c("registration_group","age")]))
+
 
