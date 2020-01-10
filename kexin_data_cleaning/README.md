@@ -26,23 +26,29 @@ SPECIAL:
 At the end, use "warnings()" to retrieve all warning messages 
 ## Steps 
 ### STEP1
-**Load Access form, split it into non-checkbox variables and checkbox variables, map non-checkbox Access variables to Redcap variables**  
+#### Load Access form, split it into non-checkbox variables and checkbox variables, map non-checkbox Access variables to Redcap variables
 1.1. Get `formname`, `vm`, `ifbl` (if is a baseline form)  
 1.2. Read form, filter out subjects that are not ours.    
-1.3. Convert CDATE to "yyyy-mm-dd" format. Create a copy fo the column. Combine ID+CDATE to make a new column called IDDATE. Check if any ID is duplicated for baseline forms or IDDATE for non-baseline forms. Remove the rows that contain duplicated IDs or IDDATEs and save the data seperately.  
+1.3. Convert `CDATE` to "yyyy-mm-dd" format. Create a copy fo the column. Combine ID+CDATE to make a new column called `IDDATE`. Check if any `ID` is duplicated for baseline forms or `IDDATE` for non-baseline forms. Remove the rows that contain duplicated `ID`s or `IDDATE`s and save the data seperately.  
 1.4. Save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'  
 1.5. Calculated fields will not be transferred. Remove them from the dataframe.   
 1.6. variable map: replace access variables with redcap variable names. After var mapping, new colnames should contain only CDATE, IDDATE, and redcap variables, and there should be no duplicated column name.  
-**Return**
+#### Return
 * `RAWDATA`: Access variables to be transferred
 * `raw_nonch`: Non-checkbox variables to be transferred. Variabels are mapped to be Redcap variables 
 * `raw_chk`: Checkbox variables to be transferred. 
-* `vm`: Varmap 
+* `vm`: Variable map for the form being cleaned  
 
-### STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map' 
-### STEP5 Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
-### STEP7 for checkbox (fix_what1)
-### STEP8 match checkbox variabels with other variabels using matching_id or IDDATE
-### STEP9 branching (fix_what2) 
+### STEP2 
+#### Fix data with systematic issues identified in 'var_map'
+2.1. <u>range_fix</u>: Values in Redcap is shifted from the values in Access, eg: 1 in Access refer to 0 in Redcap. Use mapvalues() to fix the issue.  
+2.2. <u>range_allowed</u>: Range allowed in Access is different from the range allowed in Redcap. If the value is out-of-range, write the info in log_out_of_range. Replace the value with NA and write in log_replace    
+2.3 <u>date</u>: Convert date data into format "yyyy-mm-dd". Original data must be in format "month date year". After converting, check if date is within (-100,+20) years of today; stop if not.   
+2.4 <u>value_set</u>: Import a certain value for every row in the form  
+2.5 <u>value_set2</u>: 
+### STEP3 Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
+### STEP4 for checkbox (fix_what1)
+### STEP5 match checkbox variabels with other variabels using matching_id or IDDATE
+### STEP6 branching (fix_what2) 
 
 ### OTHER: double check accross forms (eg: ham)
