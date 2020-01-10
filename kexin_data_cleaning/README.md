@@ -1,5 +1,5 @@
 # Access Forms Cleaning Pipeline (Protect)
-Revised: Jan 9 2020  
+Revised on Jan 9 2020  
 ## Setup 
 rootdir 
 logdir: directory of folder to save duplicated IDs that are removed from database
