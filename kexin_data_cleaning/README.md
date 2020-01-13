@@ -1,5 +1,5 @@
 # Access Forms Cleaning Pipeline (Protect)
-Revised on Jan 9 2020  
+Revised on Jan 13 2020  
 ## Setup 
 `rootdir`: Directory of the Access forms to be transferred  
 * Access form: in .csv format  
