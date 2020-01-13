@@ -24,6 +24,7 @@ Revised on Jan 9 2020
 `skipotherforms`: If `TRUE`, skip non-baseline forms  
 
 Logs: Out-of-range values, raplce, branching. The logs are initialized before cleaning the forms.   
+
 `curdb`: pt or bsoc  
 
 Functions: 
@@ -91,9 +92,5 @@ Check if the branching logic (var map instruction) is met, certain variable (var
 * `log_replace`: Log of replaced values 
 * `log_branching`: Log of branching checks 
 
-<<<<<<< HEAD
 ### OTHER: double entry, check accross forms (eg: ham)
 At the end, use "warnings()" to retrieve all warning messages 
-=======
-### OTHER: double check accross forms (eg: ham)
->>>>>>> bc697000da054b5064e670b7001e0dfd2b5e18af
