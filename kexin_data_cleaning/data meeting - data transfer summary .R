@@ -13,11 +13,12 @@ recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milest
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md)
+
 #ptcname: ksocial, bsocial,protect3,protect2,protect,suicid2,suicide,EMA,EXPLORE
 #Grabs the variable names based on protocol
 varnames<-function(ptcname){
-  id<-c('registration_redcapid', 'registration_wpicid', 'registration_demostatus','registration_group','registration_dob','registration_gender',
-        paste0(c('registration_ptcstat___','reg_condate_','reg_term_yesno_','reg_term_reason_','reg_term_excl_'),ptcname),paste0("registration_race___",c(1:5,999)),"registration_edu")
+  id<-c('registration_redcapid', 'registration_wpicid', 'registration_demostatus','registration_group','registration_dob','registration_gender','registration_recruisource',
+        paste0(c('registration_ptcstat___','reg_condate_','reg_term_yesno_','reg_term_reason_','reg_term_excl_'),ptcname))
   if(ptcname=='protect3'){return(c(id,'reg_status_protect3','reg_p3catchup'))
   }else if(ptcname=='protect2'){return(c(id,'reg_status_protect2'))
   }else if(ptcname=='protect'){return(c(id,'reg_status_protect'))
@@ -31,28 +32,43 @@ varnames<-function(ptcname){
 
 #PROTECT - ALL
 var_pt<-unique(c(varnames('protect3'),varnames('protect2'),varnames('protect'),varnames('suicide'),varnames('suicid2')))
-varnames("ksocial")->var_k
-varnames("bsocial")->var_ema
-varnames("bsocial")->var_bsoc
 
 #Checks1
 all(var_pt %in% colnames(MD)) #should be TRUE
-all(var_k %in% colnames(MD)) #Ksocial
-all(var_bsoc %in% colnames(MD)) #bsocial and ema
 
 #Add master demo info
 PT<-MD[,var_pt]
-K<-MD[,var_k]
-BS<-MD[,var_bsoc]
-
-
+codcol<-bsrc.getform(formname = "cause_of_death",curdb = md)[c("raw_a",'cod_dead','cod_primcause','cod_pi_mod')];colnames(codcol)[1]<-"registration_redcapid"
+PT<-dplyr::full_join(PT,codcol,by="registration_redcapid")
 ##More checks of each protocol
 #Protect checks
 PT<-PT[unique(which(PT[,grep('registration_ptcstat_',var_pt)]==1,arr.ind = T)[,1]),] # consented to at least one protocol 
-allPT<-MD[,var_pt] #not removed ineligible people 
-allP3<-allPT[which(allPT$registration_ptcstat___protect3==1),] #get all P3 people including ineligible ones 
-allP3$"mincondate"<-allP3$reg_condate_protect3
+any(is.na(PT$registration_redcapid)) #FALSE
+any(duplicated(PT$registration_redcapid)) #FALSE
 #temp<-PT[unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # ieligible people 
+
+# Get a table of the number of terminated people in each protocol 
+term_table<-data.frame(Protocal=c("Completed study","Lost to follow-up","Ineligible after signing consent","Withdrawn at own/family request","Withdrawn by PI d/t other reasons (death, unreliability, etc.)"),stringsAsFactors = F)
+for (ptversion in c("suicide","suicid2","protect","protect2")){
+  print(any(duplicated(PT$registration_redcapid))); print(table(PT[paste0("reg_term_reason_",ptversion)]));print(sum(PT[[paste0("reg_term_excl_",ptversion)]],na.rm = T))
+  term_table<-data.frame(term_table,newcol=as.vector(table(PT[paste0("reg_term_reason_",ptversion)])),stringsAsFactors = F)
+  colnames(term_table)[ncol(term_table)]<-ptversion
+  term_table
+}
+#speical protect3
+ptversion="protect3"
+print(any(duplicated(PT$registration_redcapid))); print(table(PT[paste0("reg_term_reason_",ptversion)])); print(sum(PT[[paste0("reg_term_excl_",ptversion)]],na.rm = T))
+term_table<-data.frame(term_table,newcol=c(0,0,as.vector(table(PT[paste0("reg_term_reason_",ptversion)]))),stringsAsFactors = F)
+colnames(term_table)[ncol(term_table)]<-ptversion
+term_table<-rbind(term_table,c("Total",colSums(term_table[-1])))
+term_table
+
+# cause of death 
+PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),]  # Remove people terminated for at least one protocol due to ineligibility 
+deadPT<-
+
+
+
 PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # remove all ineligible people terminated for at least one protocol due to ineligibility  
 PT<-PT[-unique(which(PT[,grep('reg_term_excl_',var_pt)]==1,arr.ind = T)[,1]),] # remove all unusable data based on 'reg_term_excl_
 
