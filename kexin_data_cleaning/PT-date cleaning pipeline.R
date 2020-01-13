@@ -36,6 +36,7 @@ log_branching <- data.frame(id=as.character(),var_name=as.character(),wrong_val=
 #protocol.cur <- ptcs$bsocial
 #db = 
 pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
+curdb=pt
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
 skipotherforms = FALSE
@@ -47,8 +48,8 @@ replace_w_na = FALSE
 ## verify Morgan's var_map. 
 ####for the col is.box. NA should mean represent unecessary variables. i.e. 
 # if redcap_var and access_var both exist, is.checkbox cannot be NA
-na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(pt$data))]
-#var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(pt$data)),] #temperary remove rc var that cannot be found in the protect data
+na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(curdb$data))]
+#var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(curdb$data)),] #temperary remove rc var that cannot be found in the protect data
 chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
 chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing other than ID, MISSCODE, RATER
 # vice versa 
@@ -295,7 +296,7 @@ STEP3<-function(){
     if(!colnames(fresh_nonch)[j]%in%vm$redcap_var){next()} #skip access var in the current form 
     if(colnames(fresh_nonch)[j]%in%c("scid_s211","scid_xii_c168")){next()} #SPECIAL skip "scid_s211","scid_xii_c168"
     if (grepl("___",colnames(fresh_nonch)[j])){next()} # skip checkbox var brougt in during fixing "value_set2"
-    rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = pt$metadata)[[1]] # get the range 
+    rg<-bsrc.getchoicemapping(variablenames = colnames(fresh_nonch)[j],metadata = curdb$metadata)[[1]] # get the range 
     if(is.null(rg)){log_out_of_range<-report_wrong(report = log_out_of_range,which_form = formname, id='OKAY-NO_RANGE',which_var = colnames(fresh_nonch)[j],comments = 'This variable has no range');next()} # variable should have a range 
     if(("na"%in%rg&sum(is.na(as.numeric(rg)))==1)|!any(is.na(as.numeric(rg)))){rg<-as.numeric(rg)} # turn range as numeric if rg contains only "na" and numbers  
     #get the rows of out-of-range values; replace and report out-of-range values
@@ -523,6 +524,7 @@ STEP6<-function(){
       #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
       #unique(fresh_nonch$staupxtra_sep_which)
     }}}
+  fresh_alldata<<-fresh_alldata
   log_branching<<-log_branching
   log_replace<<-log_replace
   cat(paste("#",form_i,formname,"- STEP6 done.\n"))
