@@ -2,8 +2,10 @@
 Revised on Jan 9 2020  
 ## Setup 
 `rootdir`: Directory of the Access forms to be transferred  
-* Access form: in .csv format 
+* Access form: in .csv format  
+
 `logdir`: Directory of the folder to save duplicated IDs that are removed from database  
+
 `variable map`  
 * 'baseline': when checking duplicated IDs, if baseline then check id if not baseline then check ID+CDATE
     * baseline: TRUE or FALSE
