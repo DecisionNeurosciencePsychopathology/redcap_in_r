@@ -17,11 +17,15 @@ Revised on Jan 9 2020
     * ID: No NA
     * CDATE: No NA 
     * If is.checkbox for CDATE is NA in a form, will get a warning message. 
-    * if a non-checkbox access_var matches multiple redcap variables, get a warning message. 
+    * if a non-checkbox access_var matches multiple redcap variables, get a warning message.  
+
 `allsub`: subjects of our lab  
+
 `skipotherforms`: If `TRUE`, skip non-baseline forms  
+
 Logs: Out-of-range values, raplce, branching. The logs are initialized before cleaning the forms.   
 `curdb`: pt or bsoc  
+
 Functions: 
 * `report_wrong()`: Functiont to report wrong values  
 * `mdy()`: Convert date type data to the correct format "yyyy-mm-dd"  
