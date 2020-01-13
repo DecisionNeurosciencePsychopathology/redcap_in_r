@@ -1,9 +1,10 @@
 # Access Forms Cleaning Pipeline (Protect)
 Revised: Jan 9 2020  
 ## Setup 
-rootdir 
-logdir: directory of folder to save duplicated IDs that are removed from database
-variable map  
+`rootdir`: Directory of the Access forms to be transferred  
+* Access form: in .csv format 
+`logdir`: Directory of the folder to save duplicated IDs that are removed from database  
+`variable map`  
 * 'baseline': when checking duplicated IDs, if baseline then check id if not baseline then check ID+CDATE
     * baseline: TRUE or FALSE
 * 'is.checkbox': TRUE, FALSE, NA. If NA, the variable will not be transferred.  
@@ -15,15 +16,15 @@ variable map
     * CDATE: No NA 
     * If is.checkbox for CDATE is NA in a form, will get a warning message. 
     * if a non-checkbox access_var matches multiple redcap variables, get a warning message. 
-Access form: in .csv format 
-allsub: subjects of our lab  
-skipotherforms
-Logs: Out-of-range values, raplce, branching   
-Database: pt or bsoc  
-* functions: report_wrong(), mdy()
-## Introduction
-SPECIAL: 
-At the end, use "warnings()" to retrieve all warning messages 
+`allsub`: subjects of our lab  
+`skipotherforms`: If `TRUE`, skip non-baseline forms  
+Logs: Out-of-range values, raplce, branching. The logs are initialized before cleaning the forms.   
+`curdb`: pt or bsoc  
+Functions: 
+* `report_wrong()`: Functiont to report wrong values  
+* `mdy()`: Convert date type data to the correct format "yyyy-mm-dd"  
+  
+
 ## Steps 
 ### STEP1
 #### Load Access form, split it into non-checkbox variables and checkbox variables, map non-checkbox Access variables to Redcap variables
@@ -40,15 +41,49 @@ At the end, use "warnings()" to retrieve all warning messages
 * `vm`: Variable map for the form being cleaned  
 
 ### STEP2 
-#### Fix data with systematic issues identified in 'var_map'
+#### Fix data with systematic issues identified in 'var_map' 'fixed_what1'
 2.1. <u>range_fix</u>: Values in Redcap is shifted from the values in Access, eg: 1 in Access refer to 0 in Redcap. Use mapvalues() to fix the issue.  
 2.2. <u>range_allowed</u>: Range allowed in Access is different from the range allowed in Redcap. If the value is out-of-range, write the info in log_out_of_range. Replace the value with NA and write in log_replace    
 2.3 <u>date</u>: Convert date data into format "yyyy-mm-dd". Original data must be in format "month date year". After converting, check if date is within (-100,+20) years of today; stop if not.   
 2.4 <u>value_set</u>: Import a certain value for every row in the form  
-2.5 <u>value_set2</u>: 
-### STEP3 Excluding checkbox variables: Report out-of-range values AND if replace_w_na=T, replace them with NA.
-### STEP4 for checkbox (fix_what1)
-### STEP5 match checkbox variabels with other variabels using matching_id or IDDATE
-### STEP6 branching (fix_what2) 
+2.5 <u>value_set2</u>: If a variable equals a certain value, give another certain variable a certain value, otherwise, give it another value.  
+#### Return 
+* `fresh_nonch`: Cleaned `raw_nonch`
+* `log_out_of_range`: Log of out-of-range values 
+* `log_replace`: Log of values replaced with NA 
 
-### OTHER: double check accross forms (eg: ham)
+### STEP3 
+#### Report out-of-range values and replace them with NA
+Get the range using `bsrc.getchoicemapping()`. Raplace them with NA. Report out-of-range values.
+#### Return
+* `fresh_nonch`: Cleaned `fresh_nonch`
+* `log_out_of_range`: Log of out-of-range values 
+* `log_replace`: Log of values replaced with NA 
+
+### STEP4 
+#### Fix checkbox variables (fix_what)
+4.2 <u>redcap_check</u>: Convert a non-checkbox access variable to a set of redcap checkbox variables   
+4.3 <u>access_check</u>: Convert a checkbox access variable to a set of redcap checkbox variables  
+4.4 <u>both_check1</u>: Convert a checkbox access variable to a set of redcap checkbox variables  
+4.5 <u>both_check2</u>: Convert a checkbox access variable to a set of redcap checkbox variables   
+4.6 <u>condition</u>: Assign an Access variable to Redcap variable only if another variable equals a certain value.  
+4.7 <u>special_6</u>: range_fix and then convert the variable to multiple redcap variables  
+4.8 <u>special_7</u>: Q3,Q3a; Q3NEW,Q3aNEW Two access variables go to one redcap, only one should have value  
+#### Return
+* `fresh_chk`: Cleaned `fresh_chk`
+
+### STEP5 
+Full join checkbox variabels with other variabels using matching_id (for baseline forms) or IDDATE (for other forms)
+#### Return 
+* `fresh_alldata`: Combine fresh_chk and fresh_nonch
+
+### STEP6 
+#### Branching (fix_what2) 
+Check if the branching logic (var map instruction) is met, certain variable (var map access_var) must be blank if the branching logic is not met. If the variable has a value that matchs a certain pattern (var map value6), replace the value with NA. If not matching a certain pattern, report it and replace it with NA. Mannually check the rows that doesn't follow the branching logic.  
+#### Return 
+* `fresh_alldata`: Cleaned `fresh_alldata`
+* `log_replace`: Log of replaced values 
+* `log_branching`: Log of branching checks 
+
+### OTHER: double entry, check accross forms (eg: ham)
+At the end, use "warnings()" to retrieve all warning messages 
