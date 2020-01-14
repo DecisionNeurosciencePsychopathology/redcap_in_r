@@ -128,6 +128,19 @@ redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5,
               affected_ids = affected_ids, elapsed_seconds = elapsed_seconds))
 }
 
+clean_str <- function(dfx,remove=T,replace_text="") {
+  dfx_back<-dfx
+  logi_frame<-as.data.frame(apply(dfx,2,function(x){grepl("-xIT_WAS_NOT_ASCIIx-",iconv(x, "latin1", "ASCII", sub="-xIT_WAS_NOT_ASCIIx-"))}))
+  vari_to_replace<-apply(logi_frame,2,any)
+  message("These variables: ",paste(names(vari_to_replace)[vari_to_replace],collapse = ", "),", contain data_points that contain illegal characters.")  
+  for (vax in names(vari_to_replace)[vari_to_replace]) {
+    message("For variable '",vax,"', the following rows has illegal characters: \n",paste(which(logi_frame[[vax]]),collapse = ","))
+    if(remove){
+      dfx[which(logi_frame[[vax]]),vax] <- iconv(dfx[which(logi_frame[[vax]]),vax], "latin1", "ASCII", sub=replace_text)
+    }
+  }
+  return(list(original_df=dfx_back,clean_df=dfx,logical_df=logi_frame))
+}
 
 redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_options = NULL,retry_whenfailed=F,previousIDs=NULL) 
 {
