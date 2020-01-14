@@ -135,7 +135,9 @@ clean_str <- function(dfx,remove=T,replace_text="") {
   message("These variables: ",paste(names(vari_to_replace)[vari_to_replace],collapse = ", "),", contain data_points that contain illegal characters.")  
   for (vax in names(vari_to_replace)[vari_to_replace]) {
     message("For variable '",vax,"', the following rows has illegal characters: \n",paste(which(logi_frame[[vax]]),collapse = ","))
-    dfx[which(logi_frame[[vax]]),vax] <- iconv(dfx[which(logi_frame[[vax]]),vax], "latin1", "ASCII", sub=replace_text)
+    if(remove){
+      dfx[which(logi_frame[[vax]]),vax] <- iconv(dfx[which(logi_frame[[vax]]),vax], "latin1", "ASCII", sub=replace_text)
+    }
   }
   return(list(original_df=dfx_back,clean_df=dfx,logical_df=logi_frame))
 }
