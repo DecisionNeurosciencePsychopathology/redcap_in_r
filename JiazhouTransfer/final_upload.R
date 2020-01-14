@@ -93,15 +93,15 @@ f_paths<-list.files(rootdir,full.names = T,include.dirs = F)
 
 
 #Do non-p2 people first:
-lapply(f_paths,upload_transfer,
+gx<-lapply(f_paths,upload_transfer,
        id.var = "registration_redcapid",
        idmap = learn_idmap,
        idmap_id = "masterdemo_id",
        metadata = protect$metadata,
        target_ptc = ptcs$protect,
-       target_evt = "baseline_arm_1",
-       ID_list = p2_only_ID,skip_check = T,
-       toignore = TRUE)
+       target_evt = "baseline_arm_2",
+       ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99),
+       toignore = FALSE)
 
 id.var = "registration_redcapid"
 idmap = learn_idmap
@@ -112,8 +112,11 @@ target_evt = "baseline_arm_1"
 ID_list = p2_only_ID
 skip_check = F
 toignore = TRUE
+exempt_code = c(999,99)
 
-upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target_evt,ID_list,toignore,skip_check) {
+
+
+upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target_evt,ID_list,toignore,skip_check,exempt_code=NULL) {
   #Read in data;
   print(basename(xpath))
   if(!grepl(".csv$",xpath)){message("skip");return(NULL)}
@@ -145,7 +148,7 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
     message("These variables are not included in the uploading because they have no match for any form on redcap. \n",
             paste(vari_ref_sp$`TRUE`$variable_name,collapse = ", "))
     write.csv(df_togo[c(id.var,vari_ref_sp$`TRUE`$variable_name)],
-              file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_no_form_leftout.csv")),row.names = F)
+              file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_no_form_matched.csv")),row.names = F)
    
   } else {
     message("Every variables are accounted for!")
@@ -181,7 +184,7 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
       
       df_togo_b <- df_togo_b[which(!df_togo_b$registration_redcapid %in% dup_id),]
     } 
-    df_tg_v<-bsrc.verify(df_new = df_togo_b,df_ref = og_forms,id.var = id.var)
+    df_tg_v<-bsrc.verify(df_new = df_togo_b,df_ref = og_forms,id.var = id.var,exempt_code=exempt_code)
     
     #Write out both non-NAs 
     if(any(!is.na(df_tg_v$DIFF$REF) & !is.na(df_tg_v$DIFF$NEW))){
@@ -208,6 +211,10 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
   
   return(list(outcome=gx,og_data=og_forms))
 }
+
+
+
+
  
 
 
