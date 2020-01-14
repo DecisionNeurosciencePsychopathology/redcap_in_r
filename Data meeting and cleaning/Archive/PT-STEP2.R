@@ -35,9 +35,9 @@ fresh_nonch<-raw_nonch #temperary
   if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
     if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){next()}
     eg<-as.character(na.omit(fresh_nonch[[fixmap$redcap_var[step4_i]]]))[1]
-    fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(lubridate::mdy(as.character(fresh_nonch[[fixmap$redcap_var[step4_i]]])))
-    if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){stop((message("After transforming date, all data in this col are remove. somthing must be wrong.")))}
-    if(!all(na.omit(as.integer((fresh_nonch[[fixmap$redcap_var[step4_i]]]-Sys.Date())/365))%in%seq(-100,100))){stop(message("Something went wrong when changing the format of date"))} # check that the new date is in reasonable range: +-100years of today
+    fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(mdy(as.character(fresh_nonch[[fixmap$redcap_var[step4_i]]])))
+    if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){stop((message(paste0("After transforming date, all data in",fixmap$redcap_var[step4_i]," are removed. somthing must be wrong."))))}
+    if(!all(na.omit(as.integer((fresh_nonch[[fixmap$redcap_var[step4_i]]]-Sys.Date())/365))%in%seq(-100,20))){stop(message("Something went wrong when changing the format of date"))} # check that the new date is in reasonable range: +-100years of today
   }}
   #STEP4.04 value_set: import this value for EVERYONE who we import this form for
   fixmap<-unique(subset(vm,fix_what=='value_set',select = c(redcap_var,instructions)))

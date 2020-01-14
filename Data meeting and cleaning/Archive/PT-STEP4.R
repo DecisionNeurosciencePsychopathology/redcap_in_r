@@ -115,6 +115,16 @@ if (nrow(vm_achk)>0){
     fresh_chk[vm_achk$redcap_var[step4_i]]<-plyr::mapvalues(fresh_chk[[vm_achk$redcap_var[step4_i]]],from = valuemap[,1], to = valuemap[,2],warn_missing = F)
   }
 }
+#STEP7.8 SPECIAL special_7 Q3,Q3a; Q3NEW,Q3aNEW Two access variables go to one redcap, only one should have value
+fixmap<-subset(vm,fix_what=="special_7") # subset of vm of redcap_check var
+if (nrow(fixmap)>0){
+  if(any(!is.na(fresh_chk$Q3)&!is.na(fresh_chk$Q3NEW))){stop(message("Stop: Special_7 - both Q3 and Q3NEW have value"))}
+  if(any(!is.na(fresh_chk$Q3a)&!is.na(fresh_chk$Q3aNEW))){stop(message("Stop: Special_7 - both Q3a and Q3aNEW have value"))}
+  fresh_chk$macarthur_3<-gsub("NA","",paste0(fresh_chk$Q3,fresh_chk$Q3NEW))
+  fresh_chk$macarthur_3_n<-gsub("NA","",paste0(fresh_chk$Q3a,fresh_chk$Q3aNEW))
+  fresh_chk$macarthur_3[which(fresh_chk$macarthur_3=="")]<-NA
+  fresh_chk$macarthur_3_n[which(fresh_chk$macarthur_3_n=="")]<-NA
+}
 
 fresh_chk<<-fresh_chk
 cat(paste("\n#",form_i,formname,"- STEP7 done.\n"))

@@ -1,15 +1,17 @@
+# special: uploade the duplicated IDs. originally in Step1 
+
 ## startup
 setwd("~/Documents/redcap_in_r/kexin_data_cleaning/")
 source('~/Documents/github/UPMC/startup.R')
 ############startuptransfer#############
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt2.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 #var_map$path<-gsub("\"","",var_map$path) #temperary: remove quotation marks from paths 
-var_map$baseline<-"FALSE"#temperary
+var_map$baseline<-"TRUE"#temperary
 var_map$baseline<-as.logical(var_map$baseline)#temperary
-var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
+#var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
 var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
 combine<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/combing forms.csv',stringsAsFactors = FALSE)
@@ -88,22 +90,29 @@ report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = N
   colnames(new_repo)<-c('id','var_name','wrong_val', 'which_form','comments')
   ifelse(rbind,return(rbind(report,new_repo)),return(new_repo))
 }
-
+# make a function to convert date type data correctly (so that 01/01/99 is not converted to 2099-01-01)
+mdy<-function(x){
+  x<-lubridate::mdy(x)
+  index<-which(x>as.Date("2030-01-01"))
+  if(length(index)>0){x[index]<-lubridate::ymd(x[index])-lubridate::years(100)}
+  index2<-which(x>as.Date(Sys.Date()+lubridate::years(10))|x<as.Date("1930-01-01"))#check if any dates are not reasonable
+  if (length(index2)>0){warning(paste0(c("Some dates are not reasonable: ",x[index2]),collapse = " "))}
+  return(x)
+}
 #check double entries (one redcap variabels exist in multiple forms) across froms  
 repeatedrcvar<-unique(na.omit(var_map$redcap_var[duplicated(var_map$redcap_var)]))
 dbentry<-subset(var_map,redcap_var%in%repeatedrcvar&!is.na(redcap_var)&!access_var%in%c("ID","MISSCODE","CDATE"),select = c("Form_name","redcap_var","access_var","path"))
 dbentry #will check double entry after data cleaning  
 #########################################
 
-#STEP1: Select a Access form - baseline(bl) first and then other forms- match with redcap variables, splited ordinary variables with checkbox variables, removed calculated variables 
 STEP1<-function(){
   #STEP1.1 Select a RC form. Check if multiple origianl forms need to be combined into one form 
-  formname <- forms[form_i] 
+  if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){
   cat(paste0("STEP1: #", form_i," Cleaning form: ",formname," now...\n"))
   fm_dir<-paste0(formname,".csv")
   vm<-subset(var_map, path==fm_dir) #subset of var mapping for the current form
   if(!(sum(vm$baseline)==0|sum(vm$baseline)==nrow(vm))){stop(message("check the column 'baseline' in the var map"))
-  }else{ifbl<-any(vm$baseline)}
+  }else{ifbl<-any(vm$baseline)} #ifbl: if baseline 
   
   if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
     acvar_nonch<-with(vm,split(access_var,is.checkbox))$'FALSE' #non-checkbox var
@@ -114,64 +123,17 @@ STEP1<-function(){
       stop(message('At least one row in var mapping does not give the path of directory for the original forms')) # path cannot be NA
     }else{if(any(!file.exists(paste0(rootdir,fm_dir)))){stop(message('At least one row of path in var mapping does not exist.'))}}#path must be valid
     #STEP1.2 Get raw. Grab forms, remove unecessary people and variables
-    RAWDATA <- read.csv(paste0(rootdir,fm_dir), stringsAsFactors = F)#grab form 
-    colnames(RAWDATA)<-gsub("^X","",colnames(RAWDATA)) # raname colnames to remove "X" in "X1", "X2"...
-    RAWDATA<-RAWDATA[which(RAWDATA$ID%in%allsub$ID),] #remove people not in our study
-    w_acvar<-setdiff(colnames(RAWDATA),vm$access_var)#all access variesbles should be in var map
-    if(length(w_acvar)>0){warning(paste("step1.2","#",form_i,formname,"Warning:",paste(w_acvar,collapse = ","),"cannot be found in the var_map."))} # report ^
-    w_rcvar<-setdiff(na.omit(vm$access_var),colnames(RAWDATA))# all access_var in var mapping should be in actual Access forms
-    if(length(w_rcvar)>0){warning(paste("step1.2","#:",form_i,formname,"Warning:",paste(w_rcvar,collapse = ", "),"in the var_map does not match any variables in the forms."))} # report^
-    RAWDATA<-RAWDATA[,which(colnames(RAWDATA)%in%c(acvar_nonch,acvar_chk))] #remove unncessary var 
-    #STEP1.3 no NA in ID or CDATE. create IDDATE. IDDATE must be unique
-    RAWDATA[which(RAWDATA=="",arr.ind = T)]<-NA
-    if(any(is.na(RAWDATA$ID)|is.na(RAWDATA$CDATE))){stop(message(paste("NA in ID or CDATE of RAWDATA. Form:",formname)))}
-    if("CDATE"%in%colnames(RAWDATA)){ #if the dataframe has CDATE
-      readline(prompt = paste0("Enter any key to confirm CDATE '",RAWDATA[1,"CDATE"],"' is in format month date year.")) # confirm the format of CDATE
-      RAWDATA$CDATE<-as.Date(lubridate::mdy(RAWDATA$CDATE))
-      RAWDATA$CDATECOPY<-RAWDATA$CDATE # create a col CDATECOPY so that after var mapping the form still has a col called CDATE 
-      RAWDATA$IDDATE<-paste0(RAWDATA$ID,RAWDATA$CDATE)
-    }else{
-      RAWDATA$IDDATE<-RAWDATA$ID
-      warning(paste0("#",form_i,formname," step1.3 Warn: ",formname," does not have CDATE."))}
-    RAWDATA<-unique(RAWDATA) #remove duplicated rows before checking duplicated IDDATE 
-    if(ifbl){ 
-      dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$ID)),"ID"])# shoule have no duplicates in ID
-      if(length(dup_id)>0){
-        warning(paste0("Warn: ",formname," is a baseline form and has duplicated ID. Please refer to formname_dup_id_rows.csv. The rows are removed."))
-        reportdup<-RAWDATA[which(RAWDATA$ID%in%dup_id),]
-        reportdup<-reportdup[order(reportdup$ID),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
-        write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_id_rows.csv"))
-        RAWDATA<-RAWDATA[-which(RAWDATA$ID%in%dup_id),]}      #remove duplicated rows 
-    }else{
-      dup_id<-unique(RAWDATA[which(duplicated(RAWDATA$IDDATE)),"IDDATE"])# shoule have no duplicates in IDDATE
-      if(length(dup_id)>0){
-        warning(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv. The rows are removed."))
-        reportdup<-RAWDATA[which(RAWDATA$IDDATE%in%dup_id),]
-        #SPECIAL for SIS: remove blank rows 
-        if (grepl("SIS",formname)){
-          realvar<-setdiff(colnames(reportdup),c("ID","CDATE","CDATECOPY","IDDATE"))
-          allnarow<-which(rowSums(is.na(reportdup[realvar]))==length(realvar)) #to be removed
-          reportdup<-reportdup[-allnarow,] # removed all-NA rows 
-          duprows<-which(duplicated(reportdup$IDDATE,fromLast = T)|duplicated(reportdup$IDDATE)) #rows where IDDATE have duplicates
-          RAWDATA<-rbind(RAWDATA,reportdup[-duprows,])#add back unique rows 
-          reportdup<-reportdup[duprows,] #remove unique rows from the reportdup
-        }
-        reportdup<-reportdup[order(reportdup$IDDATE),];reportdup[which(is.na(reportdup),arr.ind = T)]<-""
-        write.csv(reportdup,file = paste0("~/Documents/github/UPMC/TRANSFER/PT/dup_id/",formname,"_dup_idcdate_rows.csv"))
-        RAWDATA<-RAWDATA[-which(RAWDATA$IDDATE%in%dup_id),]}      #remove duplicated rows
-    }
     #SPECIAL for SCID: add back some records with dup id that Morgan manually find. These five forms are the only forms that have duplicaetd IDs. 
     if (formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){
       special<-read.csv(paste0(rootdir,"deleted_duplicated_id/",formname,"_special_dup_id.csv"),stringsAsFactors = F)
       special<-subset(special,ifkeep=="TRUE",select = 1:(ncol(special)-1))[-1]
       special[which(special=="",arr.ind = T)]<-NA
       special$CDATE<-as.Date(special$CDATE,format = "%m/%d/%y");special$CDATECOPY<-as.Date(special$CDATECOPY,format = "%m/%d/%y")
-      if(!(any(duplicated(special$ID))|any(special$ID%in%RAWDATA$ID))){
-        RAWDATA<-rbind(RAWDATA,special)
+      if(!(any(duplicated(special$ID)))){
+       RAWDATA<-special
         message(paste0("Note: added back observations Morgan identified manually on Dec 12."))
       }else{stop(message("Something is wrong"))}
     }
-    #STEP1.4 save chkbx vars to 'raw_nonch' and non-chkbx vars to df: 'raw_chk'
     if(!is.null(acvar_chk)){
       raw_nonch<-RAWDATA[,-which(colnames(RAWDATA)%in%acvar_chk)] #keep only non-checkbx variables 
       ifelse("CDATE"%in%colnames(RAWDATA), raw_chk<-RAWDATA[,c("ID","CDATE","IDDATE",acvar_chk)],raw_chk<-RAWDATA[,c("ID","IDDATE",acvar_chk)])
@@ -192,12 +154,12 @@ STEP1<-function(){
     colnames(raw_nonch)<-gsub("newcol",tolower(paste0("cdate_",formname)),colnames(raw_nonch))}
     #STEP1.8 SPECIAL for some forms that have "condition" issue, merge the checkbox df with certain non-chk access var. 
     if ("condition" %in% vm$fix_what){
-      raw_chk<-cbind(raw_chk,RAWDATA[,subset(vm,fix_what=="condition",select = value1)[[1]]])
+      raw_chk<-cbind(raw_chk,RAWDATA[,unique(subset(vm,fix_what=="condition",select = value1)[[1]])])
     }
     
     cat(paste0(formname,": STEP1 done.\n"))
     vm<<-vm
-    formname<<-formname
+
     acvar_chk<<-acvar_chk
     RAWDATA<<-RAWDATA
     #deleted_rows<<-deleted_rows
@@ -207,8 +169,8 @@ STEP1<-function(){
     log_comb_fm<<-log_comb_fm
     ifbl<<-ifbl
   }else{cat(paste0(formname," is not a baseline form. Skiped it.\n"))
-    ifbl<<-ifbl}
-  
+    ifbl<<-ifbl}}
+  formname<<-formname
 }# the function is writen and editted in another script. Above is a copy of the script
 ##STEP4 fix data with systematic issues (eg: shifted range) identified in 'var_map'
 STEP4<-function(){
@@ -247,8 +209,8 @@ STEP4<-function(){
   if (nrow(fixmap)>0){for (step4_i in 1:nrow(fixmap)){
     if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){next()}
     eg<-as.character(na.omit(fresh_nonch[[fixmap$redcap_var[step4_i]]]))[1]
-    fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(lubridate::mdy(as.character(fresh_nonch[[fixmap$redcap_var[step4_i]]])))
-    if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){stop((message("After transforming date, all data in this col are remove. somthing must be wrong.")))}
+    fresh_nonch[fixmap$redcap_var[step4_i]]<-as.Date(mdy(as.character(fresh_nonch[[fixmap$redcap_var[step4_i]]])))
+    if(all(is.na(fresh_nonch[[fixmap$redcap_var[step4_i]]]))){stop((message(paste0("After transforming date, all data in",fixmap$redcap_var[step4_i]," are removed. somthing must be wrong."))))}
     if(!all(na.omit(as.integer((fresh_nonch[[fixmap$redcap_var[step4_i]]]-Sys.Date())/365))%in%seq(-100,100))){stop(message("Something went wrong when changing the format of date"))} # check that the new date is in reasonable range: +-100years of today
   }}
   #STEP4.04 value_set: import this value for EVERYONE who we import this form for
@@ -315,7 +277,7 @@ STEP5<-function(){
     # check 295.3 in scid s211 and 29..0 in scid_xii_c168
     # check 
     
-    #fresh_nonch[i,j]<-NA
+    fresh_nonch[i,j]<-NA
     #cat(paste(j,"done."))
   }
   fresh_nonch<<-fresh_nonch
@@ -445,9 +407,13 @@ STEP7<-function(){
   }
   #STEP7.8 SPECIAL special_7 Q3,Q3a; Q3NEW,Q3aNEW Two access variables go to one redcap, only one should have value
   fixmap<-subset(vm,fix_what=="special_7") # subset of vm of redcap_check var
-  if (nrow(vm_achk)>0){
-    #Q3 Q3NEW 
-    #Q3a Q3aNEW
+  if (nrow(fixmap)>0){
+    if(any(!is.na(fresh_chk$Q3)&!is.na(fresh_chk$Q3NEW))){stop(message("Stop: Special_7 - both Q3 and Q3NEW have value"))}
+    if(any(!is.na(fresh_chk$Q3a)&!is.na(fresh_chk$Q3aNEW))){stop(message("Stop: Special_7 - both Q3a and Q3aNEW have value"))}
+    fresh_chk$macarthur_3<-gsub("NA","",paste0(fresh_chk$Q3,fresh_chk$Q3NEW))
+    fresh_chk$macarthur_3_n<-gsub("NA","",paste0(fresh_chk$Q3a,fresh_chk$Q3aNEW))
+    fresh_chk$macarthur_3[which(fresh_chk$macarthur_3=="")]<-NA
+    fresh_chk$macarthur_3_n[which(fresh_chk$macarthur_3_n=="")]<-NA
   }
   
   fresh_chk<<-fresh_chk
@@ -486,7 +452,7 @@ STEP9<-function(){
           log_replace<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch1",vm_br$value4[vm_i],"=",fresh_alldata[df_i,vm_br$value4[vm_i]],"Replaced with NA"), report = log_replace)
           fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA 
         }else{
-          log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch1-replaced with NA",vm_br$value4[vm_i],"=",fresh_alldata[df_i,vm_br$value4[vm_i]]), report = log_branching)
+          log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch1-NOT replaced with NA",vm_br$value4[vm_i],"=",fresh_alldata[df_i,vm_br$value4[vm_i]]), report = log_branching)
         }
         fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA
       }
@@ -504,7 +470,7 @@ STEP9<-function(){
           log_replace<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch2",vm_br$value4[vm_i],"Replaced with NA"), report = log_replace)
           fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA 
         }else{
-          log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch2-replaced with NA",vm_br$value4[vm_i]), report = log_branching)}
+          log_branching<-report_wrong(id = fresh_alldata[df_i,"IDDATE"], which_var = vm_br$redcap_var[vm_i], wrong_val = fresh_alldata[df_i,vm_br$redcap_var[vm_i]], which_form = formname, comments = paste("Branch2-NOT replaced with NA",vm_br$value4[vm_i]), report = log_branching)}
         fresh_alldata[df_i,vm_br$redcap_var[vm_i]]<-NA
       }
       #unique(fresh_alldata$staupxtra_sep_which)#-->NA   "1"  "2"  "3"  "NA"
@@ -515,45 +481,20 @@ STEP9<-function(){
   cat(paste("#",form_i,formname,"- Step9 done.\n"))
 }
 
-for (form_i in 1:length(forms)) {STEP1();STEP4();STEP5()} # temperary test step1 and 4
-
 for (form_i in 1:length(forms)) {
+  #for (form_i in 9){ 
   #for (form_i in 6:length(forms)) { 
+  formname <- forms[form_i] 
   STEP1() # get 'raw_nonch': redcap variables, 
+  if (!formname%in%c("A_SCIDIV","A_SCIDCHRON","L_CONDIAG","LSU2_PAIN","A_SUPP")){next()}else{
   if(!skipotherforms|ifbl){ # skip the form if skipotherforms is T AND ifbl is F
     STEP4();STEP5()
     if(!is.null(acvar_chk)){STEP7()}
     STEP8();STEP9()
-    write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/form_",formname,"_",Sys.Date(),".csv"))
+    assign(paste0("form_",formname),unique(fresh_alldata))
+    write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/form_addedback_",formname,"_",Sys.Date(),".csv"))
     if(formname=="A_SCIDIV"){write.csv(unique(deleted_rows),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/deleted_rows_scidiv_",Sys.Date(),".csv"))}
     #  write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm_",form_i,".csv"))
     #  write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range_",form_i,".csv"))
     #  write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_",form_i,".csv"))
-  }} 
-
-# check double entries across forms (dbentry)
-
-# check IDDATE following combining_form.csv (eg: some forms should have identical IDDATE, every IDDATE has all forms?). Refer to combine and check forms.R
-
-#write.csv(unique(log_branching),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_branching_scidiv_",Sys.Date(),".csv")) #temperary
-#write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm.csv"))
-write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_out_of_range_",Sys.Date(),".csv"))
-write.csv(unique(log_branching),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_branching_",Sys.Date(),".csv"))
-write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_replace",Sys.Date(),".csv"))
-#write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_.csv"))
-
-for (del_i in 1:length(deleted_rows)){
-  write.csv(deleted_rows[[del_i]],file = paste0("~/Documents/github/UPMC/TRANSFER/DeletedRows_",names(deleted_rows)[del_i],".csv"))
-  rm(del_i)
-}
-newdeleted<-do.call("rbind",lapply(deleted_rows[4:13],function(x){x[1:2]}))
-write.csv(newdeleted,file = paste0("~/Documents/github/UPMC/TRANSFER/DeletedRows_IPDE.csv"))
-#}
-
-
-
-
-#####################################end of the function#########################################
-
-
-
+  }} }
