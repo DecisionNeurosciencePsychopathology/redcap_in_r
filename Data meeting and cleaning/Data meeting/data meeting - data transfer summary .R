@@ -43,29 +43,42 @@ PT<-dplyr::full_join(PT,codcol,by="registration_redcapid")
 ##More checks of each protocol
 #Protect checks
 PT<-PT[unique(which(PT[,grep('registration_ptcstat_',var_pt)]==1,arr.ind = T)[,1]),] # consented to at least one protocol 
+PT$group<-plyr::mapvalues(PT$registration_group,from = c("ATT","DEP","HC","IDE",88,89), to = c("4ATT","2DEP","1HC","3IDE","5Not sure yet","6Ineligible"))
 any(is.na(PT$registration_redcapid)) #FALSE
 any(duplicated(PT$registration_redcapid)) #FALSE
 #temp<-PT[unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # ieligible people 
 
+library(tidyr)
 # Get a table of the number of terminated people in each protocol 
-term_table<-data.frame(Protocal=c("Completed study","Lost to follow-up","Ineligible after signing consent","Withdrawn at own/family request","Withdrawn by PI d/t other reasons (death, unreliability, etc.)"),stringsAsFactors = F)
-for (ptversion in c("suicide","suicid2","protect","protect2")){
-  print(any(duplicated(PT$registration_redcapid))); print(table(PT[paste0("reg_term_reason_",ptversion)]));print(sum(PT[[paste0("reg_term_excl_",ptversion)]],na.rm = T))
-  term_table<-data.frame(term_table,newcol=as.vector(table(PT[paste0("reg_term_reason_",ptversion)])),stringsAsFactors = F)
-  colnames(term_table)[ncol(term_table)]<-ptversion
-  term_table
+gettable<-function(field,variable,valuemapfrom,valuemapto,ptversion){
+  df0<-subset(PT,eval(parse(text = (paste0("registration_ptcstat___",ptversion))))==1)
+  if(all(is.na(df0[variable]))){warning(paste(ptversion,field,variable,"has no values."))
+  }else{
+    df<-as.data.frame(table(df0[c(variable,'group')]))%>%
+      pivot_wider(names_from = group,values_from = Freq)
+    df<-as.data.frame(df)
+    df[1]<-plyr::mapvalues(df[[1]],from = valuemapfrom,to = valuemapto,warn_missing = F)
+    colnames(df)[1]<-field
+    return(df)}
 }
-#speical protect3
-ptversion="protect3"
-print(any(duplicated(PT$registration_redcapid))); print(table(PT[paste0("reg_term_reason_",ptversion)])); print(sum(PT[[paste0("reg_term_excl_",ptversion)]],na.rm = T))
-term_table<-data.frame(term_table,newcol=c(0,0,as.vector(table(PT[paste0("reg_term_reason_",ptversion)]))),stringsAsFactors = F)
-colnames(term_table)[ncol(term_table)]<-ptversion
-term_table<-rbind(term_table,c("Total",colSums(term_table[-1])))
-term_table
+for (ptversion in c("suicide","suicid2","protect","protect2","protect3")){
+  print(any(duplicated(PT$registration_redcapid)))
+  field<-c("term","mod","recurisour")
+  variables<-c(paste0("reg_term_reason_",ptversion),"cod_pi_mod","registration_recruisource")
+  valuemapfrom<-list(c(1:5),c(1:7),c(1:12,998,999))
+  valuemapto<-list(c("Completed study","Lost to follow-up","Ineligible after signing consent","Withdrawn at own/family request","Withdrawn by PI d/t other reasons (death, unreliability, etc.)"),
+                   c("Natural","Suicide","Accident","Homicide","Pending","Could not determine","Suspected Suicide"),
+                   c("Involuntary Inpatient","Voluntary Inpatient","Outpatient","Bus Ad","Radio Ad","Magazine / Newspaper","Pitt+Me / CTSI database","Clinic/PI/Affiliation Referral","Flyers / Posters","Word of mouth","Fairs / Conventions","Private Practice Referral","Other","N/A"))
+  for (i in 1:3){
+    assign(paste0(field[i],"_",ptversion),
+           gettable(field = field[i],variable = variables[i],valuemapfrom = valuemapfrom[[i]],valuemapto = valuemapto[[i]], ptversion = ptversion))}
+}
 
 # cause of death 
 PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),]  # Remove people terminated for at least one protocol due to ineligibility 
-deadPT<-
+deadPT<-subset(PT,cod_dead==1)
+table(PT[c("cod_pi_mod","registration_group")])
+
 
 
 
