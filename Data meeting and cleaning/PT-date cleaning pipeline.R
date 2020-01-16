@@ -1,5 +1,5 @@
 ## startup
-setwd("~/Documents/redcap_in_r/kexin_data_cleaning/")
+setwd("~/Documents/redcap_in_r/Data meeting and cleaning/")
 source('~/Documents/github/UPMC/startup.R')
 ############startuptransfer#############
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
@@ -7,8 +7,8 @@ logdir="~/Documents/github/UPMC/TRANSFER/PT/dup_id/" # directory of folder to sa
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
 var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
-#var_map$path<-gsub("\"","",var_map$path) #temperary: remove quotation marks from paths 
-var_map$baseline<-"FALSE"#temperary
+var_map<-unique(var_map)
+#var_map$baseline<-"FALSE"#temperary
 var_map$baseline<-as.logical(var_map$baseline)#temperary
 #var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
@@ -39,7 +39,7 @@ pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
 curdb=pt
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
-skipotherforms = FALSE
+skipotherforms = TRUE
 #replace_999 = TRUE # by defult, replace all 999 with NA 
 remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
 replace_w_na = FALSE
@@ -161,7 +161,7 @@ STEP1<-function(){
         warning(paste0("Warn: ",formname," has duplicated IDDATE. Please refer to formname_dup_id_rows.csv. The rows are removed."))
         reportdup<-RAWDATA[which(RAWDATA$IDDATE%in%dup_id),]
         #SPECIAL for SIS: remove blank rows 
-        if (grepl("SIS",formname)){
+        if (grepl("SIS",formname)|formname%in%c("A_ICG")){
           realvar<-setdiff(colnames(reportdup),c("ID","CDATE","CDATECOPY","IDDATE"))
           allnarow<-which(rowSums(is.na(reportdup[realvar]))==length(realvar)) #to be removed
           reportdup<-reportdup[-allnarow,] # removed all-NA rows 
@@ -529,8 +529,6 @@ STEP6<-function(){
   log_replace<<-log_replace
   cat(paste("#",form_i,formname,"- STEP6 done.\n"))
 }
-
-for (form_i in 1) {STEP1();STEP2();STEP3();if(!is.null(acvar_chk)){STEP4()};STEP5()} # temperary test step1 and 4
 
 for (form_i in 1:length(forms)) {
   #for (form_i in 9){ 
