@@ -9,7 +9,7 @@ md <- bsrc.checkdatabase2(online = T)
 plotpath="~/Documents/github/UPMC/data meeting" #Kexin
 
 #PT3 recruitment milestone
-recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milestones for MH085651 - Decision Process of Late-Life Suicide_new.csv",stringsAsFactors = F)
+#recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milestones for MH085651 - Decision Process of Late-Life Suicide_new.csv",stringsAsFactors = F)
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md)
@@ -50,7 +50,7 @@ any(duplicated(PT$registration_redcapid)) #FALSE
 
 library(tidyr)
 # Get a table of the number of terminated people in each protocol 
-gettable<-function(field,variable,valuemapfrom,valuemapto,ptversion){
+gettable_bygroup<-function(field,variable,valuemapfrom,valuemapto,ptversion){
   df0<-subset(PT,eval(parse(text = (paste0("registration_ptcstat___",ptversion))))==1)
   if(all(is.na(df0[variable]))){warning(paste(ptversion,field,variable,"has no values."))
   }else{
@@ -59,6 +59,15 @@ gettable<-function(field,variable,valuemapfrom,valuemapto,ptversion){
     df<-as.data.frame(df)
     df[1]<-plyr::mapvalues(df[[1]],from = valuemapfrom,to = valuemapto,warn_missing = F)
     colnames(df)[1]<-field
+    return(df)}
+}
+gettable<-function(field,variable,valuemapfrom,valuemapto,ptversion){
+  df0<-subset(PT,eval(parse(text = (paste0("registration_ptcstat___",ptversion))))==1)
+  if(all(is.na(df0[variable]))){warning(paste(ptversion,field,variable,"has no values."))
+  }else{
+    df<-as.data.frame(table(df0[variable]))
+    df[1]<-plyr::mapvalues(df[[1]],from = valuemapfrom,to = valuemapto,warn_missing = F)
+    colnames(df)<-c(field,"counts")
     return(df)}
 }
 for (ptversion in c("suicide","suicid2","protect","protect2","protect3")){
