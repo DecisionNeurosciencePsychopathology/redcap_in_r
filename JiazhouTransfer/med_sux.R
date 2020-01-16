@@ -40,12 +40,12 @@ proc.rc.medlist <- function(med_dfx=NULL,get_RxName=T) {
           dfmedx$value[dfmedx$Type == "spname"]<-paste(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxName[match(dfmedx$value[dfmedx$Type == "name"],rx_ref$RxID)],sep = ": ")
           dfmedx$value[dfmedx$Type == "name"] <-NA
         }
-
+        
       }
-        return(dfmedx)
-      } else {
-        return(NULL)
-      }
+      return(dfmedx)
+    } else {
+      return(NULL)
+    }
     
   }))
   med_rej_sp<-split(med_dfx_rej,med_dfx_rej$registration_redcapid)
@@ -126,9 +126,9 @@ sahx_bs$registration_redcapid<-sahx_bs$masterdemo_id
 sahx_bs<-sahx_bs[sahx_bs$ifexist,which(!names(sahx_bs) %in% c("redcap_event_name","masterdemo_id","wpic_id","soloff_id","ogid","ifexist"))]
 sahx_backup<-bsrc.conredcap2(protocol = ptcs$masterdemo,batch_size = 1000L)
 if(FALSE){
-sahx_bs_v<-bsrc.verify(df_new = sahx_bs,df_ref = msdm_db$data,id.var = "registration_redcapid")
-bs_demo_dcast<-reshape2::dcast(bs_demo_dx,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
-redcap_upload(ds_to_write = sahx_bs,batch_size = 100L,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+  sahx_bs_v<-bsrc.verify(df_new = sahx_bs,df_ref = msdm_db$data,id.var = "registration_redcapid")
+  bs_demo_dcast<-reshape2::dcast(bs_demo_dx,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
+  redcap_upload(ds_to_write = sahx_bs,batch_size = 100L,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 } else {
   message("First time didn't have to deal with this; but if later....use the protect method!")
 }
@@ -165,63 +165,189 @@ redcap_upload(ds_to_write = sahx_pt_v$DIFF[which(sahx_pt_v$DIFF$REF %in% c(0,"",
 sahx_pt_v<-bsrc.verify(df_new = sahx_pt_sp$exists,df_ref = msdm_db$data,id.var = "registration_redcapid")
 
 
-cur_sahx_msdm <- bsrc.getform(protocol = ptcs$masterdemo,formname = "suicide_history",online = T,batch_size = 1000L,mod = T,at_least = 1)
-
-sahx_form<-cur_sahx_msdm
-IDvar="registration_redcapid"
-sahx_sp <- split(sahx_form,sahx_form[[IDvar]])
 
 
-bsrc.sahx_index<-function(sahx_df = NULL){
-  sui_names<-names(sahx_df)
-  index_df<-data.frame(vari_names=sui_names,attempt_num=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
-  index_df$single_entry<-index_df$vari_names==index_df$attempt_num
-  index_df$is_checkbox<-grepl("___",index_df$vari_names)
-  index_df$root_names<-index_df$vari_names;
-  index_df$root_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
-  index_df$checkbox_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
-  index_df$choice_name[index_df$is_checkbox] <- gsub(".*___","",index_df$vari_names[index_df$is_checkbox])
-  index_df$root_names<-gsub("_at[0-9]*$","\\1",index_df$root_names)
-  index_df$vari_to_use<-index_df$root_names
-  index_df$vari_to_use[index_df$is_checkbox]<-paste(index_df$root_names[index_df$is_checkbox],index_df$choice_name[index_df$is_checkbox],sep = "___")
-  #index_df$rxsim1<-NULL
-  index_df$index_num <- suppressWarnings(as.numeric(gsub("at","",index_df$attempt_num),warning=F))
-  return(index_df)
+######Protect transfer:
+####This is the suicide histroy########
+##Get the existing folks, exclude them for now;
+sahx_baseline<-read.csv("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/S_SQUEST.csv",stringsAsFactors = F)
+sahx_varimap<-na.omit(unpack(readxl::read_xlsx(file.path("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer","redcap outputs","To be transferred","SP","SUICIDE HISTORY_cv.xlsx")))$map)
+sahx_varimap$date_field_yn<-grepl("date",sahx_varimap$RC_name)
+
+sahx_dfx<-sahx_baseline[names(sahx_baseline) %in% sahx_varimap$OG_name]
+names(sahx_dfx)<-sahx_varimap$RC_name[match(names(sahx_dfx),sahx_varimap$OG_name)]
+sahx_dfx<-bsrc.findid(sahx_dfx,idmap = idmap)
+sahx_dfx$ID<-sahx_dfx$masterdemo_id
+if(any(!sahx_dfx$ifexist)){warning("Dataframe has IDs that are not matched.")}
+sahx_dfx[c(names(idmap),"ogid","ifexist")]<-NULL
+
+#For now only transfer P2 folks:
+sahx_dfz<-reshape2::melt(sahx_dfx,id.vars=c("ID","sahx_attemptnum"))
+sahx_dfz$type<-sapply(strsplit(as.character(sahx_dfz$variable),split = "-x-"),`[[`,1)
+sahx_dfz$num<-sapply(strsplit(as.character(sahx_dfz$variable),split = "-x-"),`[[`,2)
+#Recast
+sahx_dfz$variable<-NULL;
+sahx_dfr<-reshape(data = sahx_dfz,timevar = "type",idvar = c("ID","num","sahx_attemptnum"),direction = "wide",sep = "-x-")
+names(sahx_dfr)<-gsub("value-x-","",names(sahx_dfr))
+
+
+sahx_dfr$sahx_sadate_at<-as.character(as.Date(sahx_dfr$sahx_sadate_at,format = "%m/%d/%Y"))
+
+sp_sahx<-split(sahx_dfr,sahx_dfr$ID)
+
+
+
+
+
+find_sahx_duplicate_single <- function(grz,skipnumcheck=F) {
+  grz[grz==""]<-NA
+  success<-TRUE 
+  if(!skipnumcheck && is.na(unique(grz$sahx_attemptnum))){
+    return(list(o_df=grz,status="NO DATA"))
+  }
+  #Clean up 
+  if(skipnumcheck) {grz$sahx_attemptnum <- NA}
+  fix_v <- c("ID","sahx_attemptnum")
+  grz_fix<-unique(grz[fix_v])
+  message(grz_fix$ID)
+  gra <- grz[which(!names(grz) %in% fix_v)]
+  gra <- gra[which(!duplicated(gra[names(gra) != "num"])),]
+  
+  if(grz_fix$sahx_attemptnum <1 && !skipnumcheck){
+    return(list(o_df=grz[1,],status="ZERO ATTEMPT"))
+  }
+  gra<-gra[which(apply(gra[names(gra) != "num"],1,function(x){any(!is.na(x))})),]
+  
+  #If it's already pre-fixed, pass through
+  if(nrow(gra)==as.numeric(grz_fix$sahx_attemptnum) && !skipnumcheck) {
+    gr_final <- cbind(grz_fix,gra)
+    return(list(o_df=gr_final,status="ATTEMPT NUM MATCHED"))
+  }
+  na_date_num <- gra$num[which(is.na(gra$sahx_sadate_at))]
+  gra$sahx_sadate_at[which(is.na(gra$sahx_sadate_at))] <- "FAKEDATE"
+  gra_dsp <- split(gra,gra$sahx_sadate_at)
+  if(length(gra_dsp) == as.numeric(grz_fix$sahx_attemptnum) || skipnumcheck){
+    grc_raw<-lapply(gra_dsp,function(x){
+      if(x$sahx_sadate_at=="FAKEDATE"){x$sahx_sadate_at<-NA}
+      x$sahx_lr_at[is.na(x$sahx_lr_at)]<-x$sahx_lr_at[match(paste(x[is.na(x$sahx_lr_at),c("sahx_describe_at","sahx_sadate_at")],collapse = "|X|"),
+                                                            paste(x[!is.na(x$sahx_lr_at),c("sahx_describe_at","sahx_sadate_at")],collapse = "|X|"))]
+      x$sahx_describe_at[is.na(x$sahx_describe_at)]<-x$sahx_lr_at[match(paste(x[is.na(x$sahx_describe_at),c("sahx_lr_at","sahx_sadate_at")],collapse = "|X|"),
+                                                            paste(x[!is.na(x$sahx_describe_at),c("sahx_lr_at","sahx_sadate_at")],collapse = "|X|"))]
+      
+      x <- unique(x)
+      if(nrow(x)==1){
+        return(list(df=x,matched=T))
+      } else if (nrow(unique(x[c("sahx_sadate_at","sahx_describe_at")]))==1 && length(na.omit(unique(x$sahx_lr_at)))) {
+        return(list(df=x[which(!is.na(x$sahx_lr_at))[1],],matched=T))
+      } else {
+        return(list(df=x,matched=F))
+      }
+    })
+   
+    matched <-sapply(grc_raw, `[[`,"matched")
+    grc <- do.call(rbind,lapply(grc_raw[which(matched)],`[[`,"df"))
+    rownames(grc)<-NULL
+    if(length(which(matched))==as.numeric(grz_fix$sahx_attemptnum) && !skipnumcheck){
+      return(list(o_df=cbind(grz_fix,grc),status="DUPLICATE DETECTED AND SOLVED"))
+    } else if (length(which(!matched)) ==1 && length(na.omit(unique(grc_raw[[which(!matched)]]$df$sahx_lr_at))) == 1) {
+      gre_a <- grc_raw[[which(!matched)]]$df
+      gre <- gre_a[1,]
+      gre$sahx_describe_at <- paste(unique(gre_a$sahx_describe_at),collapse = " / ")
+      if(is.na(gre$sahx_lr_at) && any(!is.na(gre_a$sahx_lr_at))){gre$sahx_lr_at <- as.numeric(na.omit(unique(gre_a$sahx_lr_at)))}
+      grf <- rbind(grc,gre)
+      return(list(o_df=cbind(grz_fix,grf),status="IMPERFECT MATCH, CHECK REQUIRED"))
+    } else if (skipnumcheck) {
+      return(list(o_df=cbind(grz_fix,gra),status="SKIP ATT NUM CHECK"))
+    } else {return(list(o_df=cbind(grz_fix,gra),status="NO DATA:UNABLE TO MATCH"))}
+  } else {return(list(o_df=cbind(grz_fix,gra),status="NO DATA:UNIQUE DATES NUM IS DIFF THAN ATT NUM"))}
+  return(list(o_df=grz,status="NO DATA:HELP!SHOULDN'T HAPPEN"))
 }
 
-index_df <- bsrc.sahx_index(sahx_df =  sahx_df)
-
-bsrc.proc_multientry<-function(long_df=NULL,index_df=NULL,IDvar = "registration_redcapid",at_least=1){
-  #single_entry df:
-  SE_df <- long_df[index_df$vari_names[which(index_df$single_entry)]]
-  hx_mdf <- long_df[index_df$vari_names[which(!index_df$single_entry)]]
-  hx_mdf[[IDvar]]<-SE_df[[IDvar]]
-  hx_shdf<-do.call(rbind,lapply(1:max(index_df$index_num,na.rm = T),function(xa){
-    #print(xa)
-    sub_indx<-index_df[which(index_df$index_num == xa),]
-    sub_div<-hx_mdf[c(IDvar,sub_indx$vari_names)]
-    subm_div<-suppressMessages(rc_na_remove(raw = sub_div,mod = T,IDvar = IDvar,at_least = 1))
-    if(nrow(subm_div)>0){
-      names(subm_div)<-c(IDvar,sub_indx$vari_to_use)
-      subm_div$index_num <- xa
-      return(subm_div)
-    } else {return(NULL)}
-  }))
-  sp_shdf<-split(hx_shdf,hx_shdf[[IDvar]])
-  return(list(long_df = hx_shdf,list = sp_shdf))
-}
-
-cur_sahx_msdm_lx_sp<-bsrc.proc_multientry(long_df = cur_sahx_msdm,index_df = index_df,IDvar = "registration_redcapid",at_least = 1)
-
-unique_var <- c("sahx_sadate","sahx_lr")
+sp_sahx_proc<-cleanuplist(lapply(sp_sahx,find_sahx_duplicate_single))
+report_df<-data.frame(ID=names(sp_sahx_proc),Status=as.character(sapply(sp_sahx_proc,`[[`,"status",USE.NAMES = F)),stringsAsFactors = F)
+left_overIDs<-report_df$ID[which(grepl("NO DATA",report_df$Status))]
+carryonIDs<-report_df$ID[which(!grepl("NO DATA",report_df$Status))]
+left_over_ddf <- do.call(rbind,lapply(sp_sahx_proc[left_overIDs],`[[`,"o_df"))
+left_over_fdf <- merge(left_over_ddf,report_df,by = "ID",all.x = T)
+write.csv(left_over_fdf,file = "/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/Problems/baseline_sahx_status.csv",row.names = F)
 
 
-
-sa_dup<-do.call(rbind,lapply(cur_sahx_msdm_lx_sp$list,function(dfa){
-  if(any(duplicated(dfa[unique_var]))){
-    return(dfa[which(duplicated(dfa[unique_var]) | duplicated(dfa[unique_var],fromLast = T)),])
-  } else {return(NULL)}
+sahx_dfx_clean<-do.call(rbind,lapply(sp_sahx_proc[carryonIDs],function(x){
+  if(is.null(x$o_df)) {return(NULL)} 
+  xr<-x$o_df
+  xr$num<-NA
+  if(unique(xr$sahx_attemptnum)!=0){
+    xr$num<-1:nrow(xr)
+  }
+  return(xr)
 }))
+
+sahx_dfx_clean$sahx_lr_at[which(as.numeric(sahx_dfx_clean$sahx_lr_at)>8)]<-NA
+
+sahx_gx_sp <- split(sahx_dfx_clean,sahx_dfx_clean$sahx_attemptnum>0)
+
+cur_sahx_msdm <- bsrc.getform(protocol = ptcs$masterdemo,formname = "suicide_history",online = T,batch_size = 1000L,mod = T,at_least = 1)
+save(cur_sahx_msdm,file = file.path("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/pre_upload_sahx.rdata"))
+
+noSA_dfx<-sahx_gx_sp$`FALSE`
+noSA_dfx$registration_redcapid<-noSA_dfx$ID; noSA_dfx$ID<-NULL
+noSA_dfx<-noSA_dfx[c("registration_redcapid","sahx_attemptnum")]
+noSA_dfx<-noSA_dfx[!noSA_dfx$registration_redcapid %in% cur_sahx_msdm$registration_redcapid,]
+noSA_verify<-bsrc.verify(df_new = noSA_dfx,df_ref = cur_sahx_msdm,id.var = "registration_redcapid")
+REDCapR::redcap_write(noSA_verify$NEW_INFO,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+
+SA_clean_df <- clean_str(sahx_gx_sp$`TRUE`)$clean_df
+wide_SAdfx<-reshape( SA_clean_df,idvar = c("ID","sahx_attemptnum"),timevar = "num",direction = "wide",sep = "")
+wide_SAdfx$registration_redcapid<-wide_SAdfx$ID; wide_SAdfx$ID<-NULL
+SA_verify<-bsrc.verify(df_new = wide_SAdfx,df_ref = cur_sahx_msdm,id.var = "registration_redcapid")
+SA_togo <- SA_verify$NEW_INFO[!SA_verify$NEW_INFO$registration_redcapid %in% cur_sahx_msdm$registration_redcapid,]
+
+# ##purging attempt histroyies #retry
+#SA_togo[-1]<-""
+
+redcap_seq_uplaod(ds = SA_togo,id.var = id.var,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+SA_togo_existing <- SA_clean_df[SA_clean_df$ID %in% cur_sahx_msdm$registration_redcapid,]
+SA_togo_sp <- split(SA_togo_existing,SA_togo_existing$ID)
+cur_sahx_msdm_lx_sp<-bsrc.proc_multientry(long_df = cur_sahx_msdm,index_df = bsrc.sahx_index(sahx_df =  cur_sahx_msdm),IDvar = "registration_redcapid",at_least = 1)
+
+SA_EX_try<-cleanuplist(lapply(SA_togo_sp,function(dfx){
+  cur_df<-cur_sahx_msdm_lx_sp$list[[as.character(unique(dfx$ID))]]
+  if(is.null(cur_df)){
+    return(list(out_df=dfx,status=TRUE,ogf=dfx))
+  }
+  names(cur_df)<-paste(names(cur_df),"at",sep = "_")
+  cur_df$sahx_attemptnum<-NA
+  cur_df$ID <- cur_df$registration_redcapid_at;cur_df$num <- cur_df$index_num_at
+  px_cur_df <- cur_df[names(dfx)]; px_cur_df$num <- paste0("rc_",px_cur_df$num)
+  otc<-find_sahx_duplicate_single(rbind(px_cur_df,dfx),skipnumcheck = T)
+  statusX <- !any(duplicated(otc$o_df))
+  statusY <- otc$status; check_ensure<-FALSE
+  if(statusX) {
+    ota <- otc$o_df
+    ota$sahx_attemptnum <- nrow(ota)
+    if(length(which(is.na(match(px_cur_df$num,ota$num))))>0) {message("yo");statusY<-"DOUBLE CHECK: RC entry Replace";check_ensure <- TRUE}
+    ota <- ota[which(!grepl("rc_",ota$num)),]
+    if(nrow(ota)<1){message("NO DATA");return(NULL)}
+    ota$num <- nrow(cur_df) + (1:nrow(ota))
+    return(list(out_df=ota,status=statusY,ogf=rbind(dfx,px_cur_df)))
+  }  else {
+    message("DUPLICATE DETECHED. WILL REMOVE AND CALL FOR ATTENTION.")
+    return(NULL)
+  }
+}))
+SA_EX_try_df <- do.call(rbind,lapply(SA_EX_try,`[[`,"out_df"))
+wide_SAEXdfx<-reshape( SA_EX_try_df,idvar = c("ID","sahx_attemptnum"),timevar = "num",direction = "wide",sep = "")
+wide_SAEXdfx$registration_redcapid<-wide_SAEXdfx$ID; wide_SAEXdfx$ID<-NULL
+bsrc.verify(df_new = wide_SAEXdfx,df_ref = cur_sahx_msdm,id.var = "registration_redcapid")$VALUE_CONFLICT
+message("Make sure no other value than the attempter number is modified.")
+redcap_seq_uplaod(ds = wide_SAEXdfx,id.var = id.var,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
+
+
+
+
+
 
 
 

@@ -68,3 +68,44 @@ get_drug<-function(drugname){
   if(length(m_dxt)<1){m_dxt<-list(rxcui=NA,score=NA)}
   return(data.frame(drug_name=drugname,drug_rxcui=m_dxt$rxcui,score=m_dxt$score,stringsAsFactors = F))
 }
+
+bsrc.sahx_index<-function(sahx_df = NULL){
+  sui_names<-names(sahx_df)
+  index_df<-data.frame(vari_names=sui_names,attempt_num=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
+  index_df$single_entry<-index_df$vari_names==index_df$attempt_num
+  index_df$is_checkbox<-grepl("___",index_df$vari_names)
+  index_df$root_names<-index_df$vari_names;
+  index_df$root_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$checkbox_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$choice_name[index_df$is_checkbox] <- gsub(".*___","",index_df$vari_names[index_df$is_checkbox])
+  index_df$root_names<-gsub("_at[0-9]*$","\\1",index_df$root_names)
+  index_df$vari_to_use<-index_df$root_names
+  index_df$vari_to_use[index_df$is_checkbox]<-paste(index_df$root_names[index_df$is_checkbox],index_df$choice_name[index_df$is_checkbox],sep = "___")
+  #index_df$rxsim1<-NULL
+  index_df$index_num <- suppressWarnings(as.numeric(gsub("at","",index_df$attempt_num),warning=F))
+  return(index_df)
+}
+
+bsrc.proc_multientry<-function(long_df=NULL,index_df=NULL,IDvar = "registration_redcapid",at_least=1){
+  #single_entry df:
+  SE_df <- long_df[index_df$vari_names[which(index_df$single_entry)]]
+  hx_mdf <- long_df[index_df$vari_names[which(!index_df$single_entry)]]
+  hx_mdf[[IDvar]]<-SE_df[[IDvar]]
+  hx_shdf<-do.call(rbind,lapply(1:max(index_df$index_num,na.rm = T),function(xa){
+    #print(xa)
+    sub_indx<-index_df[which(index_df$index_num == xa),]
+    sub_div<-hx_mdf[c(IDvar,sub_indx$vari_names)]
+    subm_div<-suppressMessages(rc_na_remove(raw = sub_div,mod = T,IDvar = IDvar,at_least = 1))
+    if(nrow(subm_div)>0){
+      names(subm_div)<-c(IDvar,sub_indx$vari_to_use)
+      subm_div$index_num <- xa
+      return(subm_div)
+    } else {return(NULL)}
+  }))
+  sp_shdf<-split(hx_shdf,hx_shdf[[IDvar]])
+  return(list(long_df = hx_shdf,list = sp_shdf))
+}
+
+
+
+

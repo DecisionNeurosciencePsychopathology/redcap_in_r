@@ -82,8 +82,11 @@ names(dat_a)[which(!names(dat_a) %in% c(rcIDvar,"redcap_event_name","interview_d
 
 dat_b<-dat_a[which(!is.na(names(dat_a)))]
 dat_b[dat_b==999] <- -99
-dat_merge <- merge(dat_b,requiredDF,by.x = rcIDvar,by.y = "src_subject_id",all.y = T)
+dat_merge <- merge(y = dat_b,x = requiredDF,by.y = rcIDvar,by.x = "src_subject_id",all.x = T)
 dat_merge$registration_redcapid<-NULL;dat_merge$redcap_event_name<-NULL
+dat_merge$subjectkey <- rcUpload$registration_ndaguid[match(dat_merge$src_subject_id,rcUpload$registration_redcapid)]
+dat_merge$interview_age <- round(as.numeric(as.Date(dat_merge$interview_date) - as.Date(dat_merge$dob) ) / 365,0); dat_merge$dob<-NULL;
+dat_merge<-na.omit(dat_merge)
 write.csv(dat_merge,file = "ctq_out.csv",row.names = F)
 
 
