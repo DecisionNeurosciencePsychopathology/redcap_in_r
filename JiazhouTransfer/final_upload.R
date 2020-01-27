@@ -64,7 +64,7 @@ outcome<-lapply(f_paths,function(xa) {
   if(nrow(df_toupload)<1){message("nothing to upload");return(NULL)}
   df_toupload<-reshape2::dcast(df_toupload,formula = registration_redcapid ~ variable, drop = T,value.var = "NEW")
   df_toupload$redcap_event_name<-unique(og_forms$redcap_event_name)
-
+  
   gx<-redcap_seq_uplaod(ds = df_toupload,id.var = "registration_redcapid",redcap_uri = ptcs$bsocial$redcap_uri,token = ptcs$bsocial$token)
   
   return(list(outcome=gx,og_data=og_forms))
@@ -94,33 +94,36 @@ f_paths<-list.files(rootdir,full.names = T,include.dirs = F)
 
 #Do non-p2 people first:
 gx<-lapply(f_paths,upload_transfer,
-       id.var = "registration_redcapid",
-       idmap = learn_idmap,
-       idmap_id = "masterdemo_id",
-       metadata = protect$metadata,
-       target_ptc = ptcs$protect,
-       target_evt = "baseline_arm_2",
-       ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99),
-       toignore = FALSE)
+           id.var = "registration_redcapid",
+           idmap = learn_idmap,
+           idmap_id = "masterdemo_id",
+           metadata = protect$metadata,
+           target_ptc = ptcs$protect,
+           target_evt = "baseline_arm_2",
+           ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99),
+           toignore = FALSE)
 
 id.var = "registration_redcapid"
 idmap = learn_idmap
 idmap_id = "masterdemo_id"
 metadata = protect$metadata
 target_ptc = ptcs$protect
-target_evt = "baseline_arm_1"
+target_evt = "baseline_arm_2"
 ID_list = p2_only_ID
 skip_check = F
-toignore = TRUE
+toignore = FALSE
 exempt_code = c(999,99)
+x_data=NULL
 
 
 
-upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target_evt,ID_list,toignore,skip_check,exempt_code=NULL) {
+upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=NULL,idmap_id=NULL,metadata=NULL,target_ptc=NULL,target_evt=NULL,ID_list=NULL,toignore=FALSE,skip_check=FALSE,exempt_code=NULL) {
   #Read in data;
-  print(basename(xpath))
-  if(!grepl(".csv$",xpath)){message("skip");return(NULL)}
-  x_data<-read.csv(xpath,stringsAsFactors = F)
+  if(is.null(x_data)){
+    print(basename(xpath))
+    if(!grepl(".csv$",xpath)){message("skip");return(NULL)}
+    x_data<-read.csv(xpath,stringsAsFactors = F)
+  }
   #Clean up and use ID map for ID matching
   x_data$X<-NULL
   x_data_findid <- bsrc.findid(df = x_data,idmap = idmap,id.var = id.var)
@@ -149,11 +152,12 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
             paste(vari_ref_sp$`TRUE`$variable_name,collapse = ", "))
     write.csv(df_togo[c(id.var,vari_ref_sp$`TRUE`$variable_name)],
               file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_no_form_matched.csv")),row.names = F)
-   
+    
   } else {
     message("Every variables are accounted for!")
   }
   df_togo <- df_togo[which(names(df_togo) %in% vari_ref_sp$`FALSE`$variable_name)]
+  
   if(toignore){
     df_togo<-df_togo[!df_togo$registration_redcapid %in% ID_list,]
   } else {
@@ -161,7 +165,7 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
   }
   
   fnames <- as.character(na.omit(unique(vari_ref$form_name[vari_ref$variable_name != id.var])))
-
+  
   og_forms <- bsrc.getform(protocol = target_ptc,formname = fnames,online = T,batch_size = 1000L,mod = T,at_least = 1,filter_events = target_evt)
   
   if(!is.null(og_forms) && nrow(og_forms)!=0) {
@@ -180,7 +184,7 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
       dup_id<-names(which(table(df_togo_b[[id.var]]) > 1))
       mp_df<-df_togo_b[which(df_togo_b[[id.var]] %in% names(which(table(df_togo_b[[id.var]]) > 1))),]
       message(nrow(mp_df)," records and ",length(unique(mp_df[[id.var]]))," IDs have duplicated form. Removed");
-      write.csv(mp_df,file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xa)),"_problem_multiple_entry.csv")),row.names=F)
+      write.csv(mp_df,file = file.path(error_outdir,paste0(gsub(".csv","",basename(xa)),"_problem_multiple_entry.csv")),row.names=F)
       
       df_togo_b <- df_togo_b[which(!df_togo_b$registration_redcapid %in% dup_id),]
     } 
@@ -201,11 +205,15 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
       df_toupload <- df_togo_b
       if(nrow(df_toupload)<1){message("nothing to upload");return(NULL)}
     }
-    
-
+    print(unique(df_toupload$redcap_event_name))
+    #return(df_toupload)
     gx<-redcap_seq_uplaod(ds = df_toupload,id.var = id.var,redcap_uri = target_ptc$redcap_uri,token = target_ptc$token)
   } else {
+    if(nrow(df_togo)<1){message("nothing to upload");return(NULL)}
     message("No data found in destination, directly inject...")
+    df_togo$redcap_event_name <- target_evt
+    print(unique(df_togo$redcap_event_name))
+    #return(df_togo)
     gx<-redcap_seq_uplaod(ds = df_togo,id.var = id.var,redcap_uri = target_ptc$redcap_uri,token = target_ptc$token)
   }
   
@@ -213,22 +221,120 @@ upload_transfer<-function(xpath,id.var,idmap,idmap_id,metadata,target_ptc,target
 }
 
 
+#Non-Baseline forms:
+
+###First do the single entry ones;
+rootdir <- "~/Box/skinner/data/Redcap Transfer/PT transfer/Baseline2/"
+dir.create(file.path(rootdir,"Problems"),showWarnings = F,recursive = T)
+protect<-bsrc.checkdatabase2(protocol = ptcs$protect)
+masterdemo_reg <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L)
+learn_idmap <- masterdemo_reg[c("registration_redcapid","registration_wpicid")]
+names(learn_idmap)<-c("masterdemo_id","wpic_id")
+
+ptc_map<-bsrc.checkbox(variablename = "registration_ptcstat",dfx = masterdemo_reg)
+cons_p2 <- sapply(sapply(ptc_map$registration_ptcstat,`%in%`,"protect2"),any)
+cons_legacy <- sapply(sapply(ptc_map$registration_ptcstat,`%in%`,c("protect","suicid2","suicide")),any)
+p2_only_ID <- ptc_map$registration_redcapid[cons_p2 & !cons_legacy]
 
 
- 
+f_paths<-list.files(rootdir,full.names = T,include.dirs = F)
+
+gx<-lapply(f_paths,upload_transfer,error_outdir=file.path(rootdir,"F_Problems"),
+           id.var = "registration_redcapid",
+           idmap = learn_idmap,
+           idmap_id = "masterdemo_id",
+           metadata = protect$metadata,
+           target_ptc = ptcs$protect,
+           target_evt = "baseline_arm_1",
+           ID_list = p2_only_ID,skip_check = FALSE,exempt_code = c(999,99),
+           toignore = TRUE)
+# 
+# for (xpath in f_paths) {
+#   print(xpath)
+#   dfx <- read.csv(xpath,stringsAsFactors = F)
+#   print(table(table(dfx$registration_redcapid))[1] / nrow(dfx))
+# }
+
+
+
+protect_cur<-bsrc.checkdatabase2(protocol = ptcs$protect,online = T)
+
+
+gxa<-protect_cur$data[which(protect_cur$data$registration_redcapid %in% p2_only_ID & grepl("_arm_1",protect_cur$data$redcap_event_name)),]
+gxa[-c(1,2)] <- ""
+redcap_seq_uplaod(ds = gxa,id.var = id.var,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
 
 
 
+##Updating dates to the legacy database:
+lookup_melt<-reshape2::melt(lookuptable,id.var=c("ID","CDATE","MISSCODE", "RATER", "CONTACT TYPE", "OUTCOME", "MISSINGNESS", "LOCATION1", "LOCATION2", "COMMENT" ))
+lookup_melt<-lookup_melt[which(!is.na(lookup_melt$value)),]
+lookup_melt$CDATE <- as.Date(lookup_melt$CDATE)
+sp_lookup <- split(lookup_melt,lookup_melt$ID)
 
+ptc_toget <- c("PROTECT","SUICIDE","SUICIDE2")
 
+gMAPx<-bsrc.getEVTDATEFIELD(db = protect_cur)
 
+sp_rctogo<-lapply(sp_lookup,function(dfx){
+  dfx<-bsrc.findid(dfx,learn_idmap)
+  dfy<-dfx[dfx$variable %in% ptc_toget,]
+  if(nrow(dfy)<1) {return(NULL)}
+  print(unique(dfx$ID))
+  dfy$value <- toupper(dfy$value)
+  dfy$value[dfy$value=="INT"] <- "ADDA"
+  dfy$ID<-dfy$masterdemo_id
+  dfy<-dfy[order(as.Date(dfy$CDATE)),]
+  dfy$value[dfy$value == "ADDA"] <- paste0("ADDA",1:length(which(dfy$value=="ADDA")))
+  if(toupper(dfy$value[which.min(dfy$CDATE)]) == "B") {
+    baseline_evt <- as.character(dfy$variable[which.min(dfy$CDATE)])
+    message("Identified first contact as ",as.character(dfy$variable[which.min(dfy$CDATE)])," baseline")
+    
+    if(length(unique(dfy$variable))==1) {
+      dfy<-change_evt(dty = dfy,protocol_name = "PROTECT",arm_num = 1,evtvariname = "value")
+    } else {
+      dfy<-change_evt(dty = dfy,protocol_name = "NUM",arm_num = 1,evtvariname = "value")
+      
+      return(NULL)
+    }
+  } else {
+    message("####### First contact identified as ",as.character(dfy$variable[which.min(dfy$CDATE)])," ",as.character(dfy$value[which.min(dfy$CDATE)]),
+            ". Don't know what to do yet, pass.")
+    return(NULL)
+  }
+  
+  dfy$date_variable<-gMAPx$date_variname[match(dfy$EVT,gMAPx$unique_event_name)]
+  dfz<-na.omit(dfy[c("ID","EVT","date_variable","CDATE")])
+  
+  if(any(duplicated(dfz$EVT))) {
+    
+    dfz_i<-do.call(rbind,lapply(split(dfz,dfz$EVT),function(xd){
+      if(grepl("baseline",unique(xd$EVT))) {max_days = 45 } else {max_days = 8}
+      if(as.numeric(max(xd$CDATE) - min(xd$CDATE)) < max_days){
+        return(xd[which.min(xd$CDATE),])
+      } else{
+        return(NULL)
+      }
+    }))
+    if(!any(!dfz$EVT %in% dfz_i$EVT)) {
+      dfz <- dfz_i
+    } else {
+      message("######## duplicated EVT");
+      return(NULL)
+    }
 
-
-
-
-
-
+  }
+  
+  
+  if(nrow(dfz)<1){return(NULL)}
+  
+  names(dfz)<-c("registration_redcapid","redcap_event_name","date_variable","CDATE")
+  dfz$CDATE<-as.character(dfz$CDATE)
+  dfz_e<-reshape2::dcast(dfz, registration_redcapid + redcap_event_name ~ date_variable, value.var="CDATE")
+  #redcap_seq_uplaod(ds = dfz_e,id.var = "registration_redcapid",redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
+  return(as.data.frame(dfz_e))
+})
 
 
 

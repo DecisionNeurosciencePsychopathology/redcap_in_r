@@ -227,7 +227,7 @@ redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
   gt_u_index <- sapply(gt,function(gtx){match(list(names(gtx)),gt_u_names)})
   gyat<-lapply(1:length(gt_u_names),function(g){
     message("uploading ",g," out of ",length(gt_u_names))
-    redcap_upload(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
+    redcap_write(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
   })
   return(
     list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F),outcome_message = unlist(sapply(gyat,`[[`,"outcome_message"),use.names = F))

@@ -31,8 +31,9 @@ bsrc.verify<-function(df_new=NULL,df_ref=NULL,id.var=NULL,exempt_code=NULL){
   df_comp_sp$VALUE_CONFLICT <- df_comp_sp$DIFF[df_comp_sp$DIFF$NEW != df_comp_sp$DIFF$REF & !is.na(df_comp_sp$DIFF$REF),]
   df_comp_sp$NEW_INFO<-df_comp_sp$DIFF[is.na(df_comp_sp$DIFF$REF) & !is.na(df_comp_sp$DIFF$NEW),]
   
-  if(is.null(df_toupload) || nrow(df_toupload)<1){message("NO NEW INFO FOUND")}
-  df_comp_sp$NEW_INFO<-reshape2::dcast(df_comp_sp$NEW_INFO,formula = as.formula(paste0(paste(id.var,collapse = "+"),"~variable")), drop = T,value.var = "NEW")
+  if(is.null(df_comp_sp$NEW_INFO) || nrow(df_comp_sp$NEW_INFO)<1){message("NO NEW INFO FOUND");} else {
+    df_comp_sp$NEW_INFO<-reshape2::dcast(df_comp_sp$NEW_INFO,formula = as.formula(paste0(paste(id.var,collapse = "+"),"~variable")), drop = T,value.var = "NEW")
+  }
   return(df_comp_sp)
 }
 

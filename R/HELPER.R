@@ -72,6 +72,27 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
               dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
             }
           },
+          "NUM" = {
+
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-as.numeric(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))])) / 12
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-as.numeric(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]))
+           
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-0
+            #dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+          },
+          "PROTECT" = {
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"month","arm",arm_num,sep = "_")
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"year","arm",arm_num,sep = "_")
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional_visit",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
+            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+            if(any(grepl("int",tolower(dty$EVT)))){
+              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
+                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
+              }
+              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
+            }
+          },
           "SNAKE" = {
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")
             dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
