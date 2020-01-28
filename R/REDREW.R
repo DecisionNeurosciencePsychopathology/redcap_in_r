@@ -469,12 +469,14 @@ rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
 
 ###############################
 bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
-  
+  project_info <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "project")
   #Get necessary data
   if (online) {
     metadata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "metadata")
-    eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")
-    if(nrow(eventdata)<1){eventdata<-NULL}
+    if(as.logical(project_info$is_longitudinal)){
+      eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")
+    } else {eventdata <- NULL}
+
   } else {
     if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
     stopifnot(exprs = {curdb$success})
