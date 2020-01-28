@@ -41,12 +41,13 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   if(is.null(content) ) {
     message("no content type supplied, using default: 'record'.")
     content <- "record"
-    }
+  }
   post_body <- list(token = token, content = content, format = "csv")
   if(!is.null(action)){}
   if(!is.null(arms)){}
   if(!is.null(records)){}
   if(!is.null(fields)){}
+  if(is.null(action)) {action <- ""}
   start_time <- Sys.time()
   result <- httr::POST(url = redcap_uri, body = post_body,config = httr_config)
   raw_text <- httr::content(result, "text")
@@ -54,7 +55,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
   simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user")
   
-  if(content %in% simple_df_contents && is.null(action)) {
+  if(content %in% simple_df_contents && action=="") {
     try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
         silent = TRUE)
     if (exists("ds") & inherits(ds, "data.frame")) {return(ds)} else {
@@ -62,10 +63,14 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
     }
   } else if (action == "export" || content %in% c("pdf")) {
    stop("Function not yet available.")
-  } else if (content == "records" && is.null(action)) {
-    
+  } else if (content == "record" && action=="") {
+    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
+        silent = TRUE)
+    if (exists("ds") & inherits(ds, "data.frame")) {return(ds)} else {
+      if(result$status != 200L) {message("redcap api call failed at converting stage, returning raw text");return(raw_text)}
+    }
   } else if (content == "records" && action == "delete"){
-    
+    stop("Function not yet available.")
   }
   return(raw_text)
 }

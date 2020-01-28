@@ -330,7 +330,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullup
   if (missing(protocol)) {stop("no protocol specified")}
   
   if (is.list(protocol)) {message(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
-    message(protocol[ protocol != protocol$token ])
+    message(paste(protocol[ protocol != protocol$token ],collapse = "\n"))
     protocol.n<-protocol$name
     input.uri<-protocol$redcap_uri
     input.token<-protocol$token
@@ -352,28 +352,19 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullup
         fullupdate<-TRUE}
     } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
-  anyfailed.s<-FALSE
-  anyfailed.e<-FALSE
-  anyfailed.d<-FALSE
-  funstrc.x<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "metadata")
-  if (funstrc.x$success){
-    funstrc<-funstrc.x$data
-  }else{anyfailed.s<-TRUE
-  message("Metadata not loaded")}
-  funevent.x<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "formEventMapping")
-  if (funevent.x$success){
-    funevent<-funevent.x$data
-  }else{anyfailed.e<-TRUE
-  message("Event mapping not loaded")}
-  if (fullupdate){
-    funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
-    if (funbsrc.x$success){
-      funbsrc<-funbsrc.x$data
-    }else{anyfailed.d<-TRUE
-    message("Main database not loaded")}
-  }else {anyfailed.d<-TRUE}
+
+  project_info <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = "project")
   
-  if (!any(anyfailed.s,anyfailed.d)){
+  funstrc<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "metadata")
+  funbsrc<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "record")
+  anyfailed.s <- !is.data.frame(funstrc)
+  anyfailed.d <- !is.data.frame(funbsrc)
+  if(project_info$is_longitudinal) {
+    funevent<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "formEventMapping")
+    anyfailed.e <- !is.data.frame(funevent)
+  } else {anyfailed.e <- FALSE}
+  
+  if (!any(anyfailed.s,anyfailed.d,anyfailed.e)){
     assign("update.date",Sys.Date(),envir = cur.envir)
     assign("update.time",Sys.time(),envir = cur.envir)
     assign("success",TRUE,envir = cur.envir)
@@ -468,7 +459,7 @@ rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
 
 
 ###############################
-bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
+bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
   project_info <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "project")
   #Get necessary data
   if (online) {
