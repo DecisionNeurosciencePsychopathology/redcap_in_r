@@ -360,7 +360,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullup
     funstrc<-funstrc.x$data
   }else{anyfailed.s<-TRUE
   message("Metadata not loaded")}
-  funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
+  funevent.x<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "formEventMapping")
   if (funevent.x$success){
     funevent<-funevent.x$data
   }else{anyfailed.e<-TRUE
@@ -472,8 +472,8 @@ bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=N
   
   #Get necessary data
   if (online) {
-    metadata <- REDCapR::redcap_metadata_read(redcap_uri = protocol$redcap_uri,token = protocol$token,verbose = F)$data
-    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = protocol$token)$data
+    metadata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "metadata")
+    eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")
     if(nrow(eventdata)<1){eventdata<-NULL}
   } else {
     if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
