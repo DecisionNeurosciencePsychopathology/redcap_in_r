@@ -10,13 +10,13 @@
 #' 
 #' message = TRUE
 #' 
-#' #' @param overwriteBehavior Character string.  'normal' prevents blank
+#' #' param overwriteBehavior Character string.  'normal' prevents blank
 #' #' #'   fields from overwriting populated fields.  'overwrite' causes blanks to
 #' #' #'   overwrite data in the REDCap database.
-#' #' #' @param returnContent Character string.  'count' returns the number of
+#' #' #' param returnContent Character string.  'count' returns the number of
 #' #' #'   records imported; 'ids' returns the record ids that are imported;
 #' #' #'   'nothing' returns no message.
-#' #' #' @param returnData Logical.  Prevents the REDCap import and instead
+#' #' #' param returnData Logical.  Prevents the REDCap import and instead
 #' #' #'   returns the data frame that would have been given
 #' #' #'   for import.  This is sometimes helpful if the API import fails without
 #' #' #'   providing an informative message. The data frame can be written to a csv
@@ -30,7 +30,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
                            action = NULL, content = NULL,
                            records = NULL,arms = NULL,events=NULL, forms=NULL, fields = NULL,
                            export_file_path = NULL,
-                           message = TRUE,httr_config=NULL) {
+                           message = TRUE,httr_config=NULL,...) {
   #Use this space to document
   #List of Contents:
   #formEventMapping report metadata event participantList exportFieldNames project instrument user instrument generateNextRecordName record pdf file
@@ -48,30 +48,34 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   if(!is.null(records)){}
   if(!is.null(fields)){}
   if(is.null(action)) {action <- ""}
+  
+  if (content == "record" && action == "") {
+    return(redcap_get_large_record)
+  }
+  
   start_time <- Sys.time()
   result <- httr::POST(url = redcap_uri, body = post_body,config = httr_config)
   raw_text <- httr::content(result, "text")
   if(result$status != 200L) {message("redcap api call failed\n",raw_text);return(raw_text)}
   elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-  simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user")
+  simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user","record")
   
-  if(content %in% simple_df_contents && action=="") {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
-        silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {return(ds)} else {
-      if(result$status != 200L) {message("redcap api call failed at converting stage, returning raw text");return(raw_text)}
+  if(content %in% simple_df_contents && action %in% c("record_single_run","")) {
+    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), silent = TRUE)
+    if (exists("ds") & inherits(ds, "data.frame")) {
+      return(list(output=ds,success=TRUE))
+    } else if (result$status != 200L) {
+      message("redcap api call failed at converting stage, returning raw text")
+      return(list(output=ds,success=FALSE))
     }
   } else if (action == "export" || content %in% c("pdf")) {
    stop("Function not yet available.")
-  } else if (content == "record" && action=="") {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
-        silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {return(ds)} else {
-      if(result$status != 200L) {message("redcap api call failed at converting stage, returning raw text");return(raw_text)}
-    }
   } else if (content == "records" && action == "delete"){
     stop("Function not yet available.")
   }
-  return(raw_text)
+  return(list(output=ds,success=FALSE))
 }
 
+redcap_get_large_records <- function(redcap_uri=NULL, token=NULL,batch_size=1000L) {
+  
+}

@@ -326,11 +326,11 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
 
 
 #########################New Ver in DEV
-bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullupdate=T,output=F,newfile=F,online=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   
-  if (is.list(protocol)) {message(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
-    message(paste(protocol[ protocol != protocol$token ],collapse = "\n"))
+  if (is.list(protocol)) {
+    message(paste(names(protocol[ protocol != protocol$token ]),protocol[ protocol != protocol$token ],sep = ": ",collapse = "\n"))
     protocol.n<-protocol$name
     input.uri<-protocol$redcap_uri
     input.token<-protocol$token
@@ -344,47 +344,55 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullup
       if (file.exists(rdpath) & !newfile) {
         pathsplit<-strsplit(rdpath,split = "/")[[1]]
         topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
+        dir.create(dirname(topath),recursive = T,showWarnings = F)
         file.copy(from = rdpath, to = topath, overwrite = T)
         cur.envir<-bsrc.attachngrab(protocol = protocol, returnas = "envir")
-      }else if (newfile | !file.exists(rdpath)) {"Starting new file..."
+      }else if (newfile | !file.exists(rdpath)) {
+        message("Starting new file...")
         cur.envir<-new.env(parent = emptyenv())
         allobjects<-c(protocol.n)
-        fullupdate<-TRUE}
+        }
     } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
-
-  project_info <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = "project")
   
-  funstrc<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "metadata")
-  funbsrc<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "record")
-  anyfailed.s <- !is.data.frame(funstrc)
-  anyfailed.d <- !is.data.frame(funbsrc)
-  if(project_info$is_longitudinal) {
-    funevent<-redcap_api_call(redcap_uri = input.uri,token = input.token,content = "formEventMapping")
-    anyfailed.e <- !is.data.frame(funevent)
-  } else {anyfailed.e <- FALSE}
+  project_info <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = "project")$output
   
-  if (!any(anyfailed.s,anyfailed.d,anyfailed.e)){
-    assign("update.date",Sys.Date(),envir = cur.envir)
-    assign("update.time",Sys.time(),envir = cur.envir)
-    assign("success",TRUE,envir = cur.envir)
-  }else{
-    message("something went wrong, better go check it out.")
-    message("will still update successfully loaded parts.")
-    assign("success",FALSE,envir = cur.envir)
+  if(as.logical(project_info$is_longitudinal)) {
+    toget <- c("metadata","data","eventmap")
+  } else {
+    toget <- c("metadata","data")
   }
-  #New way, use environment:
-  if (!anyfailed.s){
-    assign("metadata",funstrc,envir = cur.envir)
-  }
-  if (!anyfailed.e){
-    assign("eventmap",funevent,envir = cur.envir)
-  }
-  if (!anyfailed.d){
-    assign("data",funbsrc,envir = cur.envir)
-  }
+  
+  success_sequence<-sapply(toget,function(xe){
+    if(xe == "data") {
+      dxe <- "record"
+    } else if (xe == "eventmap") {
+      dxe <- "formEventMapping"
+    } else {dxe <- xe}
+    message("loading: ",xe)
+    output <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = dxe)
+    if (!output$success) {
+      message(xe," did not load successfully. error message is \n",output)
+      return(FALSE)
+    } else {
+      assign(xe,output$output,envir = cur.envir)
+      return(TRUE)
+    }
+  })
+  
   assign("name",protocol$name,envir = cur.envir)
-  if (updaterd & !online){
+  assign("is_longitudinal",as.logical(project_info$is_longitudinal),envir = cur.envir)
+  assign("success",!any(!success_sequence),envir = cur.envir)
+  assign("update.date",Sys.Date(),envir = cur.envir)
+  assign("update.time",Sys.time(),envir = cur.envir)
+  if(any(!success_sequence)) {
+    message(paste(names(success_sequence)[which(!success_sequence)],"did not load successfully.",sep=": ",collapse = "\n"))
+    message("will output the rest.")
+  } else {
+    message("success")
+  }
+  
+  if (updaterd && !online && !any(!success_sequence)){
     save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
   
@@ -405,10 +413,15 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
         if (curdb$success) {
           if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
             message(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
-            reload<-TRUE} }else {message("Something went wrong when loading rdata file...")
-              ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
-              if (!as.logical(ifso)){reload<-T}
-            }
+            reload<-TRUE
+          } 
+        }else {
+          message("Something went wrong when loading rdata file...")
+          ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
+          if (!as.logical(ifso)){
+            reload<-T
+          }
+        }
         
       }else{message("FORCE SKIP RDATA CHECKS")
         ifrun<-T}
@@ -888,7 +901,7 @@ bsrc.reg.race<-function(x,reverse=F){
 bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=F,aggressivecog=1,...){
   if (is.null(curdb)) {
     if (grabnewinfo) {
-      curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
+      curdb<-bsrc.conredcap2(protocol = protocol, output = T, updaterd = F,... = ...)
       ifrun<-TRUE
     }else if (!grabnewinfo) {
       curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
