@@ -3,8 +3,8 @@ setwd("~/Documents/redcap_in_r/Data meeting and cleaning/")
 source('~/Documents/github/UPMC/startup.R')
 pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
 bs<-bsrc.checkdatabase2(protocol = ptcs$bsocial)
+library(tidyr); library(dplyr); library(ggplot2)
 
-library(tidyr)
 BSnotTerm<-unique(subset(md$data,registration_ptcstat___bsocial==1&(reg_term_yesno_bsocial==0|is.na(reg_term_yesno_bsocial)))$registration_redcapid) # all bsocial people 
 for (fmname in c("scid","suicide_questions","sidpiv","scid_consensus")){
   #Checks for Protect BL transfer: 1 person should not have more than 1 SCID (repeat steps for Suicide Questions, SIDP, and SCID consensus)
