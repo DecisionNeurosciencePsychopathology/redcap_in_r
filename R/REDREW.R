@@ -370,7 +370,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,output
       dxe <- "formEventMapping"
     } else {dxe <- xe}
     message("loading: ",xe)
-    output <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = dxe)
+    output <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = dxe,batch_size = batch_size)
     if (!output$success) {
       message(xe," did not load successfully. error message is \n",output)
       return(FALSE)
