@@ -326,7 +326,7 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
 
 
 #########################New Ver in DEV
-bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,output=F,newfile=F,online=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
   
   if (is.list(protocol)) {
