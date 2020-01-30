@@ -430,7 +430,8 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
   } else {message("Online mode is on")
     reload<-F
     online<-T
-    forceupdate<-F}
+    forceupdate<-F
+    }
   
   if (reload | forceupdate) {
     bsrc.conredcap2(protocol = protocol,online=online,... = ...)

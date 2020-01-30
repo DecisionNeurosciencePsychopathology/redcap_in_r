@@ -79,12 +79,13 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
 redcap_get_large_records <- function(redcap_uri=NULL, token=NULL,batch_size=1000L) {
   vari_list <-  redcap_api_call(redcap_uri = redcap_uri, token = token, content = "exportFieldNames")
   record_list <-  redcap_api_call(redcap_uri = redcap_uri, token = token, content = "record",fields=vari_list$output$original_field_name[1],action = "record_single_run")
-  record_list$output<-record_list$output[which(!duplicated(record_list$output$registration_redcapid,fromLast = F)),]
+  
   records_sp<-split(record_list$output, ceiling(1:nrow(record_list$output)/batch_size))
   
   if (length(records_sp)==1) {
     return(list(continue=TRUE))
   }
+  
   message("pulling large records in batchs, running ",)  
   
 }
