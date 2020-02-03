@@ -9,20 +9,7 @@
 #' fields = NULL
 #' 
 #' message = TRUE
-#' 
-#' #' param overwriteBehavior Character string.  'normal' prevents blank
-#' #' #'   fields from overwriting populated fields.  'overwrite' causes blanks to
-#' #' #'   overwrite data in the REDCap database.
-#' #' #' param returnContent Character string.  'count' returns the number of
-#' #' #'   records imported; 'ids' returns the record ids that are imported;
-#' #' #'   'nothing' returns no message.
-#' #' #' param returnData Logical.  Prevents the REDCap import and instead
-#' #' #'   returns the data frame that would have been given
-#' #' #'   for import.  This is sometimes helpful if the API import fails without
-#' #' #'   providing an informative message. The data frame can be written to a csv
-#' #' #'   and uploaded using the interactive tools to troubleshoot the
-#' #' #'   problem.  Please shoot me an e-mail if you find errors I havne't
-#' #' #'   accounted for.
+
 
 
 
@@ -35,7 +22,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   #List of Contents:
   #formEventMapping report metadata event participantList exportFieldNames project instrument user instrument generateNextRecordName record pdf file
   #List of Actions:
-  #delete export
+  #delete export import
 
   if(is.null(redcap_uri) ) {stop("requires redcap_uri")}
   if(is.null(token) && is.null(post_body) ) {stop("requires token or constructed post body")}
@@ -92,6 +79,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   }
   return(list(output=ds,success=FALSE))
 }
+
 
 redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_list=NULL,batch_size=1000L,carryon = FALSE ) {
   record_list$output$count<-ceiling(1:nrow(record_list$output)/batch_size)
