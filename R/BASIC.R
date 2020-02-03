@@ -45,12 +45,16 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   post_body <- list(token = token, content = content, format = "csv")
   if(!is.null(action) && action!= "record_single_run"){}
   if(!is.null(arms)){}
+  
+  if(!is.null(events)){post_body$events<-paste(events,sep = "",collapse = ",")}
+  if(!is.null(fields)){post_body$fields<-paste(fields,sep = "",collapse = ",")}
+  if(!is.null(forms)){post_body$forms<-paste(forms,sep = "",collapse = ",")}
   if(!is.null(records)){post_body$records<-paste(records,sep = "",collapse = ",")}
-  if(!is.null(fields)){post_body$fields <- fields}
+  
   if(is.null(action)) {action <- ""}
   
   if (content == "record" && action == "") {
-    return(redcap_get_large_records(redcap_uri = redcap_uri,token = token,batch_size = batch_size,carryon = carryon))
+    return(redcap_get_large_records(post_body = post_body,batch_size = batch_size,carryon = carryon))
   }
   
   start_time <- Sys.time()

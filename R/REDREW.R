@@ -474,24 +474,28 @@ rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
 
 ###############################
 bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
-  project_info <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "project")
+  
   #Get necessary data
   if (online) {
-    metadata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "metadata")
-    if(as.logical(project_info$is_longitudinal)){
-      eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")
+    project_info <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "project")
+    metadata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "metadata")$output
+    is_longitudinal <- as.logical(project_info$output$is_longitudinal)
+    if(is_longitudinal){
+      eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")$output
     } else {eventdata <- NULL}
-
   } else {
     if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
     stopifnot(exprs = {curdb$success})
     data <- curdb$data
     metadata <- curdb$metadata
-    eventdata <- curdb$eventmap
+    is_longitudinal <- curdb$is_longitudinal
+    if(is_longitudinal) {
+      eventdata <- curdb$eventmap
+    } 
   }
   
   #Determine if this project has events
-  if(is.null(eventdata)){
+  if(!is_longitudinal){
     no_evt_rc<-TRUE;message("This RedCap project does not have multiple events.")
     fix_variables<-IDvar
   } else {
@@ -523,10 +527,10 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
     if (online) {
       #Do online version:
       message("Getting form data directly from RedCap.")
-      
-      renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = c(fix_variables,lvariname), events = eventname,batch_size = batch_size)
+      renew <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "record",action = "record_single_run",
+                               fields = c(fix_variables,lvariname),events = eventname,batch_size = batch_size)
       if (renew$success){
-        raw<-renew$data
+        raw<-renew$output
       } else if (nrow(renew$data)==0) {
         return(NULL)
       } else {stop("Failed... Try again?")}

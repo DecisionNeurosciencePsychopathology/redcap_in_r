@@ -184,11 +184,12 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
 }}
 
 ################# Future update to include automatic sync
-bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
-  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
+bsrc.emastats<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$masterdemo,shortlist=T,...) {
+  mastedemo <- bsrc.checkdatabase2(protocol = masterdemo_ptc)
+  idmap <- mastedemo$data[c("registration_redcapid","registration_wpicid","registration_group","registration_lethality")]
+  names(idmap)<-c("masterdemo_id","wpic_id","group_status","lethality")
   #Get funema:
-  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)
+  funema<-bsrc.getform(formname = "ema_session_checklist",online = T,protocol = bsocial_ptc,batch_size = 5000L)
   
   emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
   emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]
@@ -197,10 +198,20 @@ bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
                                               to = c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3","DID NOT COMPELETE","Early Termination"), warn_missing = F)
   emastate$`EMA Status`<-emastate$`EMA Status FULL`
   emastate$`EMA Status`[agrep("COMPLETED",emastate$`EMA Status`)]<-"COMPLETED"
-  emastate$group.num<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
-  emastate$`GROUP`<-plyr::mapvalues(emastate$group,from = c("1","2","3","4","88","89"), 
-                                    to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
-  emacount<-xtabs(~GROUP+`EMA Status`,emastate)
+    
+  emastate<-bsrc.findid(df = emastate,idmap = idmap,id.var = "registration_redcapid")
+  emastate$masterdemo_id[is.na(emastate$masterdemo_id)] <- paste0(emastate$ID[is.na(emastate$masterdemo_id)],"_UNKNOWN")
+  emastate$registration_redcapid <- emastate$masterdemo_id
+  emastate$group_leth <- emastate$group_status
+  emastate$lethality[is.na(emastate$lethality)] <- ""
+  emastate$group_status[is.na(emastate$group_status)]<-"unknown"
+  
+  emastate$group_leth[emastate$group_status == "ATT"] <- toupper(emastate$lethality[emastate$group_status == "ATT"])
+  
+  emastate <- emastate[which(emastate$ifexist),]
+  emastate$ogid <- NULL;   emastate$ifexist<-NULL
+  
+  emacount<-xtabs(~group_leth+`EMA Status`,emastate)
   emacount<-addmargins(emacount)
   
   if (shortlist){
