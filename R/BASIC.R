@@ -29,34 +29,42 @@
 redcap_api_call<-function (redcap_uri=NULL, token=NULL,
                            action = NULL, content = NULL,
                            records = NULL,arms = NULL,events=NULL, forms=NULL, fields = NULL,
-                           export_file_path = NULL,batch_size = 200L, carryon = FALSE,
-                           message = TRUE,httr_config=NULL,...) {
+                           export_file_path = NULL,batch_size = 500L, carryon = FALSE,
+                           message = TRUE,httr_config=NULL,post_body=NULL,...) {
   #Use this space to document
   #List of Contents:
   #formEventMapping report metadata event participantList exportFieldNames project instrument user instrument generateNextRecordName record pdf file
   #List of Actions:
   #delete export
 
-  if(is.null(redcap_uri) || is.null(token)) {stop("must supply both redcap_uri and token.")}
+  if(is.null(redcap_uri) ) {stop("requires redcap_uri")}
+  if(is.null(token) && is.null(post_body) ) {stop("requires token or constructed post body")}
   if(is.null(content) ) {
     message("no content type supplied, using default: 'record'.")
     content <- "record"
   }
-  post_body <- list(token = token, content = content, format = "csv")
-  if(!is.null(action) && action!= "record_single_run"){}
-  if(!is.null(arms)){}
   
+  if(is.null(post_body)){
+    post_body <- list(token = token, content = content, format = "csv")
+  }
+  post_body$content <- content
+  if(!is.null(action) && action!= "record_single_run"){post_body$action = action}
+  if(!is.null(arms)){post_body$arms<-paste(arms,sep = "",collapse = ",")}
   if(!is.null(events)){post_body$events<-paste(events,sep = "",collapse = ",")}
   if(!is.null(fields)){post_body$fields<-paste(fields,sep = "",collapse = ",")}
   if(!is.null(forms)){post_body$forms<-paste(forms,sep = "",collapse = ",")}
   if(!is.null(records)){post_body$records<-paste(records,sep = "",collapse = ",")}
-  
+
   if(is.null(action)) {action <- ""}
   
   if (content == "record" && action == "") {
-    return(redcap_get_large_records(post_body = post_body,batch_size = batch_size,carryon = carryon))
+    vari_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body[which(names(post_body)!="fields")],content = "exportFieldNames")
+    record_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body,content = "record",fields=vari_list$output$original_field_name[1],action = "record_single_run")
+    
+    if (nrow( record_list$output) > batch_size) {
+      return(redcap_get_large_records(redcap_uri= redcap_uri,post_body = post_body,record_list = record_list,batch_size = batch_size,carryon = carryon))
+    }
   }
-  
   start_time <- Sys.time()
   result <- httr::POST(url = redcap_uri, body = post_body,config = httr_config)
   raw_text <- httr::content(result, "text")
@@ -80,13 +88,8 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   return(list(output=ds,success=FALSE))
 }
 
-redcap_get_large_records <- function(redcap_uri=NULL, token=NULL,batch_size=1000L,carryon = FALSE ) {
-  vari_list <-  redcap_api_call(redcap_uri = redcap_uri, token = token, content = "exportFieldNames")
-  record_list <-  redcap_api_call(redcap_uri = redcap_uri, token = token, content = "record",fields=vari_list$output$original_field_name[1],action = "record_single_run")
+redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_list=NULL,batch_size=1000L,carryon = FALSE ) {
   record_list$output$count<-ceiling(1:nrow(record_list$output)/batch_size)
-  if (length(unique(record_list$output$count))==1) {
-    return(list(continue=TRUE))
-  }
   records_evt_fixed<-do.call(rbind,lapply(split(record_list$output,record_list$output$registration_redcapid),function(dfx){
     if(length(unique(dfx$count))!=1) {
       dfx$count<-round(median(dfx$count),digits = 0)
@@ -99,7 +102,8 @@ redcap_get_large_records <- function(redcap_uri=NULL, token=NULL,batch_size=1000
   output_sum<-cleanuplist(lapply(records_sp,function(tgt){
     if(ifTerminate && !carryon) {return(NULL)}
     message("pulling batch ",unique(tgt$count)," out of ",max(records_evt_fixed$count))
-    output<-redcap_api_call(redcap_uri = redcap_uri, token = token, content = "record",records = unique(tgt$registration_redcapid),action = "record_single_run")
+    output<-redcap_api_call(redcap_uri = redcap_uri, post_body = post_body, 
+                            content = "record",records = unique(tgt$registration_redcapid),action = "record_single_run")
     if(!output$success) {
       message("failed, error message is: ",output$output)
       ifTerminate <<- TRUE

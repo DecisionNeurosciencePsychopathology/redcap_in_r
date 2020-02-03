@@ -189,7 +189,7 @@ bsrc.emastats<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$masterdemo,
   idmap <- mastedemo$data[c("registration_redcapid","registration_wpicid","registration_group","registration_lethality")]
   names(idmap)<-c("masterdemo_id","wpic_id","group_status","lethality")
   #Get funema:
-  funema<-bsrc.getform(formname = "ema_session_checklist",online = T,protocol = bsocial_ptc,batch_size = 5000L)
+  funema<-bsrc.getform(formname = "ema_session_checklist",online = T,protocol = bsocial_ptc,batch_size = 1000L)
   
   emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
   emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]

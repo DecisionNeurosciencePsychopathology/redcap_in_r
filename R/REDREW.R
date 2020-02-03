@@ -473,7 +473,7 @@ rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
 
 
 ###############################
-bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
+bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curdb = NULL,mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
   
   #Get necessary data
   if (online) {
@@ -493,15 +493,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       eventdata <- curdb$eventmap
     } 
   }
-  
-  #Determine if this project has events
-  if(!is_longitudinal){
-    no_evt_rc<-TRUE;message("This RedCap project does not have multiple events.")
-    fix_variables<-IDvar
-  } else {
-    no_evt_rc<-FALSE
-    fix_variables<-c(IDvar,"redcap_event_name")
-  }
+  IDvar <- metadata$field_name[1]
   #Get form name(s) if not specified
   if (missing(formname)){
     message("Here's a list of forms: ")
@@ -514,23 +506,26 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
     #Get variable names and events if applicable
     lvariname<-as.character(metadata$field_name[which(metadata$form_name %in% formname)])
     #lvariname<-
-    if(!no_evt_rc){
+    if(is_longitudinal){
       eventname<-eventdata$unique_event_name[which(eventdata$form %in% formname)]
       if (!is.null(filter_events)) {
         eventname<-eventname[which(eventname %in% filter_events)]
       }
+      fix_variables <- c(IDvar,"redcap_event_name")
     } else {
       eventname <- NULL
+      fix_variables <- c(IDvar)
     }
     
     
     if (online) {
       #Do online version:
       message("Getting form data directly from RedCap.")
-      renew <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "record",action = "record_single_run",
+      renew <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "record",
                                fields = c(fix_variables,lvariname),events = eventname,batch_size = batch_size)
       if (renew$success){
         raw<-renew$output
+        rownames(raw)<-NULL
       } else if (nrow(renew$data)==0) {
         return(NULL)
       } else {stop("Failed... Try again?")}
