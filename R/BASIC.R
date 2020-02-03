@@ -30,7 +30,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
                            action = NULL, content = NULL,
                            records = NULL,arms = NULL,events=NULL, forms=NULL, fields = NULL,
                            export_file_path = NULL,batch_size = 500L, carryon = FALSE,
-                           message = TRUE,httr_config=NULL,post_body=NULL,...) {
+                           message = TRUE,httr_config=NULL,post_body=NULL,upload_file=NULL,...) {
   #Use this space to document
   #List of Contents:
   #formEventMapping report metadata event participantList exportFieldNames project instrument user instrument generateNextRecordName record pdf file
@@ -43,7 +43,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
     message("no content type supplied, using default: 'record'.")
     content <- "record"
   }
-  
+  ls_add <- list(...)
   if(is.null(post_body)){
     post_body <- list(token = token, content = content, format = "csv")
   }
@@ -54,9 +54,12 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   if(!is.null(fields)){post_body$fields<-paste(fields,sep = "",collapse = ",")}
   if(!is.null(forms)){post_body$forms<-paste(forms,sep = "",collapse = ",")}
   if(!is.null(records)){post_body$records<-paste(records,sep = "",collapse = ",")}
-
+  if(!is.null(upload_file)) {
+    post_body$file <- httr::upload_file(upload_file)
+    names(post_body)[which(names(post_body)=="records")]<-"record"
+    names(post_body)[which(names(post_body)=="fields")]<-"field"
+  }
   if(is.null(action)) {action <- ""}
-  
   if (content == "record" && action == "") {
     vari_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body[which(names(post_body)!="fields")],content = "exportFieldNames")
     record_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body,content = "record",fields=vari_list$output$original_field_name[1],action = "record_single_run")
@@ -66,6 +69,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
     }
   }
   start_time <- Sys.time()
+  print(post_body)
   result <- httr::POST(url = redcap_uri, body = post_body,config = httr_config)
   raw_text <- httr::content(result, "text")
   if(result$status != 200L) {message("redcap api call failed\n",raw_text);return(raw_text)}
@@ -84,9 +88,15 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
    stop("Function not yet available.")
   } else if (content == "records" && action == "delete"){
     stop("Function not yet available.")
+  } else if (content == "file") {
+    return(list(output=raw_text,success=FALSE))
   }
   return(list(output=ds,success=FALSE))
 }
+
+redcap_api_call(redcap_uri = ptcs$masterdemo$redcap_uri,token = "0FF325EF382C4DD836A90CE3354BA540",records = "2",
+                action = "import",content = "file",fields = "behavior_file",upload_file = "~/allcpcl.rdata")
+
 
 redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_list=NULL,batch_size=1000L,carryon = FALSE ) {
   record_list$output$count<-ceiling(1:nrow(record_list$output)/batch_size)
