@@ -69,7 +69,6 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
     }
   }
   start_time <- Sys.time()
-  print(post_body)
   result <- httr::POST(url = redcap_uri, body = post_body,config = httr_config)
   raw_text <- httr::content(result, "text")
   if(result$status != 200L) {message("redcap api call failed\n",raw_text);return(raw_text)}
