@@ -94,10 +94,6 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   return(list(output=ds,success=FALSE))
 }
 
-redcap_api_call(redcap_uri = ptcs$masterdemo$redcap_uri,token = "0FF325EF382C4DD836A90CE3354BA540",records = "2",
-                action = "import",content = "file",fields = "behavior_file",upload_file = "~/allcpcl.rdata")
-
-
 redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_list=NULL,batch_size=1000L,carryon = FALSE ) {
   record_list$output$count<-ceiling(1:nrow(record_list$output)/batch_size)
   records_evt_fixed<-do.call(rbind,lapply(split(record_list$output,record_list$output$registration_redcapid),function(dfx){
