@@ -5,8 +5,8 @@ source("~/Documents/github/UPMC/startup.R")
 protocol.cur <- ptcs$masterdemo
 md <- bsrc.checkdatabase2(online = T)
 #plotpath="/Users/mogoverde/Desktop" #Morgan WFH
-#plotpath="C:/Users/buerkem/OneDrive - UPMC/Desktop" #Morgan Work
-plotpath="~/Documents/github/UPMC/data meeting" #Kexin
+plotpath="C:/Users/buerkem/OneDrive - UPMC/Desktop" #Morgan Work
+#plotpath="~/Documents/github/UPMC/data meeting" #Kexin
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md,protocol = ptcs$masterdemo)
@@ -51,6 +51,8 @@ PT<-PT[-unique(which(PT[,grep('reg_term_excl_',var_pt)]==1,arr.ind = T)[,1]),] #
 BS[which(BS$registration_ptcstat___bsocial==1 & !is.na(BS$registration_ptcstat___bsocial)),]->BS
 BS[which(BS$reg_term_reason_bsocial!=3 | is.na(BS$reg_term_reason_bsocial)),]->BS
 BS[which(BS$reg_term_excl_bsocial!=1 | is.na(BS$reg_term_excl_bsocial)),]->BS
+idmap<-md$data[c("registration_redcapid","registration_wpicid","registration_soloffid")]
+  names(idmap)<-c("masterdemoid","wpicid","soloffid")
 BS<-bsrc.findid(BS,idmap = idmap,id.var = "registration_redcapid")
 
 
@@ -79,11 +81,12 @@ BS[which(is.na(BS$registration_group)),"registration_redcapid"]
 #Remove ineligible
 sum(BS$registration_group==89 & !is.na(BS$registration_group==89)) # =23
 BS[-which(BS$registration_group==89 & !is.na(BS$registration_group==89)),]->BS
-#One person with missing dob, new person, remove (no initials or ANYTHING)
+#Missing DOB
 sum(is.na(BS$registration_dob)) 
-#BS[-which(is.na(BS$registration_dob)),]->BS
+
 
 root="~/Box/skinner/data/" #Kexin
+#root="C:/Users/buerkem/Box/skinner/data/" #Morgan
 list.files(path=paste0(root, "eprime/shark"))->Eshark
 list.files(path=paste0(root, "eprime/clock_reversal"))->Eclock
 #Remove the non-ID files (only a problem with clock)
@@ -257,4 +260,42 @@ for (dfname in c("explore","bmri","emaa")){
   print(paste("age mean",mean(df$Age)))
   print(paste("age sd",sd(df$Age)))}
 
+####2/27/2020 additions to determine if group differences on gender
+bsgrp<-md$data[which(md$data$registration_redcapid %in% Bmrimddf$masterdemoid),c("registration_redcapid","registration_group",
+                                                              "registration_lethality","registration_gender","registration_ptcstat___bsocial")]
+if(any(bsgrp$registration_ptcstat___bsocial!=1)){
+  message("These people aren't in BSOCIAL but have BSOCIAL scanning data plz fix")
+  message(list(bsgrp[which(bsgrp$registration_ptcstat___bsocial!=1),"registration_redcapid"]))
+  bsgrp[-which(bsgrp$registration_ptcstat___bsocial!=1),]->bsgrp}
 
+if(any(bsgrp$registration_lethality=="" & bsgrp$registration_group=="ATT")){
+  message("Attempter w/o lethality, please fix!")
+  message(list(bsgrp[which(bsgrp$registration_lethality=="" & bsgrp$registration_group=="ATT"),"registration_redcapid"]))}
+
+
+if(any(bsgrp$registration_group=="89")){
+  message("Group listed as 89")
+  message(list(bsgrp[which(bsgrp$registration_group=="89"),"registration_redcapid"]))
+  bsgrp[-which(bsgrp$registration_group=="89"),]->bsgrp
+}
+
+library(dplyr)
+bsgrp %>% mutate(group=ifelse(registration_group=="ATT",toupper(registration_lethality), registration_group))->bsgrp
+bsgrp[c(4,6)]->genderxgroup
+library(tableone)
+c2<-
+  compareGroups::compareGroups(
+    genderxgroup,
+    y=genderxgroup$group, 
+    include.miss=F
+  )
+t2<-compareGroups::createTable(
+    c2,
+    hide.no = 0,
+    digits = 0,
+    show.n = TRUE,
+    show.p.mul = TRUE)
+
+
+compareGroups::export2html(t2, "bsocialbygrp.html")
+      
