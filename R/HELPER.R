@@ -73,17 +73,17 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
             }
           },
           "NUM" = {
-
+            
             dty$EVT[grepl("mo",tolower(dty$EVT))]<-as.numeric(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))])) / 12
             dty$EVT[grepl("yr",tolower(dty$EVT))]<-as.numeric(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]))
-           
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-0
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-"ADDA"
             #dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
           },
           "PROTECT" = {
             dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"month","arm",arm_num,sep = "_")
             dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"year","arm",arm_num,sep = "_")
-            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional_visit",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional_",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
             dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
             if(any(grepl("int",tolower(dty$EVT)))){
@@ -92,6 +92,20 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
               }
               dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
             }
+          },
+          "NUM2PROTECT" = {
+            dty$EVT[dty$EVT == 0L] <- paste("baseline_arm",arm_num,sep="_")
+            dty$EVT[which(dty$EVT < 1)] <- paste(as.numeric(dty$EVT[which(dty$EVT < 1)])*12,"month","arm",arm_num,sep = "_")
+            even_yrs <- suppressWarnings(which(round(as.numeric(dty$EVT) / 0.5,0) == as.numeric(dty$EVT) / 0.5))
+            dty$EVT[even_yrs] <- paste(dty$EVT[even_yrs],"year","arm",arm_num,sep = "_")
+            dty$EVT[which(!grepl("arm",dty$EVT))] <- "ADDA"
+            
+            dty$EVT[grep("adda",tolower(dty$EVT))] <- paste0("ADDA",1:length(grep("adda",tolower(dty$EVT))))
+            
+            
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+            
           },
           "SNAKE" = {
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")

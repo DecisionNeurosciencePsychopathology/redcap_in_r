@@ -70,6 +70,7 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     maxevent$redcap_event_name<-NULL
     maxevent$months<-NULL
     maxevent$fudemo_visitdate<-NULL
+    
     #Get 3 month
     maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0 & maxevent$sincelastfu$month > 1]<-0.25
     #if 3 month is completed, skip 6 month.

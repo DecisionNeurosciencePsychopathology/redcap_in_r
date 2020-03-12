@@ -60,15 +60,24 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   raw_text <- httr::content(result, "text")
   if(result$status != 200L) {message("redcap api call failed\n",raw_text);return(raw_text)}
   elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-  simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user","record")
+  simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user","record","generateNextRecordName")
   
   if(content %in% simple_df_contents && action %in% c("record_single_run","")) {
     try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {
-      return(list(output=ds,success=TRUE))
+    if (!exists("ds")){
+      ds <- raw_text
+    } else if (inherits(ds, "data.frame")) {
+      if(nrow(ds)<1){
+        return(list(output=raw_text,success=TRUE))
+      } else {
+        return(list(output=ds,success=TRUE))
+      }
+      
     } else if (result$status != 200L) {
-      message("redcap api call failed at converting stage, returning raw text")
+      message("redcap api call failed (HTTP code is not 200), returning raw text")
       return(list(output=ds,success=FALSE))
+    } else {
+      return(output=ds,success=TRUE)
     }
   } else if (action == "export" || content %in% c("pdf")) {
    stop("Function not yet available.")

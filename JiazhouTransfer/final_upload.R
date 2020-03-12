@@ -76,9 +76,10 @@ outcome<-lapply(f_paths,function(xa) {
 #Protect Version:
 
 #Import Baseline:
-rootdir <- "~/Box/skinner/data/Redcap Transfer/PT transfer/Baseline/"
+rootdir <- "~/Box/skinner/data/Redcap Transfer/PT transfer/Baseline2/"
+rootdir <- "/Users/jiazhouchen/Box/skinner/data/Redcap\ Transfer/PT\ transfer/Baseline/additional_to_be_uploaded"
 dir.create(file.path(rootdir,"Problems"),showWarnings = F,recursive = T)
-protect<-bsrc.checkdatabase2(protocol = ptcs$protect)
+protect<-bsrc.checkdatabase2(protocol = ptcs$protect,online = T)
 masterdemo_reg <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T,batch_size = 1000L)
 learn_idmap <- masterdemo_reg[c("registration_redcapid","registration_wpicid")]
 names(learn_idmap)<-c("masterdemo_id","wpic_id")
@@ -99,9 +100,21 @@ gx<-lapply(f_paths,upload_transfer,
            idmap_id = "masterdemo_id",
            metadata = protect$metadata,
            target_ptc = ptcs$protect,
+           target_evt = "baseline_arm_1",
+           ID_list = p2_only_ID,skip_check = T,exempt_code = c(999,99,""),
+           toignore = TRUE)
+
+#Do the p2 folks here:
+gx<-lapply(f_paths,upload_transfer,
+           id.var = "registration_redcapid",
+           idmap = learn_idmap,
+           idmap_id = "masterdemo_id",
+           metadata = protect$metadata,
+           target_ptc = ptcs$protect,
            target_evt = "baseline_arm_2",
-           ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99),
+           ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99,""),
            toignore = FALSE)
+
 
 id.var = "registration_redcapid"
 idmap = learn_idmap
@@ -112,9 +125,8 @@ target_evt = "baseline_arm_2"
 ID_list = p2_only_ID
 skip_check = F
 toignore = FALSE
-exempt_code = c(999,99)
-x_data=NULL
-
+exempt_code = c(999,99,"")
+x_data = NULL
 
 
 upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=NULL,idmap_id=NULL,metadata=NULL,target_ptc=NULL,target_evt=NULL,ID_list=NULL,toignore=FALSE,skip_check=FALSE,exempt_code=NULL) {
@@ -178,7 +190,7 @@ upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=
     #   write.csv(df_togo[c(ID_pos,which(!names(df_togo) %in% names(og_forms)))],file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_nointake.csv")),row.names=F)
     # }
     
-    df_togo_b <- df_togo[which(names(df_togo) %in% names(og_forms))]
+    df_togo_b <- df_togo[,which(names(df_togo) %in% names(og_forms))]
     
     if(any(table(df_togo_b[[id.var]])>1)){
       dup_id<-names(which(table(df_togo_b[[id.var]]) > 1))
@@ -188,6 +200,7 @@ upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=
       
       df_togo_b <- df_togo_b[which(!df_togo_b$registration_redcapid %in% dup_id),]
     } 
+    if(nrow(df_togo)<1){message("nothing to check...ending");return(NULL)}
     df_tg_v<-bsrc.verify(df_new = df_togo_b,df_ref = og_forms,id.var = id.var,exempt_code=exempt_code)
     
     #Write out both non-NAs 
@@ -268,44 +281,106 @@ redcap_seq_uplaod(ds = gxa,id.var = id.var,redcap_uri = ptcs$protect$redcap_uri,
 
 
 ##Updating dates to the legacy database:
+lookuptable<-readxl::read_xlsx(file.path("~/Box/skinner/data/Redcap Transfer","redcap outputs","Subject Visits Table","S_CONTACTS.xlsx"))
 lookup_melt<-reshape2::melt(lookuptable,id.var=c("ID","CDATE","MISSCODE", "RATER", "CONTACT TYPE", "OUTCOME", "MISSINGNESS", "LOCATION1", "LOCATION2", "COMMENT" ))
 lookup_melt<-lookup_melt[which(!is.na(lookup_melt$value)),]
 lookup_melt$CDATE <- as.Date(lookup_melt$CDATE)
 sp_lookup <- split(lookup_melt,lookup_melt$ID)
 
-ptc_toget <- c("PROTECT","SUICIDE","SUICIDE2")
-
+ptc_toget <- c("SUICIDE","SUICIDE2","PROTECT")
+protect_cur <- bsrc.checkdatabase2(protocol = ptcs$protect)
 gMAPx<-bsrc.getEVTDATEFIELD(db = protect_cur)
 
-sp_rctogo<-lapply(sp_lookup,function(dfx){
+sp_rctogo<-lapply(sp_lookup,function(dfx=NULL,same_evt_days = 10){
   dfx<-bsrc.findid(dfx,learn_idmap)
   dfy<-dfx[dfx$variable %in% ptc_toget,]
   if(nrow(dfy)<1) {return(NULL)}
-  print(unique(dfx$ID))
+  #return(NULL)
   dfy$value <- toupper(dfy$value)
   dfy$value[dfy$value=="INT"] <- "ADDA"
   dfy$ID<-dfy$masterdemo_id
   dfy<-dfy[order(as.Date(dfy$CDATE)),]
+  dfy <- change_evt(dty = dfy,protocol_name = "NUM",arm_num = 1,evtvariname = "value")
   dfy$value[dfy$value == "ADDA"] <- paste0("ADDA",1:length(which(dfy$value=="ADDA")))
-  if(toupper(dfy$value[which.min(dfy$CDATE)]) == "B") {
+  dfy$TIC <- NA
+  #Consolidate same visit type; get date duration
+  if(nrow(dfy)>1) {
+    dfy$unique_evt <- paste(dfy$variable,dfy$value,sep = "_")
+    dfy <- do.call(rbind,lapply(split(dfy,dfy$unique_evt),function(dfgx){
+      if(nrow(dfgx)==1){return(dfgx)}
+      dfgy <-dfgx[which.min(as.Date(dfgx$CDATE)),]
+      dfgy$TIC <- list(dfgx$CDATE - dfgy$CDATE)
+      return(dfgy)
+    }))
+    rownames(dfy) <- NULL
+    dfy <- dfy[order(as.Date(dfy$CDATE)),]
+  }
+  #Consolidate possible identical visits
+  if(nrow(dfy)>1){
+    dfy$CDATE_diff <- (dfy$CDATE - dfy$CDATE[c(NA,1:(nrow(dfy)-1))])
+    dfy$CDATE_logi<- dfy$CDATE_diff < same_evt_days
+    dfy$CDATE_logi[which(grepl("ADDA",dfy$EVT))] <- dfy$CDATE_diff[which(grepl("ADDA",dfy$EVT))] <= 3
+    dfy$CDATE_logi[is.na(dfy$CDATE_logi) ] <- FALSE
+    dfy$num <- 1:nrow(dfy)
+    dfy$num <- dfy$num - cumsum(as.numeric(dfy$CDATE_logi))
+    dfy<-do.call(rbind,lapply(split(dfy,dfy$num),function(dfxa){
+      if(nrow(dfxa)==1) {
+        return(dfxa)
+      }
+      if(any(grepl("ADDA",dfxa$EVT))){
+        ind_logi <- min(which(grepl("ADDA",dfxa$EVT)))
+      } else {
+        ind_logi <- which.max(as.numeric(dfxa$EVT))
+      }
+      dfxb <- dfxa[ind_logi,]
+      dfxb$TIC <-  list(dfxa$CDATE - dfxb$CDATE)
+      return(dfxb)
+    }))
+  }
+  dfy$value[dfy$EVT == "ADDA"] <- paste0("ADDA",1:length(which(dfy$EVT=="ADDA")))
+
+
+  if(toupper(dfy$value[which.min(dfy$CDATE)]) == "B" || grepl("ADDA",toupper(dfy$value[which.min(dfy$CDATE)]))) {
     baseline_evt <- as.character(dfy$variable[which.min(dfy$CDATE)])
-    message("Identified first contact as ",as.character(dfy$variable[which.min(dfy$CDATE)])," baseline")
-    
-    if(length(unique(dfy$variable))==1) {
-      dfy<-change_evt(dty = dfy,protocol_name = "PROTECT",arm_num = 1,evtvariname = "value")
-    } else {
-      dfy<-change_evt(dty = dfy,protocol_name = "NUM",arm_num = 1,evtvariname = "value")
+    #message("Identified first contact as ",as.character(dfy$variable[which.min(dfy$CDATE)])," baseline")
+    if(baseline_evt!=ptc_toget[min(match(unique(dfx$variable),ptc_toget),na.rm = T)]) {
+      print(unique(dfx$ID))
+      print(as.character(unique(dfx$variable)))
       
+      message("#######!!!!!!! MISALIGNED STUDY ORDER!!!!! ",baseline_evt," ",ptc_toget[min(match(unique(dfx$variable),ptc_toget),na.rm = T)],
+              ". Don't know what to do yet, pass.")
       return(NULL)
     }
   } else {
-    message("####### First contact identified as ",as.character(dfy$variable[which.min(dfy$CDATE)])," ",as.character(dfy$value[which.min(dfy$CDATE)]),
+    print(unique(dfx$ID))
+    print(as.character(unique(dfx$variable)))
+    
+    message("#######!!!!!!! First contact identified as ",as.character(dfy$variable[which.min(dfy$CDATE)])," ",as.character(dfy$value[which.min(dfy$CDATE)]),
             ". Don't know what to do yet, pass.")
     return(NULL)
   }
+  dfy$EVT_num <- suppressWarnings(as.numeric(dfy$EVT))
+  add_yrs<-aggregate(EVT_num~variable,data = dfy,FUN = max)
+  add_yrs$EVT_num<-cumsum(add_yrs$EVT_num) - as.numeric(add_yrs$EVT_num)
+  add_yrs$EVT_num[add_yrs$EVT_num < 0.5] <- 0
+  
+  dfy$EVT_num <- dfy$EVT_num + add_yrs$EVT_num[match(dfy$variable,add_yrs$variable)]
+  dfy$EVT_num[dfy$EVT=="ADDA"] <- "ADDA"
+  dfy<-change_evt(dty = dfy,protocol_name = "NUM2PROTECT",arm_num = 1,evtvariname = "EVT_num")
+  
+  return(dfy[c("ID","CDATE","variable","value","EVT","TIC")])
   
   dfy$date_variable<-gMAPx$date_variname[match(dfy$EVT,gMAPx$unique_event_name)]
   dfz<-na.omit(dfy[c("ID","EVT","date_variable","CDATE")])
+  dfz$TIC <- 0 
+  
+  
+  if(length(unique(dfy$variable))==1) {
+    dfy<-change_evt(dty = dfy,protocol_name = "PROTECT",arm_num = 1,evtvariname = "value")
+  } else {
+    dfy<-change_evt(dty = dfy,protocol_name = "NUM",arm_num = 1,evtvariname = "value")
+  }
+  
   
   if(any(duplicated(dfz$EVT))) {
     
@@ -317,15 +392,15 @@ sp_rctogo<-lapply(sp_lookup,function(dfx){
         return(NULL)
       }
     }))
+    
     if(!any(!dfz$EVT %in% dfz_i$EVT)) {
       dfz <- dfz_i
     } else {
-      message("######## duplicated EVT");
+      message("######## duplicated EVT #########");
       return(NULL)
     }
-
+    
   }
-  
   
   if(nrow(dfz)<1){return(NULL)}
   
@@ -335,6 +410,50 @@ sp_rctogo<-lapply(sp_lookup,function(dfx){
   #redcap_seq_uplaod(ds = dfz_e,id.var = "registration_redcapid",redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
   return(as.data.frame(dfz_e))
 })
+
+sp_rctogo[!sapply(sp_rctogo,is.null)]
+sp_rctogo[sapply(sp_rctogo,function(x){any(duplicated(x$EVT))})]
+
+evt_map_df <- do.call(rbind,sp_rctogo)
+rownames(evt_map_df) <- NULL
+
+gx<-lapply(f_paths,upload_transfer,
+           id.var = "registration_redcapid",
+           idmap = learn_idmap,
+           idmap_id = "masterdemo_id",
+           metadata = protect$metadata,
+           target_ptc = ptcs$protect,
+           target_evt = "baseline_arm_2",
+           ID_list = p2_only_ID,skip_check = F,exempt_code = c(999,99,""),
+           toignore = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -171,6 +171,7 @@ sahx_pt_v<-bsrc.verify(df_new = sahx_pt_sp$exists,df_ref = msdm_db$data,id.var =
 ####This is the suicide histroy########
 ##Get the existing folks, exclude them for now;
 sahx_baseline<-read.csv("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/S_SQUEST.csv",stringsAsFactors = F)
+
 sahx_varimap<-na.omit(unpack(readxl::read_xlsx(file.path("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer","redcap outputs","To be transferred","SP","SUICIDE HISTORY_cv.xlsx")))$map)
 sahx_varimap$date_field_yn<-grepl("date",sahx_varimap$RC_name)
 
@@ -286,8 +287,8 @@ sahx_dfx_clean$sahx_lr_at[which(as.numeric(sahx_dfx_clean$sahx_lr_at)>8)]<-NA
 
 sahx_gx_sp <- split(sahx_dfx_clean,sahx_dfx_clean$sahx_attemptnum>0)
 
-cur_sahx_msdm <- bsrc.getform(protocol = ptcs$masterdemo,formname = "suicide_history",online = T,batch_size = 1000L,mod = T,at_least = 1)
-save(cur_sahx_msdm,file = file.path("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/pre_upload_sahx.rdata"))
+
+save(cur_sahx_msdm,file = file.path("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/pre_new_upload_sahx.rdata"))
 
 noSA_dfx<-sahx_gx_sp$`FALSE`
 noSA_dfx$registration_redcapid<-noSA_dfx$ID; noSA_dfx$ID<-NULL
@@ -345,9 +346,77 @@ message("Make sure no other value than the attempter number is modified.")
 redcap_seq_uplaod(ds = wide_SAEXdfx,id.var = id.var,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 
+#follow-up
+sahx_followup <- read.csv("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/A_NEGOUT.csv",stringsAsFactors = F)
+fu_lethality <- read.csv("/Users/jiazhouchen/Box/skinner/data/Redcap Transfer/All protect data/suicide history/S_LETH.csv",stringsAsFactors = F)
+fu_lethality<-bsrc.findid(fu_lethality,idmap = idmap)
+fu_lethality$lethality<-apply(fu_lethality,1,function(x){
+  x[x=="99"] <- NA
+  max(as.numeric(x[c(11,13,15:21)]),na.rm = T)
+})
+fu_lethality$lethality[fu_lethality$lethality==-Inf]<-NA
 
+sahx_fu_watt <- sahx_followup[which(sahx_followup$ATT == 1),c("ID","ATT","ATT_TOTAL",	"ATTDATE",	"ATTDATE2",	"ATTDATE3",	"ATTDATE4",	"ATTEX","CDATE")]
+sahx_fu_watt<-bsrc.findid(sahx_fu_watt,idmap = idmap)
+sahx_fu_watt$registration_redcapid <- sahx_fu_watt$masterdemo_id;
+sahx_fu_watt <- sahx_fu_watt[c("registration_redcapid","ATT","ATT_TOTAL",	"ATTDATE",	"ATTDATE2",	"ATTDATE3",	"ATTDATE4",	"ATTEX","CDATE")]
+sahx_fu_melt <- reshape2::melt(sahx_fu_watt,id.var=c("registration_redcapid","ATT","ATT_TOTAL","ATTEX","CDATE"))
+sahx_fu_melt$num <- gsub("ATTDATE","",sahx_fu_melt$variable)
+sahx_fu_melt$num[sahx_fu_melt$num==""]<-1
+sahx_fu_melt$sahx_sadate_at <- sahx_fu_melt$value
+sahx_fu_melt$sahx_describe_at <- sahx_fu_melt$ATTEX
 
+sahx_fu_lite <- sahx_fu_melt[which(!is.na(sahx_fu_melt$sahx_sadate_at) & sahx_fu_melt$sahx_sadate_at!=""),c("registration_redcapid","sahx_sadate_at","sahx_describe_at","num","CDATE")]
+sahx_fu_lite$sahx_sadate_at <- as.Date(sahx_fu_lite$sahx_sadate_at,format = "%m/%d/%Y")
 
+SAFU_togo_sp <- split(sahx_fu_lite,sahx_fu_lite$registration_redcapid)
 
+cur_sahx_msdm_lx_sp<-bsrc.proc_multientry(long_df = cur_sahx_msdm,index_df = bsrc.sahx_index(sahx_df =  cur_sahx_msdm),IDvar = "registration_redcapid",at_least = 1)
+
+SAFU_togo_EX<-cleanuplist(lapply(SAFU_togo_sp,function(dfx){
+  cur_df <- cur_sahx_msdm_lx_sp$list[[as.character(unique(dfx$registration_redcapid))]]
+  cur_leth <- fu_lethality[which(fu_lethality$masterdemo_id %in% unique(dfx$registration_redcapid)),]
+  cur_leth <- cur_leth[which(!is.na(cur_leth$lethality)),]
+  #Get lethality;
+  if(any(!is.na(cur_leth$lethality))){
+    
+  } else {
+    dfx$sahx_lr_at <- NA
+  }
+  
+  if(is.null(cur_df)){
+    return(list(out_df=dfx,status=TRUE,ogf=dfx))
+  }
+  
+  
+  names(cur_df)<-paste(names(cur_df),"at",sep = "_")
+  cur_df$sahx_attemptnum<-NA
+  cur_df$ID <- cur_df$registration_redcapid_at;cur_df$num <- cur_df$index_num_at
+  
+  px_cur_df <- cur_df[names(dfx)]; 
+  px_cur_df$num <- paste0("rc_",px_cur_df$num)
+  
+  otc<-find_sahx_duplicate_single(rbind(px_cur_df,dfx),skipnumcheck = T)
+  statusX <- !any(duplicated(otc$o_df))
+  statusY <- otc$status; check_ensure<-FALSE
+  if(statusX) {
+    ota <- otc$o_df
+    ota$sahx_attemptnum <- nrow(ota)
+    if(length(which(is.na(match(px_cur_df$num,ota$num))))>0) {message("yo");statusY<-"DOUBLE CHECK: RC entry Replace";check_ensure <- TRUE}
+    ota <- ota[which(!grepl("rc_",ota$num)),]
+    if(nrow(ota)<1){message("NO DATA");return(NULL)}
+    ota$num <- nrow(cur_df) + (1:nrow(ota))
+    return(list(out_df=ota,status=statusY,ogf=rbind(dfx,px_cur_df)))
+  }  else {
+    message("DUPLICATE DETECHED. WILL REMOVE AND CALL FOR ATTENTION.")
+    return(NULL)
+  }
+}))
+SA_EX_try_df <- do.call(rbind,lapply(SA_EX_try,`[[`,"out_df"))
+wide_SAEXdfx<-reshape( SA_EX_try_df,idvar = c("ID","sahx_attemptnum"),timevar = "num",direction = "wide",sep = "")
+wide_SAEXdfx$registration_redcapid<-wide_SAEXdfx$ID; wide_SAEXdfx$ID<-NULL
+bsrc.verify(df_new = wide_SAEXdfx,df_ref = cur_sahx_msdm,id.var = "registration_redcapid")$VALUE_CONFLICT
+message("Make sure no other value than the attempter number is modified.")
+redcap_seq_uplaod(ds = wide_SAEXdfx,id.var = id.var,redcap_uri = ptcs$masterdemo$redcap_uri,token = ptcs$masterdemo$token)
 
 

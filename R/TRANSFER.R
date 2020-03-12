@@ -7,7 +7,6 @@
 bsrc.verify<-function(df_new=NULL,df_ref=NULL,id.var=NULL,exempt_code=NULL){
   if(any(!names(df_new) %in% names(df_ref))) {stop("New data frame has variables that is not in the RC one. Clean before input.")}
   df_ref <- df_ref[names(df_new)] 
-  
   df_new$TYPE<-"NEW"
   df_ref$TYPE<-"REF"
 
