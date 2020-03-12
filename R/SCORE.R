@@ -2,7 +2,7 @@
 
 #wrapper:
 bsrc.score_this_form<-function(df_in=NULL,formname=NULL,...){
-  argu <- as.list(...)
+  argu <- list(...)
   argu$df_in = df_in
   score_func<-get(paste0("score_",formname),envir = loadNamespace("bsrc"))
   return(do.call(score_func,argu))
