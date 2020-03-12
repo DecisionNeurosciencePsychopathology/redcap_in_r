@@ -5,46 +5,14 @@ source('~/Documents/github/UPMC/startup.R')
 rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
 logdir="~/Documents/github/UPMC/TRANSFER/PT/dup_id/" # directory of folder to save duplicated IDs that are removed from database
 allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/kexin_practice_pt.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/FINAL-kexin_practice_pt2-BASELINE.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
 var_map[which(var_map=="",arr.ind = T)]<-NA
 var_map<-unique(var_map)
-#var_map$baseline<-"FALSE"#temperary
+#var_map$baseline<-"TRUE"#temperary
 var_map$baseline<-as.logical(var_map$baseline)#temperary
 #var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
 var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
 var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
-combine<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/combing forms.csv',stringsAsFactors = FALSE)
-combine[which(combine=="",arr.ind = T)]<-NA
-
-#Initialize reports 
-log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                               which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
-log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
-log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
-log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
-log_branching <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
-                            which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
-#deleted_rows<-list()
-#comb_rows<-list() # IDDATE absent in at least one form when combining 
-#####################################start of the function#########################################
-# rctransfer.dataclean <- function(
-# [VARIABLES]
-#curdb = bsoc
-#protocol.cur <- ptcs$bsocial
-#db = 
-pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
-curdb=pt
-
-forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
-skipotherforms = TRUE
-#replace_999 = TRUE # by defult, replace all 999 with NA 
-remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
-replace_w_na = FALSE
-#) {
-
 ## verify Morgan's var_map. 
 ####for the col is.box. NA should mean represent unecessary variables. i.e. 
 # if redcap_var and access_var both exist, is.checkbox cannot be NA
@@ -61,6 +29,33 @@ sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplica
 #sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
 ####remove all blank rows 
 
+#Initialize reports 
+log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                               which_form=as.character(),comments=as.character(),stringsAsFactors = F) #Report out-of-range values 
+log_replace <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report wrong values/datatypes, correct and report 
+log_comb_fm <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                          which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+log_comb_fm2 <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                           which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+log_branching <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
+                            which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
+
+#####################################start of the function#########################################
+# rctransfer.dataclean <- function(
+# [VARIABLES]
+#curdb = bsoc
+#protocol.cur <- ptcs$bsocial
+#db = 
+pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
+curdb=pt
+
+forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
+skipotherforms = TRUE
+remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
+replace_w_na = FALSE
+#) {
+
 # PREPARE variable: access forms
 all_formnm<-with(var_map,gsub(".csv","",unique(na.omit(path)))) #get all redcap formnames  
 if (is.null(forms)){
@@ -75,9 +70,8 @@ if (is.null(forms)){
   forms<-unique(forms[!is.na(forms)])
 } 
 rm(all_formnm)
-
-
-
+if (!all(paste0(forms,".csv") %in% unique(var_map$path))){stop("A least one form cannot be found in the variable map.")}
+var_map<-subset(var_map,path %in% paste0(forms,".csv"))
 ## PREPARE functions
 # make a fun to report abnormal values 
 report_wrong <- function(id = NA, which_var = NA, wrong_val = NA, which_form = NA, comments = NA, 
@@ -99,8 +93,6 @@ mdy<-function(x){
   if (length(index2)>0){warning(paste0(c("Some dates are not reasonable: ",x[index2]),collapse = " "))}
   return(x)
 }
-#x=c("01/30/1999","01/30/68","01/30/2010","01/30/11",NA)
-#x=c("01/30/2999","01/30/2968","01/30/2010","01/30/2011",NA)
 
 #check double entries (one redcap variabels exist in multiple forms) across froms  
 repeatedrcvar<-unique(na.omit(var_map$redcap_var[duplicated(var_map$redcap_var)]))

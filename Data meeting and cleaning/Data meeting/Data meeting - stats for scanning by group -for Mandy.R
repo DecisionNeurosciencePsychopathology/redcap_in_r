@@ -5,14 +5,11 @@ source("~/Documents/github/UPMC/startup.R")
 protocol.cur <- ptcs$masterdemo
 md <- bsrc.checkdatabase2(online = T)
 #plotpath="/Users/mogoverde/Desktop" #Morgan WFH
-#plotpath="C:/Users/buerkem/OneDrive - UPMC/Desktop" #Morgan Work
-plotpath="~/Documents/github/UPMC/data meeting" #Kexin
-
-#PT3 recruitment milestone
-recr_pt3<-read.csv("~/Box/skinner/administrative/Data meeting/Recruitment milestones for MH085651 - Decision Process of Late-Life Suicide_new.csv",stringsAsFactors = F)
+plotpath="C:/Users/buerkem/OneDrive - UPMC/Desktop" #Morgan Work
+#plotpath="~/Documents/github/UPMC/data meeting" #Kexin
 
 #get id 
-MD<-bsrc.getform(formname = 'record_registration',curdb = md)
+MD<-bsrc.getform(formname = 'record_registration',curdb = md,protocol = ptcs$masterdemo)
 #ptcname: ksocial, bsocial,protect3,protect2,protect,suicid2,suicide,EMA,EXPLORE
 #Grabs the variable names based on protocol
 varnames<-function(ptcname){
@@ -31,18 +28,14 @@ varnames<-function(ptcname){
 
 #PROTECT - ALL
 var_pt<-unique(c(varnames('protect3'),varnames('protect2'),varnames('protect'),varnames('suicide'),varnames('suicid2')))
-varnames("ksocial")->var_k
-varnames("bsocial")->var_ema
 varnames("bsocial")->var_bsoc
 
 #Checks1
 all(var_pt %in% colnames(MD)) #should be TRUE
-all(var_k %in% colnames(MD)) #Ksocial
 all(var_bsoc %in% colnames(MD)) #bsocial and ema
 
 #Add master demo info
 PT<-MD[,var_pt]
-K<-MD[,var_k]
 BS<-MD[,var_bsoc]
 
 
@@ -50,21 +43,16 @@ BS<-MD[,var_bsoc]
 #Protect checks
 PT<-PT[unique(which(PT[,grep('registration_ptcstat_',var_pt)]==1,arr.ind = T)[,1]),] # consented to at least one protocol 
 allPT<-MD[,var_pt] #not removed ineligible people 
-allP3<-allPT[which(allPT$registration_ptcstat___protect3==1),] #get all P3 people including ineligible ones 
-allP3$"mincondate"<-allP3$reg_condate_protect3
 #temp<-PT[unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # ieligible people 
-PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # remove all ineligible people terminated for at least one protocol due to ineligibility  
+PT<-PT[-unique(which(PT[,grep('reg_term_reason_',var_pt)]==3,arr.ind = T)[,1]),] # remove all people terminated for at least one protocol due to ineligibility  
 PT<-PT[-unique(which(PT[,grep('reg_term_excl_',var_pt)]==1,arr.ind = T)[,1]),] # remove all unusable data based on 'reg_term_excl_
-
-#KSOCIAL checks (must be in KSOCIAL, can also be in BSOCIAL)
-K[which(K$registration_ptcstat___ksocial==1 & !is.na(K$registration_ptcstat___ksocial)),]->K
-K[which(K$reg_term_reason_ksocial!=3 | is.na(K$reg_term_reason_ksocial)),]->K
-K[which(K$reg_term_excl_ksocial!=1 | is.na(K$reg_term_excl_ksocial)),]->K
 
 #BSOCIAL checks
 BS[which(BS$registration_ptcstat___bsocial==1 & !is.na(BS$registration_ptcstat___bsocial)),]->BS
 BS[which(BS$reg_term_reason_bsocial!=3 | is.na(BS$reg_term_reason_bsocial)),]->BS
 BS[which(BS$reg_term_excl_bsocial!=1 | is.na(BS$reg_term_excl_bsocial)),]->BS
+idmap<-md$data[c("registration_redcapid","registration_wpicid","registration_soloffid")]
+  names(idmap)<-c("masterdemoid","wpicid","soloffid")
 BS<-bsrc.findid(BS,idmap = idmap,id.var = "registration_redcapid")
 
 
@@ -83,21 +71,6 @@ sum(PT$reg_term_excl_suicid2==1,na.rm = T)
 sum(PT$reg_term_excl_suicide==1,na.rm = T)
 #View(PT[which(PT$reg_term_excl_protect3==1 | PT$reg_term_excl_protect2==1 | PT$reg_term_excl_protect==1 | PT$reg_term_excl_suicid2==1 | PT$reg_term_excl_suicide==1),]) #18 people exluded from analysis 
 
-##P3 all
-sum(duplicated(allP3$registration_redcapid)) #should be 0. check ID duplicates 
-sum(allP3$registration_group==89) #should be 0. No 89 in 'group'
-sum(is.na(allP3$registration_redcapid)) # should be 0. no NA in ID 
-sum(is.na(allP3$registration_group)) # should be 0. no NA in 'group'
-sum(is.na(allP3$registration_dob))# should be 0. no NA in 'dob'
-
-##Ksocial
-sum(duplicated(K$registration_redcapid)) 
-sum(K$registration_group==89) 
-sum(is.na(K$registration_redcapid)) 
-sum(is.na(K$registration_group))
-sum(is.na(K$registration_dob))
-sum(K$reg_term_excl_ksocial==1,na.rm = T)
-
 ##Bsocial
 sum(duplicated(BS$registration_redcapid))
 sum(BS$reg_term_excl_bsocial==1,na.rm = T)
@@ -108,11 +81,12 @@ BS[which(is.na(BS$registration_group)),"registration_redcapid"]
 #Remove ineligible
 sum(BS$registration_group==89 & !is.na(BS$registration_group==89)) # =23
 BS[-which(BS$registration_group==89 & !is.na(BS$registration_group==89)),]->BS
-#One person with missing dob, new person, remove (no initials or ANYTHING)
+#Missing DOB
 sum(is.na(BS$registration_dob)) 
-#BS[-which(is.na(BS$registration_dob)),]->BS
+
 
 root="~/Box/skinner/data/" #Kexin
+#root="C:/Users/buerkem/Box/skinner/data/" #Morgan
 list.files(path=paste0(root, "eprime/shark"))->Eshark
 list.files(path=paste0(root, "eprime/clock_reversal"))->Eclock
 #Remove the non-ID files (only a problem with clock)
@@ -130,7 +104,6 @@ bsrc.findid(Eallid,idmap = idmap,id.var = "ID")$masterdemoid->Eallmd
 #Check
 #Should be =0, all IDs should be in Pall
 #Get EXPLORE pts from those in Protect
-
 #Get people who have scanned from Box
 list.files(path=paste0(root, "matlab task data/bpd_clock"))->Bclock
 list.files(path=paste0(root, "matlab task data/bpd_spott"))->Bspott
@@ -149,8 +122,6 @@ bsrc.findid(Bmriid,idmap = idmap,id.var = "ID")->Bmrimddf
 Bmrimddf[which(!Bmrimddf$ifexist),] #Should be no one
 bsrc.findid(Bspottid,idmap = idmap,id.var = "ID")->Bspottmddf
 Bspottmddf[which(!Bspottmddf$ifexist),] #Should be no one
-#Plotting and final df
-
 #Get people in EMA
 bsrc.attachngrab(rdpaths$ema)->ema
 ema$fulldata.ema$info->emainfo
@@ -178,8 +149,25 @@ Eallmd #explore (pt)
 Bspottmddf$masterdemoid #spott (bs)
 Bmrimddf$masterdemoid #bmri (bs)
 emainfo$masterdemoid #ema (bs)
-Kmri #kmri (k)
+#Kmri #kmri (k)
 
+explore<-as_tibble(PT) %>%
+  filter(registration_redcapid%in%Eallmd) %>%
+  mutate(Group=plyr::mapvalues(registration_group,from = c("ATT","IDE","DEP","88","HC"), to = c("3ATT","2DNA","2DNA","2DNA","1HC"))) 
+  
+bmri<-as_tibble(BS) %>%
+  filter(masterdemoid%in%Bmrimddf$masterdemoid) %>%
+  mutate(Group=plyr::mapvalues(registration_group,from = c("ATT","NON","HC"), to = c("3ATT","2NON","1HC"))) %>%
+  mutate(Group=replace(Group,registration_lethality=="hl","4ATT-HL")) %>%
+  mutate(Group=replace(Group,registration_lethality=="ll","3ATT-LL")) 
+bmri<-filter(bmri,registration_redcapid!=440132) # special case: 440132 is removed from the data because he's a bs att but does not have lethality status. Emailed Nate about this. 
+
+emaa<-as_tibble(BS) %>%
+  filter(masterdemoid%in%emainfo$masterdemoid) %>%          
+  mutate(Group=plyr::mapvalues(registration_group,from = c("ATT","NON","HC"), to = c("3ATT","2NON","1HC"))) 
+  
+
+########################################
 explore<-subset(PT,registration_redcapid%in%Eallmd)
 explore$Group<-plyr::mapvalues(explore$registration_group,from = c("ATT","IDE","DEP","88","HC"), to = c("3ATT","IDE","DEP","Unsure","1HC"))
 explore$Group[which(explore$registration_group %in% c("IDE","DEP","88"))]<-"2DNA"
@@ -190,6 +178,7 @@ bmri$Group[which(bmri$registration_lethality=="hl")]<-"4ATT-HL"
 bmri$Group[which(bmri$registration_lethality=="ll")]<-"3ATT-LL"
 emaa<-subset(BS,masterdemoid%in%emainfo$masterdemoid) #193->192 440057 removed due to ineligibility
 emaa$Group<-plyr::mapvalues(emaa$registration_group,from = c("ATT","NON","HC"), to = c("3ATT","2NON","1HC"))
+#########################################
 #kmri<-subset(K,registration_redcapid%in%Kmri) #152->60
 setdiff(Bmrimddf$masterdemoid,bmri$masterdemoid) # id in folders but not consented to BS or ineligible for BS 
 setdiff(Bmrimddf$masterdemoid,bmri$masterdemoid)%in%PT$registration_redcapid 
@@ -257,7 +246,7 @@ for (dfname in c("explore","bmri","emaa")){
   
   result[which(is.na(result),arr.ind = T)]<-""
   assign(paste0("stats_",dfname),result)
-  write.csv(result,paste0("~/Documents/github/UPMC/data meeting/Counts_Scanning_for_Mandy_",dfname,".csv"))
+  write.csv(result,paste0("~/Documents/github/UPMC/data meeting/Counts_Scanning_for_Mandy_",dfname,"_",Sys.Date(),"_",".csv"))
 }
 
 #get mean and sd of age 
@@ -268,7 +257,45 @@ for (dfname in c("explore","bmri","emaa")){
   print(dfname)
   print(class(df$Age))
   print(df%>% group_by(Group) %>% summarise(mean=mean(Age,na.rm = T),sd=(sd(Age,na.rm = T))))
-  print(mean(df$Age))
-  print(sd(df$Age))}
+  print(paste("age mean",mean(df$Age)))
+  print(paste("age sd",sd(df$Age)))}
+
+####2/27/2020 additions to determine if group differences on gender
+bsgrp<-md$data[which(md$data$registration_redcapid %in% Bmrimddf$masterdemoid),c("registration_redcapid","registration_group",
+                                                              "registration_lethality","registration_gender","registration_ptcstat___bsocial")]
+if(any(bsgrp$registration_ptcstat___bsocial!=1)){
+  message("These people aren't in BSOCIAL but have BSOCIAL scanning data plz fix")
+  message(list(bsgrp[which(bsgrp$registration_ptcstat___bsocial!=1),"registration_redcapid"]))
+  bsgrp[-which(bsgrp$registration_ptcstat___bsocial!=1),]->bsgrp}
+
+if(any(bsgrp$registration_lethality=="" & bsgrp$registration_group=="ATT")){
+  message("Attempter w/o lethality, please fix!")
+  message(list(bsgrp[which(bsgrp$registration_lethality=="" & bsgrp$registration_group=="ATT"),"registration_redcapid"]))}
 
 
+if(any(bsgrp$registration_group=="89")){
+  message("Group listed as 89")
+  message(list(bsgrp[which(bsgrp$registration_group=="89"),"registration_redcapid"]))
+  bsgrp[-which(bsgrp$registration_group=="89"),]->bsgrp
+}
+
+library(dplyr)
+bsgrp %>% mutate(group=ifelse(registration_group=="ATT",toupper(registration_lethality), registration_group))->bsgrp
+bsgrp[c(4,6)]->genderxgroup
+library(tableone)
+c2<-
+  compareGroups::compareGroups(
+    genderxgroup,
+    y=genderxgroup$group, 
+    include.miss=F
+  )
+t2<-compareGroups::createTable(
+    c2,
+    hide.no = 0,
+    digits = 0,
+    show.n = TRUE,
+    show.p.mul = TRUE)
+
+
+compareGroups::export2html(t2, "bsocialbygrp.html")
+      
