@@ -374,6 +374,7 @@ SAFU_togo_sp <- split(sahx_fu_lite,sahx_fu_lite$registration_redcapid)
 cur_sahx_msdm_lx_sp<-bsrc.proc_multientry(long_df = cur_sahx_msdm,index_df = bsrc.sahx_index(sahx_df =  cur_sahx_msdm),IDvar = "registration_redcapid",at_least = 1)
 
 SAFU_togo_EX<-cleanuplist(lapply(SAFU_togo_sp,function(dfx){
+  print(unique(dfx$registration_redcapid))
   cur_df <- cur_sahx_msdm_lx_sp$list[[as.character(unique(dfx$registration_redcapid))]]
   cur_leth <- fu_lethality[which(fu_lethality$masterdemo_id %in% unique(dfx$registration_redcapid)),]
   cur_leth <- cur_leth[which(!is.na(cur_leth$lethality)),]

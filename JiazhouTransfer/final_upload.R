@@ -127,6 +127,7 @@ skip_check = F
 toignore = FALSE
 exempt_code = c(999,99,"")
 x_data = NULL
+look_up = sp_rctogo
 
 
 upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=NULL,idmap_id=NULL,metadata=NULL,target_ptc=NULL,target_evt=NULL,ID_list=NULL,toignore=FALSE,skip_check=FALSE,exempt_code=NULL) {
@@ -153,6 +154,22 @@ upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=
   df_togo$registration_redcapid<-df_togo[[idmap_id]]
   df_togo<-df_togo[which(!names(df_togo) %in% c("ogid","ifexist",names(idmap)))]
   ID_pos<-match(id.var,names(df_togo))
+  
+  df_tg_sp<-split(df_togo,df_togo[[id.var]])
+  do_multi<-any(sapply(df_tg_sp,nrow)>1)
+  
+  if(do_multi) {
+    lapply(df_tg_sp,function(dfk){
+      dfk$CDATE <- as.Date(dfk$CDATE)
+      lk <- look_up[[as.character(unique(dfk$registration_redcapid))]]
+      #Maybe we just stop getting the additional ones for now ?
+      #Only do the direct match first. 
+      
+      
+    })
+  }
+  
+  
   
   #Finding appropriate data to pull;
   vari_ref<-data.frame(variable_name = names(df_togo),stringsAsFactors = F)
@@ -291,7 +308,7 @@ ptc_toget <- c("SUICIDE","SUICIDE2","PROTECT")
 protect_cur <- bsrc.checkdatabase2(protocol = ptcs$protect)
 gMAPx<-bsrc.getEVTDATEFIELD(db = protect_cur)
 
-sp_rctogo<-lapply(sp_lookup,function(dfx=NULL,same_evt_days = 10){
+sp_rctogo<-lapply(sp_lookup,function(dfx,same_evt_days = 10){
   dfx<-bsrc.findid(dfx,learn_idmap)
   dfy<-dfx[dfx$variable %in% ptc_toget,]
   if(nrow(dfy)<1) {return(NULL)}
@@ -411,8 +428,12 @@ sp_rctogo<-lapply(sp_lookup,function(dfx=NULL,same_evt_days = 10){
   return(as.data.frame(dfz_e))
 })
 
-sp_rctogo[!sapply(sp_rctogo,is.null)]
+sp_rctogo<-sp_rctogo[!sapply(sp_rctogo,is.null)]
 sp_rctogo[sapply(sp_rctogo,function(x){any(duplicated(x$EVT))})]
+
+
+
+
 
 evt_map_df <- do.call(rbind,sp_rctogo)
 rownames(evt_map_df) <- NULL
