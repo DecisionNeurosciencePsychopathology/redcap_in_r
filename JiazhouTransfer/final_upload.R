@@ -164,8 +164,20 @@ upload_transfer<-function(xpath,x_data=NULL,error_outdir=NULL,id.var=NULL,idmap=
       lk <- look_up[[as.character(unique(dfk$registration_redcapid))]]
       #Maybe we just stop getting the additional ones for now ?
       #Only do the direct match first. 
+      dfk$EVT <- lk$EVT[match(dfk$CDATE,lk$CDATE)]
+      lk$USED <- lk$EVT %in% dfk$EVT
+      dfj<-dfk[is.na(dfk$EVT),]
+      lk_search <- lk[!lk$USED,]
+      if(nrow(dfj)<1){
+        return(dfk)
+      }
+      for (x in 1:nrow(dfj)) {
+        dt_to_search<-dfj$CDATE[x]
+        
+        
+      }
       
-      
+        
     })
   }
   
