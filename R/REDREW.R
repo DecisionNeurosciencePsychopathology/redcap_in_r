@@ -73,7 +73,7 @@ is.empty<-function(...) {
 
 
 redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5, retry_whenfailed=T,
-                         continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, 
+                         continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, NAoverwrite = F,
                          config_options = NULL) 
 {
   start_time <- base::Sys.time()
@@ -96,13 +96,14 @@ redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5,
     selected_indices <- seq(from = ds_glossary[i, "start_index"], 
                             to = ds_glossary[i, "stop_index"])
     if (i > 0) 
-    Sys.sleep(time = interbatch_delay)
+      Sys.sleep(time = interbatch_delay)
     message("Writing batch ", i, " of ", nrow(ds_glossary), 
             ", with indices ", min(selected_indices), " through ", 
             max(selected_indices), ".")
     
     write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,], previousIDs = NULL,retry_whenfailed = T,
-                                          redcap_uri = redcap_uri, token = token, verbose = verbose, 
+                                          redcap_uri = redcap_uri, token = token, verbose = verbose,
+                                          NAoverwrite = NAoverwrite,
                                           config_options = config_options)
     lst_status_code[[i]] <- write_result$status_code
     lst_outcome_message[[i]] <- write_result$outcome_message
@@ -145,8 +146,8 @@ clean_str <- function(dfx,remove=T,replace_text="") {
   return(list(original_df=dfx_back,clean_df=dfx,logical_df=logi_frame))
 }
 
-redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_options = NULL,retry_whenfailed=F,previousIDs=NULL) 
-{
+redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, NAoverwrite = F,config_options = NULL,retry_whenfailed=F,previousIDs=NULL) {
+  overwriteBehavior = ifelse(NAoverwrite,"overwrite","normal")
   start_time <- Sys.time()
   csvElements <- NULL
   if (missing(redcap_uri)) 
@@ -161,7 +162,7 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_o
   csv <- paste(csvElements, collapse = "\n")
   rm(csvElements, con)
   post_body <- list(token = token, content = "record", format = "csv", 
-                    type = "flat", data = csv, overwriteBehavior = "overwrite", 
+                    type = "flat", data = csv, overwriteBehavior = overwriteBehavior, 
                     returnContent = "ids", returnFormat = "csv")
   result <- httr::POST(url = redcap_uri, body = post_body, 
                        config = config_options)
@@ -223,7 +224,7 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_o
 }
 
 
-redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
+redcap_seq_uplaod<-function(ds=NULL,id.var=NULL,redcap_uri,token,batch_size=1000L) {
   ds_sp<-split(ds,do.call(paste,c(ds[id.var],sep="_")))
   gt <- lapply(ds_sp,function(gx){gx[!apply(gx,2,is.na)]})
   gt_u_names<-unique(lapply(gt,names))
@@ -234,7 +235,7 @@ redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
   })
   return(
     list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F),outcome_message = unlist(sapply(gyat,`[[`,"outcome_message"),use.names = F))
-         )
+  )
 }
 
 
@@ -351,7 +352,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,outp
         message("Starting new file...")
         cur.envir<-new.env(parent = emptyenv())
         allobjects<-c(protocol.n)
-        }
+      }
     } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
   
@@ -431,7 +432,7 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
     reload<-F
     online<-T
     forceupdate<-F
-    }
+  }
   
   if (reload | forceupdate) {
     bsrc.conredcap2(protocol = protocol,online=online,... = ...)
@@ -565,7 +566,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       raw <- raw[,which(!names(raw) %in% cal_vari)]
       calmove <- length(cal_vari)
     } else {calmove<-0}
-
+    
     new_raw<-rc_na_remove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
   }
