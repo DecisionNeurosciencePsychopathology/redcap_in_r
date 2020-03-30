@@ -535,6 +535,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       #Do offline version:
       message("Getting form data from saved RedCap data.")
       #Offline version is a bit problematic with check box thing; spliting the list of variables to get by if they are checkbox or not
+      lvariname <- lvariname[!lvariname %in% fix_variables]
       check_box_varis<-split(lvariname,metadata$field_type[match(lvariname, metadata$field_name)] == "checkbox")
       
       #Get a (fixed variables) and b (non-checkbox data)
