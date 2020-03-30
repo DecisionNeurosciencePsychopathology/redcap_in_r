@@ -170,29 +170,12 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     #funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
     #funbsrc<<-funbsrc
     #subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
-    
-    idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
-    names(idmatch)<-c('id','soloffid','redcapid')
-    if (!is.na(ID)){
-    if(any(ID %in% idmatch$soloffid | ID %in% idmatch$id)){
-      if(ID %in% idmatch$soloffid) {ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
-      else{ID<-as.character(idmatch$redcapid[which(idmatch$id==ID)])}
-    }
-    if (ID %in% maxevent$registration_redcapid) {
-      singleid<-maxevent[which(maxevent$registration_redcapid==ID),]
-      ids<-idmatch[which(idmatch$redcapid==ID),]
-      upload<-FALSE
-      print("Single ID mode will not refresh RedCap")
-      print(ids)
-      print(singleid)}}
-    
-    if (output) {return(maxevent) 
+    if (output) {return(maxevent)
       print("Here you go, you asked for it.")
     }
 
-    
     if (upload) {
-    result.maxevent<-REDCapR::redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
+    result.maxevent<-redcap_upload(maxevent,token = input.token,redcap_uri = input.uri,NAoverwrite = F,retry_whenfailed = T)
     return(result.maxevent)
     if (result.maxevent$success) {
       Print("Congrats, Upload was successful")}
