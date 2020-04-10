@@ -767,9 +767,16 @@ bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
   }
 }
 
-bsrc.matchIDDate <- function(dfx = NULL, db =NULL) {
-  
+bsrc.matchIDDate <- function(dfx = NULL, db =NULL,id.var="registration_redcapid") {
+  mapx<-bsrc.getIDDateMap(db = db)
+  dfx$ID_UNX <- paste(dfx[[id.var]],dfx$redcap_event_name,sep="-x-")
+  mapx$ID_UNX <- paste(mapx[[1]],mapx$redcap_event_name,sep="-x-")
+  dfy <- merge(dfx,mapx[c("ID_UNX","date")],by = "ID_UNX",all.x = T)
+  dfy$ID_UNX <- NULL
+  return(dfy)
 }
+
+
 
 #########################
 ### MATACH FUNCTIONS ####
