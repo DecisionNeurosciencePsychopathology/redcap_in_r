@@ -746,15 +746,29 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=
 }
 #####################################
 #Functions to get all data from given forms: 
-
-
-rc_na_checkboxremove<-function(raw){
-  message("By default, NA will replace '' and 0 in checkbox items")
-  raw[raw==""]<-NA
-  if (length(grep("___",names(raw))) > 0){
-    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
+  gMAPx<-bsrc.getEVTDATEFIELD(db = db)
+  all_gx<-do.call(rbind,lapply(unique(gMAPx$date_variname),function(x){
+    #print(x)
+    dx<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name[which(gMAPx$date_variname == x)]),
+                c(db$metadata$field_name[1],"redcap_event_name",x)]
+    names(dx)<-c(db$metadata$field_name[1],"redcap_event_name","date")
+    dx<-dx[which(dx$date!=""),]
+    dx<-dx[which(!is.na(dx$date)),]
+    if(nrow(dx)<1){return(NULL)}
+    dx$date_vari <- x
+    return(dx)
+  }))
+  rownames(all_gx)<-NULL
+  if(return_id_sp){
+    return(split(all_gx,all_gx[[1]]))
+  } else {
+    return(all_gx)
   }
-  return(raw)
+}
+
+bsrc.matchIDDate <- function(dfx = NULL, db =NULL) {
+  
 }
 
 #########################

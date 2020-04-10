@@ -55,75 +55,6 @@ bsrc.uploadcheck<-function(dfa=NULL,uniqueidvars=c("registration_redcapid","redc
 }
 ##########################
 
-change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
-  if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
-  
-  switch (protocol_name,
-          "PROTECT2" = {
-            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste("month",gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
-            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste("year",gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
-            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
-            dty$EVT<-gsub(".","",dty$EVT,fixed = T)
-            if(any(grepl("int",tolower(dty$EVT)))){
-              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
-                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
-              }
-              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
-            }
-          },
-          "NUM" = {
-            
-            dty$EVT[grepl("mo",tolower(dty$EVT))]<-as.numeric(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))])) / 12
-            dty$EVT[grepl("yr",tolower(dty$EVT))]<-as.numeric(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]))
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-0
-            dty$EVT[grepl("adda",tolower(dty$EVT))]<-"ADDA"
-            #dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
-          },
-          "PROTECT" = {
-            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"month","arm",arm_num,sep = "_")
-            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"year","arm",arm_num,sep = "_")
-            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional_",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
-            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
-            if(any(grepl("int",tolower(dty$EVT)))){
-              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
-                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
-              }
-              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
-            }
-          },
-          "NUM2PROTECT" = {
-            dty$EVT[dty$EVT == 0L] <- paste("baseline_arm",arm_num,sep="_")
-            dty$EVT[which(dty$EVT < 1)] <- paste(as.numeric(dty$EVT[which(dty$EVT < 1)])*12,"month","arm",arm_num,sep = "_")
-            even_yrs <- suppressWarnings(which(round(as.numeric(dty$EVT) / 0.5,0) == as.numeric(dty$EVT) / 0.5))
-            dty$EVT[even_yrs] <- paste(dty$EVT[even_yrs],"year","arm",arm_num,sep = "_")
-            dty$EVT[which(!grepl("arm",dty$EVT))] <- "ADDA"
-            
-            dty$EVT[grep("adda",tolower(dty$EVT))] <- paste0("ADDA",1:length(grep("adda",tolower(dty$EVT))))
-            
-            
-            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
-            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
-            
-          },
-          "SNAKE" = {
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")
-            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
-          },
-          "EYE_DECIDE" = {
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("idecide_arm",arm_num,sep="_")
-            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
-          },
-          "EXPLORE" = {
-            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("explore_arm",arm_num,sep="_")
-            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
-          }
-  )
-  
-  return(dty)
-}
-
 ########functions#######
 unpack<-function(dtx_r){
   gx<-list(
@@ -132,6 +63,15 @@ unpack<-function(dtx_r){
   )
   gx$map[gx$map=="NA" | gx$map=="NaN"]<-NA
   return(gx)
+}
+
+rc_na_checkboxremove<-function(raw){
+  message("By default, NA will replace '' and 0 in checkbox items")
+  raw[raw==""]<-NA
+  if (length(grep("___",names(raw))) > 0){
+    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+  }
+  return(raw)
 }
 
 getevt<-function(ID=NULL,CDATE=NULL,PROTONAME=NULL,sp_lookup=NULL){

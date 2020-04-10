@@ -70,6 +70,79 @@ get_drug<-function(drugname){
 }
 
 
+change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
+  if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
+  
+  switch (protocol_name,
+          "PROTECT2" = {
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste("month",gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste("year",gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
+            dty$EVT<-gsub(".","",dty$EVT,fixed = T)
+            if(any(grepl("int",tolower(dty$EVT)))){
+              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
+                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
+              }
+              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
+            }
+          },
+          "NUM" = {
+            
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-as.numeric(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))])) / 12
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-as.numeric(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]))
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-0
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-"ADDA"
+            #dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+          },
+          "PROTECT" = {
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste(gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"month","arm",arm_num,sep = "_")
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste(gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"year","arm",arm_num,sep = "_")
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional_",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
+            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+            if(any(grepl("int",tolower(dty$EVT)))){
+              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
+                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
+              }
+              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
+            }
+          },
+          "NUM2PROTECT" = {
+            dty$EVT[dty$EVT == 0L] <- paste("baseline_arm",arm_num,sep="_")
+            dty$EVT[which(dty$EVT < 1)] <- paste(as.numeric(dty$EVT[which(dty$EVT < 1)])*12,"month","arm",arm_num,sep = "_")
+            even_yrs <- suppressWarnings(which(round(as.numeric(dty$EVT) / 0.5,0) == as.numeric(dty$EVT) / 0.5))
+            dty$EVT[even_yrs] <- paste(dty$EVT[even_yrs],"year","arm",arm_num,sep = "_")
+            dty$EVT[which(!grepl("arm",dty$EVT))] <- "ADDA"
+            
+            dty$EVT[grep("adda",tolower(dty$EVT))] <- paste0("ADDA",1:length(grep("adda",tolower(dty$EVT))))
+            
+            
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT<-gsub(".","_",dty$EVT,fixed = T)
+            
+          },
+          "SNAKE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")
+          },
+          "EYE_DECIDE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("idecide_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda",tolower(dty$EVT))]<-paste("idecide_arm",arm_num,sep="_")
+          },
+          "LEARN" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("learn_scan_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda",tolower(dty$EVT))]<-paste("learn_scan_arm",arm_num,sep="_")
+          },
+          "EXPLORE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("explore_scan_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda",tolower(dty$EVT))]<-paste("explore_scan_arm",arm_num,sep="_")
+          }
+  )
+  
+  return(dty)
+}
+
 
 ##Transfer utility:
 
@@ -160,6 +233,7 @@ map_evt_single <- function(dfk=NULL,look_up=NULL,max_allowed=NULL,evt_allowed=NU
 # idmap = learn_idmap
 # idmap_id = "masterdemo_id"
 # metadata = protect$metadata
+# eventdata = protect$eventmap
 # target_ptc = ptcs$protect
 # ID_list = p2_only_ID
 # skip_check = F
@@ -171,12 +245,30 @@ map_evt_single <- function(dfk=NULL,look_up=NULL,max_allowed=NULL,evt_allowed=NU
 # x_data=NULL
 # error_outdir=NULL
 
+
+#No check example:
+x_data = xa
+id.var = "registration_redcapid"
+error_outdir= file.path(error_outdir,"IDDATEUPLOAD")
+idmap = learn_idmap
+idmap_id = "masterdemo_id"
+metadata = protect$metadata
+eventdata = protect$eventmap
+target_ptc = ptcs$protect
+ID_list = p2_only_ID
+skip_check = F
+toignore = TRUE
+exempt_code = c(999,99,"")
+
 upload_transfer<-function(xpath,x_data=NULL,eventdata=NULL,error_outdir=NULL,id.var=NULL,idmap=NULL,idmap_id=NULL,metadata=NULL,target_ptc=NULL,target_evt=NULL,ID_list=NULL,toignore=FALSE,skip_check=FALSE,exempt_code=NULL,look_up=NULL,max_allowed = 7) {
   #Read in data;
   if(is.null(x_data)){
     print(basename(xpath))
     if(!grepl(".csv$",xpath)){message("skip");return(NULL)}
     x_data<-read.csv(xpath,stringsAsFactors = F)
+  } else {
+    if(is.null(x_data_name)) {x_data_name<-paste0("upload_r",.Random.seed[round(rnorm(1,mean=300,sd=10),0)])}
+    xpath <- file.path(error_outdir,x_data_name)
   }
   if(is.null(error_outdir)){
     error_outdir = file.path(dirname(xpath),gsub(":","",gsub("-","",gsub(" ","_",Sys.time()))))
@@ -203,26 +295,32 @@ upload_transfer<-function(xpath,x_data=NULL,eventdata=NULL,error_outdir=NULL,id.
   fnames <- fnames[fnames!="INFO"]
   message(fnames)
   
-  evt_allowed <- eventdata$unique_event_name[eventdata$form %in% fnames]
-  df_tg_sp <- split(df_togo,df_togo$registration_redcapid)
+  if(!is.null(look_up)){
+    evt_allowed <- eventdata$unique_event_name[eventdata$form %in% fnames]
+    df_tg_sp <- split(df_togo,df_togo$registration_redcapid)
+    
+    dir.create(file.path(error_outdir,"EVT_Summary","Problems"),showWarnings = F,recursive = T)
+    if(fnames %in% c("neoffi")) {
+      max_allowed = Inf
+    }
+    multi_evt<-lapply(df_tg_sp,map_evt_single,look_up=look_up,max_allowed=max_allowed,evt_allowed=evt_allowed)
+    mevt_report_df<-data.frame(ID=sapply(multi_evt,`[[`,"ID"),
+                               code=sapply(multi_evt,`[[`,"code"),
+                               max_num=sapply(multi_evt,`[[`,"max_num"),stringsAsFactors = F)
+    df_togo <- do.call(rbind,lapply(multi_evt,`[[`,"output"))
+    df_leftover <- do.call(rbind,lapply(multi_evt,`[[`,"leftover_df"))
+    write.csv(mevt_report_df,file = file.path(error_outdir,"EVT_Summary",paste0(gsub(".csv","",basename(xpath)),"_EVT_SUMMARY.csv")),row.names = F)
+    if(!is.null(df_leftover) && nrow(df_leftover)>0 ){
+      write.csv(df_leftover,file = file.path(error_outdir,"EVT_Summary","Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_noevtmatch.csv")),row.names = F)
+    }
+    if(is.null(df_togo) || nrow(df_togo)<1 ){
+      return(NULL)
+    }
+    df_togo$redcap_event_name <- df_togo$EVT
+    
+  } 
   
-  dir.create(file.path(error_outdir,"EVT_Summary","Problems"),showWarnings = F,recursive = T)
-  multi_evt<-lapply(df_tg_sp,map_evt_single,look_up=look_up,max_allowed=max_allowed,evt_allowed=evt_allowed)
-  mevt_report_df<-data.frame(ID=sapply(multi_evt,`[[`,"ID"),
-                             code=sapply(multi_evt,`[[`,"code"),
-                             max_num=sapply(multi_evt,`[[`,"max_num"),stringsAsFactors = F)
-  df_togo <- do.call(rbind,lapply(multi_evt,`[[`,"output"))
-  df_leftover <- do.call(rbind,lapply(multi_evt,`[[`,"leftover_df"))
-  write.csv(mevt_report_df,file = file.path(error_outdir,"EVT_Summary",paste0(gsub(".csv","",basename(xpath)),"_EVT_SUMMARY.csv")),row.names = F)
-  if(!is.null(df_leftover) && nrow(df_leftover)>0 ){
-    write.csv(df_leftover,file = file.path(error_outdir,"EVT_Summary","Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_noidmatch.csv")),row.names = F)
-  }
-  if(is.null(df_togo) || nrow(df_togo)<1 ){
-    return(NULL)
-  }
-  df_togo$redcap_event_name <- df_togo$EVT
   do_multi <- length(unique(df_togo$redcap_event_name))>1
-  
   if (is.null(target_evt)) {
     target_evt <- unique(df_togo$redcap_event_name)
   }
@@ -242,7 +340,7 @@ upload_transfer<-function(xpath,x_data=NULL,eventdata=NULL,error_outdir=NULL,id.
     message("These variables are not included in the uploading because they have no match for any form on redcap. \n",
             paste(vari_ref_sp$`TRUE`$variable_name,collapse = ", "))
     write.csv(df_togo[c(id.var,vari_ref_sp$`TRUE`$variable_name)],
-              file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_no_form_matched.csv")),row.names = F)
+              file = file.path(error_outdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_no_form_matched.csv")),row.names = F)
     
   } else {
     message("Every variables are accounted for!")
@@ -293,7 +391,7 @@ upload_transfer<-function(xpath,x_data=NULL,eventdata=NULL,error_outdir=NULL,id.
     #Write out both non-NAs 
     if(any(!is.na(df_tg_v$DIFF$REF) & !is.na(df_tg_v$DIFF$NEW))){
       message("Value conflict identified")
-      write.csv(x = df_tg_v$DIFF[which(!is.na(df_tg_v$DIFF$REF) & !is.na(df_tg_v$DIFF$NEW)),],file = file.path(rootdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_valueconflict.csv")),row.names = F)
+      write.csv(x = df_tg_v$DIFF[which(!is.na(df_tg_v$DIFF$REF) & !is.na(df_tg_v$DIFF$NEW)),],file = file.path(error_outdir,"Problems",paste0(gsub(".csv","",basename(xpath)),"_problem_valueconflict.csv")),row.names = F)
     }
     
     if(!skip_check){
