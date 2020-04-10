@@ -247,18 +247,18 @@ map_evt_single <- function(dfk=NULL,look_up=NULL,max_allowed=NULL,evt_allowed=NU
 
 
 #No check example:
-x_data = xa
-id.var = "registration_redcapid"
-error_outdir= file.path(error_outdir,"IDDATEUPLOAD")
-idmap = learn_idmap
-idmap_id = "masterdemo_id"
-metadata = protect$metadata
-eventdata = protect$eventmap
-target_ptc = ptcs$protect
-ID_list = p2_only_ID
-skip_check = F
-toignore = TRUE
-exempt_code = c(999,99,"")
+# x_data = xa
+# id.var = "registration_redcapid"
+# error_outdir= file.path(error_outdir,"IDDATEUPLOAD")
+# idmap = learn_idmap
+# idmap_id = "masterdemo_id"
+# metadata = protect$metadata
+# eventdata = protect$eventmap
+# target_ptc = ptcs$protect
+# ID_list = p2_only_ID
+# skip_check = F
+# toignore = TRUE
+# exempt_code = c(999,99,"")
 
 upload_transfer<-function(xpath,x_data=NULL,eventdata=NULL,error_outdir=NULL,id.var=NULL,idmap=NULL,idmap_id=NULL,metadata=NULL,target_ptc=NULL,target_evt=NULL,ID_list=NULL,toignore=FALSE,skip_check=FALSE,exempt_code=NULL,look_up=NULL,max_allowed = 7) {
   #Read in data;
