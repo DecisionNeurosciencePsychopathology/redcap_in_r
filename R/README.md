@@ -1,5 +1,5 @@
 # BSRC
-Updated on Apr 12 2020
+README ongoing. Updated on Apr 12 2020
 
 ## Overview
 This package is used by the Longitudinal Research Program in Late-Life Suicide to manage and process our research data. 
