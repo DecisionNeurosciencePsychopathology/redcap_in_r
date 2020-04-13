@@ -69,66 +69,36 @@ is.empty<-function(...) {
   return(...=="")
 }
 
-
-
-
-redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5, retry_whenfailed=T,
-                         continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, 
-                         config_options = NULL) 
-{
-  start_time <- base::Sys.time()
-  if (base::missing(redcap_uri)) 
-    base::stop("The required parameter `redcap_uri` was missing from the call to `redcap_write()`.")
-  if (base::missing(token)) 
-    base::stop("The required parameter `token` was missing from the call to `redcap_write()`.")
-  #token <- REDCapR::sanitize_token(token)
-  ds_glossary <- REDCapR::create_batch_glossary(row_count = base::nrow(ds_to_write), 
-                                                batch_size = batch_size)
-  affected_ids <- character(0)
-  excluded_ids <- 
-    lst_status_code <- NULL
-  lst_outcome_message <- NULL
-  success_combined <- TRUE
-  message("Starting to update ", format(nrow(ds_to_write), 
-                                        big.mark = ",", scientific = F, trim = T), " records to be written at ", 
-          Sys.time())
-  for (i in seq_along(ds_glossary$id)) {
-    selected_indices <- seq(from = ds_glossary[i, "start_index"], 
-                            to = ds_glossary[i, "stop_index"])
-    if (i > 0) 
-    Sys.sleep(time = interbatch_delay)
-    message("Writing batch ", i, " of ", nrow(ds_glossary), 
-            ", with indices ", min(selected_indices), " through ", 
-            max(selected_indices), ".")
-    
-    write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,], previousIDs = NULL,retry_whenfailed = T,
-                                          redcap_uri = redcap_uri, token = token, verbose = verbose, 
-                                          config_options = config_options)
-    lst_status_code[[i]] <- write_result$status_code
-    lst_outcome_message[[i]] <- write_result$outcome_message
-    if (!write_result$success) {
-      error_message <- paste0("The `redcap_write()` call failed on iteration ", 
-                              i, ".")
-      error_message <- paste(error_message, ifelse(!verbose, 
-                                                   "Set the `verbose` parameter to TRUE and rerun for additional information.", 
-                                                   ""))
-      if (continue_on_error) 
-        warning(error_message)
-      else stop(error_message)
-    }
-    affected_ids <- c(affected_ids, write_result$affected_ids)
-    success_combined <- success_combined | write_result$success
-    excluded_ids <- c(excluded_ids, write_result$excludedIDs)
-    rm(write_result)
+###########################
+ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
+  proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
+  if(addNAtoNull){
+    allnames<-unique(unlist(lapply(proc_ls,names)))
+    proc_ls<-lapply(proc_ls,function(lsx){
+      lsx[allnames[which(!allnames %in% names(lsx))]]<-NA
+      return(lsx)
+    })
   }
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
-                                         units = "secs"))
-  status_code_combined <- paste(lst_status_code, collapse = "; ")
-  outcome_message_combined <- paste(lst_outcome_message, collapse = "; ")
-  excluded_ids <- excluded_ids[excluded_ids!=""]
-  return(list(success = success_combined, status_code = status_code_combined,excluded_ids=excluded_ids,
-              outcome_message = outcome_message_combined, records_affected_count = length(affected_ids), 
-              affected_ids = affected_ids, elapsed_seconds = elapsed_seconds))
+  proc_ls<-cleanuplist(proc_ls)
+  return(list(list=proc_ls,
+              df=do.call(rbind,proc_ls)))
+}
+######
+rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
+  if(mod) {
+    message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
+    #raw[raw==""]<-NA
+    if (length(grep("___",names(raw))) > 0){
+      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+    }
+    value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
+    
+    valid_nums<-which(rowSums(is.na(raw[value_vari])) <= (length(value_vari) - (at_least) ))
+    message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
+    raw_new <- raw[valid_nums,]
+  } else {raw_new <- raw}
+  
+  return(raw_new)
 }
 
 clean_str <- function(dfx,remove=T,replace_text="") {
@@ -145,139 +115,23 @@ clean_str <- function(dfx,remove=T,replace_text="") {
   return(list(original_df=dfx_back,clean_df=dfx,logical_df=logi_frame))
 }
 
-redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_options = NULL,retry_whenfailed=F,previousIDs=NULL) 
-{
-  start_time <- Sys.time()
-  csvElements <- NULL
-  if (missing(redcap_uri)) 
-    stop("The required parameter `redcap_uri` was missing from the call to `redcap_write_oneshot()`.")
-  if (missing(token)) 
-    stop("The required parameter `token` was missing from the call to `redcap_write_oneshot()`.")
-  #token <- REDCapR::sanitize_token(token)
-  con <- base::textConnection(object = "csvElements", open = "w", 
-                              local = TRUE)
-  utils::write.csv(ds, con, row.names = FALSE, na = "")
-  close(con)
-  csv <- paste(csvElements, collapse = "\n")
-  rm(csvElements, con)
-  post_body <- list(token = token, content = "record", format = "csv", 
-                    type = "flat", data = csv, overwriteBehavior = "overwrite", 
-                    returnContent = "ids", returnFormat = "csv")
-  result <- httr::POST(url = redcap_uri, body = post_body, 
-                       config = config_options)
-  status_code <- result$status_code
-  raw_text <- httr::content(result, type = "text")
+##########################
+tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
+  dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
+  dfx_var_melt[[var.left]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",1)
+  dfx_var_melt[[var.right]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",2)
+  dfx_var_melt$variable<-NULL
+  if (timepos=="right") {
+    timevar<-var.left
+    id.var<-c(id.var,var.right)
+  } else if (timepos=="left") {
+    timevar<-var.right
+    id.var<-c(id.var,var.left)
+  }
+  dfx_reshape<-reshape(dfx_var_melt,timevar = timevar,v.names = "value",idvar = id.var,direction = "wide")
+  names(dfx_reshape)<-gsub("value.","",names(dfx_reshape),fixed = T)
   
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
-                                         units = "secs"))
-  success <- (status_code == 200L)
-  if (success) {
-    elements <- unlist(strsplit(raw_text, split = "\\n"))
-    affectedIDs <- elements[-1]
-    recordsAffectedCount <- length(affectedIDs)
-    outcome_message <- paste0(format(recordsAffectedCount, 
-                                     big.mark = ",", scientific = FALSE, trim = TRUE), 
-                              " records were written to REDCap in ", round(elapsed_seconds, 
-                                                                           1), " seconds.")
-    raw_text <- ""
-  }
-  else {
-    if(retry_whenfailed){
-      outcome_message<-outcome_message <- paste0("The upload was not successful:\n", 
-                                                 raw_text,"\n","But we will try again...\n")
-      sp_rawtext<-strsplit(raw_text,split = "\\n")[[1]]
-      allgx<-lapply(sp_rawtext,function(x){xa<-strsplit(gsub("\"","",x),",")[[1]];})
-      mxID<-sapply(allgx,function(sp_rawtext){gsub("ERROR: ","",sp_rawtext[1])})
-      allIDs<-c(previousIDs,mxID)
-      negPos<-as.numeric(na.omit(sapply(allIDs,function(IDX){
-        #print(IDX)
-        a<-unique(which(ds==IDX,arr.ind = T)[,1]);
-        if(length(a)>0){a}else{NA}
-      })))
-      ds_new<-ds[-negPos,]
-      gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
-                                retry_whenfailed = T,previousIDs = allIDs,
-                                config_options = config_options)
-      raw_text<-paste(raw_text,gx$raw_text,sep = "re-try: ")
-      success<-gx$success
-      status_code<-gx$status_code
-      outcome_message<-paste(outcome_message,gx$outcome_message,sep = "re-try: ")
-      recordsAffectedCount<-gx$records_affected_count
-      affectedIDs<-gx$affected_ids
-      elapsed_seconds<-gx$elapsed_seconds
-      previousIDs<-gx$excludedIDs
-    } else {
-      affectedIDs <- numeric(0)
-      recordsAffectedCount <- NA_integer_
-      outcome_message <- paste0("The REDCapR write/import operation was not successful.  The error message was:\n", 
-                                raw_text)
-    }
-  }
-  if (verbose) 
-    message(outcome_message)
-  if (!is.null(previousIDs)){excludedIDs<-previousIDs}else {excludedIDs<-""}
-  return(list(success = success, status_code = status_code, 
-              outcome_message = outcome_message, records_affected_count = recordsAffectedCount, 
-              affected_ids = affectedIDs, elapsed_seconds = elapsed_seconds, excludedIDs = excludedIDs,
-              raw_text = raw_text))
-}
-
-
-redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
-  ds_sp<-split(ds,do.call(paste,c(ds[id.var],sep="_")))
-  gt <- lapply(ds_sp,function(gx){gx[!apply(gx,2,is.na)]})
-  gt_u_names<-unique(lapply(gt,names))
-  gt_u_index <- sapply(gt,function(gtx){match(list(names(gtx)),gt_u_names)})
-  gyat<-lapply(1:length(gt_u_names),function(g){
-    message("uploading ",g," out of ",length(gt_u_names))
-    redcap_write(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
-  })
-  return(
-    list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F),outcome_message = unlist(sapply(gyat,`[[`,"outcome_message"),use.names = F))
-         )
-}
-
-
-###############Get Event Mapping from RedCap:
-
-
-redcap.getreport<-function(redcap_uri, token, reportid = NULL, message = TRUE, config_options = NULL) {
-  start_time <- Sys.time()
-  if (missing(redcap_uri))  {
-    stop("The required parameter `redcap_uri` was missing from the call to `redcap.getreport`.") }
-  if (missing(token)) {
-    stop("The required parameter `token` was missing from the call to `redcap.getreport`.") }
-  #token <- REDCapR::sanitize_token(token)
-  post_body <- list(token = token, content = "report", format = "csv", report_id=as.character(reportid))
-  result <- httr::POST(url = redcap_uri, body = post_body, 
-                       config = config_options)
-  status_code <- result$status
-  success <- (status_code == 200L)
-  raw_text <- httr::content(result, "text")
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-  if (success) {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
-        silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {
-      outcome_message <- paste0("The data dictionary describing ", 
-                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
-                                " fields was read from REDCap in ", 
-                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
-                                status_code, ".")
-      raw_text <- ""} else {success <- FALSE
-      ds <- data.frame()
-      outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
-                                status_code, ".  The 'raw_text' returned was '", 
-                                raw_text, "'.")}
-  } else {
-    ds <- data.frame()
-    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
-                              raw_text)}
-  if (message){ 
-    message(outcome_message)}
-  return(list(data = ds, success = success, status_code = status_code, 
-              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
-              raw_text = raw_text))
+  return(dfx_reshape)
 }
 ##########################Switcher
 bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F,
@@ -322,9 +176,6 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
 
 ##########################
 
-
-
-
 #########################New Ver in DEV
 bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
@@ -351,7 +202,7 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,outp
         message("Starting new file...")
         cur.envir<-new.env(parent = emptyenv())
         allobjects<-c(protocol.n)
-        }
+      }
     } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
   
@@ -431,7 +282,7 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
     reload<-F
     online<-T
     forceupdate<-F
-    }
+  }
   
   if (reload | forceupdate) {
     bsrc.conredcap2(protocol = protocol,online=online,... = ...)
@@ -447,29 +298,6 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
   if(logicaloutput) {return(ifrun)}
 }
 
-
-rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
-  if(mod) {
-    message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
-    #raw[raw==""]<-NA
-    if (length(grep("___",names(raw))) > 0){
-      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
-    }
-    value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
-    
-    valid_nums<-which(rowSums(is.na(raw[value_vari])) <= (length(value_vari) - (at_least) ))
-    message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
-    raw_new <- raw[valid_nums,]
-  } else {raw_new <- raw}
-  
-  return(raw_new)
-}
-
-# 
-# iconv(dd, 
-#       from = "utf8", 
-#       to = "ASCII", 
-#       sub = "")
 
 
 ###############################
@@ -534,6 +362,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       #Do offline version:
       message("Getting form data from saved RedCap data.")
       #Offline version is a bit problematic with check box thing; spliting the list of variables to get by if they are checkbox or not
+      lvariname <- lvariname[!lvariname %in% fix_variables]
       check_box_varis<-split(lvariname,metadata$field_type[match(lvariname, metadata$field_name)] == "checkbox")
       
       #Get a (fixed variables) and b (non-checkbox data)
@@ -565,7 +394,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       raw <- raw[,which(!names(raw) %in% cal_vari)]
       calmove <- length(cal_vari)
     } else {calmove<-0}
-
+    
     new_raw<-rc_na_remove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
   }
@@ -707,8 +536,6 @@ bsrc.choice2checkbox<-function(dfx=NULL,metadata=NULL,cleanupog=T){
   return(dfx)
 }
 
-######
-
 ####Find duplicate RedCap IDs
 bsrc.findduplicate <- function(protocol = protocol.cur) {
   curdb<-bsrc.checkdatabase2(protocol = protocol)
@@ -748,65 +575,53 @@ bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T,protocol
   } else {message("unable to return based on input argument")}
   
 }
-#####################
-dnpl.bso.getsahx<-function(curdb=NULL) {
-  metd<-curdb$metadata
-  sahx<-bsrc.getform(formname = "suicide_history",curdb = curdb,mod = F,IDvar = "registration_redcapid")
-  varying<-names(sahx)[grep("[0-9]+",names(sahx))]
-  notvarying<-names(sahx)[-grep("[0-9]+",names(sahx))]
-  dfz<-tolong_multivalue(dfx = sahx, varying = varying, notvarying = notvarying,id.var = c("registration_redcapid"),
-                         var.left = "type",var.right="attempt",sep = "_at",timepos = "right")
-  dfe<-dfz[!is.na(dfz$sahx_sadate),]
-  idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_redcapid","registration_soloffid")]
-  dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
-  return(dff)
-}
+
 ###########################
-bsrc.getSUIHX_index<-function(sahx_df){
+bsrc.getSUIHX_index<-bsrc.sahx_index<-function(sahx_df){
   sui_names<-names(sahx_df)
-  index_df<-data.frame(names=sui_names,rxsim1=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
-  index_df$SingleEntry<-index_df$names==index_df$rxsim1
-  index_df$is_checkbox<-grepl("___",index_df$names)
-  index_df$root_names<-index_df$names;index_df$checkbox_names<-NA
+  index_df<-data.frame(vari_names=sui_names,attempt_num=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
+  index_df$single_entry<-index_df$vari_names==index_df$attempt_num
+  index_df$is_checkbox<-grepl("___",index_df$vari_names)
+  index_df$root_names<-index_df$vari_names;
   index_df$root_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
   index_df$checkbox_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$choice_name[index_df$is_checkbox] <- gsub(".*___","",index_df$vari_names[index_df$is_checkbox])
   index_df$root_names<-gsub("_at[0-9]*$","\\1",index_df$root_names)
-  return(index_df)
+  index_df$vari_to_use<-index_df$root_names
+  index_df$vari_to_use[index_df$is_checkbox]<-paste(index_df$root_names[index_df$is_checkbox],index_df$choice_name[index_df$is_checkbox],sep = "___")
+  #index_df$rxsim1<-NULL
+  index_df$index_num <- suppressWarnings(as.numeric(gsub("at","",index_df$attempt_num),warning=F))
 }
 
-###########################
-ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
-  proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
-  if(addNAtoNull){
-    allnames<-unique(unlist(lapply(proc_ls,names)))
-    proc_ls<-lapply(proc_ls,function(lsx){
-      lsx[allnames[which(!allnames %in% names(lsx))]]<-NA
-      return(lsx)
-    })
-  }
-  proc_ls<-cleanuplist(proc_ls)
-  return(list(list=proc_ls,
-              df=do.call(rbind,proc_ls)))
-}
-
-##########################
-tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
-  dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
-  dfx_var_melt[[var.left]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",1)
-  dfx_var_melt[[var.right]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",2)
-  dfx_var_melt$variable<-NULL
-  if (timepos=="right") {
-    timevar<-var.left
-    id.var<-c(id.var,var.right)
-  } else if (timepos=="left") {
-    timevar<-var.right
-    id.var<-c(id.var,var.left)
-  }
-  dfx_reshape<-reshape(dfx_var_melt,timevar = timevar,v.names = "value",idvar = id.var,direction = "wide")
-  names(dfx_reshape)<-gsub("value.","",names(dfx_reshape),fixed = T)
+bsrc.getMEDLS_index <- function(medlist_df) {
+  medlist_name <- names(medlist_df)
   
-  return(dfx_reshape)
 }
+
+
+bsrc.proc_multientry<-function(long_df=NULL,index_df=NULL,long_df_type = c("SUIHX","MEDLIST"),
+                               IDvar = "registration_redcapid",
+                               at_least=1){
+  #single_entry df:
+  SE_df <- long_df[index_df$vari_names[which(index_df$single_entry)]]
+  hx_mdf <- long_df[index_df$vari_names[which(!index_df$single_entry)]]
+  hx_mdf[[IDvar]]<-SE_df[[IDvar]]
+  hx_shdf<-do.call(rbind,lapply(1:max(index_df$index_num,na.rm = T),function(xa){
+    #print(xa)
+    sub_indx<-index_df[which(index_df$index_num == xa),]
+    sub_div<-hx_mdf[c(IDvar,sub_indx$vari_names)]
+    subm_div<-suppressMessages(rc_na_remove(raw = sub_div,mod = T,IDvar = IDvar,at_least = 1))
+    if(nrow(subm_div)>0){
+      names(subm_div)<-c(IDvar,sub_indx$vari_to_use)
+      subm_div$index_num <- xa
+      return(subm_div)
+    } else {return(NULL)}
+  }))
+  sp_shdf<-split(hx_shdf,hx_shdf[[IDvar]])
+  return(list(long_df = hx_shdf,list = sp_shdf))
+}
+
+
 ################# Universal Function to deal with checkbox items:
 bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T,cleandf=T,returnstring=F,collapse=",",...) {
   varionly<-dfx[grep(paste(variablename,"___",sep = ""),names(dfx))]
@@ -931,16 +746,37 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=
 }
 #####################################
 #Functions to get all data from given forms: 
-
-
-rc_na_checkboxremove<-function(raw){
-  message("By default, NA will replace '' and 0 in checkbox items")
-  raw[raw==""]<-NA
-  if (length(grep("___",names(raw))) > 0){
-    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
+  gMAPx<-bsrc.getEVTDATEFIELD(db = db)
+  all_gx<-do.call(rbind,lapply(unique(gMAPx$date_variname),function(x){
+    #print(x)
+    dx<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name[which(gMAPx$date_variname == x)]),
+                c(db$metadata$field_name[1],"redcap_event_name",x)]
+    names(dx)<-c(db$metadata$field_name[1],"redcap_event_name","date")
+    dx<-dx[which(dx$date!=""),]
+    dx<-dx[which(!is.na(dx$date)),]
+    if(nrow(dx)<1){return(NULL)}
+    dx$date_vari <- x
+    return(dx)
+  }))
+  rownames(all_gx)<-NULL
+  if(return_id_sp){
+    return(split(all_gx,all_gx[[1]]))
+  } else {
+    return(all_gx)
   }
-  return(raw)
 }
+
+bsrc.matchIDDate <- function(dfx = NULL, db =NULL,id.var="registration_redcapid") {
+  mapx<-bsrc.getIDDateMap(db = db)
+  dfx$ID_UNX <- paste(dfx[[id.var]],dfx$redcap_event_name,sep="-x-")
+  mapx$ID_UNX <- paste(mapx[[1]],mapx$redcap_event_name,sep="-x-")
+  dfy <- merge(dfx,mapx[c("ID_UNX","date")],by = "ID_UNX",all.x = T)
+  dfy$ID_UNX <- NULL
+  return(dfy)
+}
+
+
 
 #########################
 ### MATACH FUNCTIONS ####
