@@ -2,32 +2,37 @@
 setwd("~/Documents/redcap_in_r/Data meeting and cleaning/")
 source('~/Documents/github/UPMC/startup.R')
 ############startuptransfer#############
-rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/"
+rootdir="~/Box/skinner/data/Redcap Transfer/All protect data/neuropsych/"
 logdir="~/Documents/github/UPMC/TRANSFER/PT/dup_id/" # directory of folder to save duplicated IDs that are removed from database
-allsub<-read.csv(paste0(rootdir,"ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
-var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/FINAL-kexin_practice_pt2-BASELINE.csv',stringsAsFactors = FALSE) #should be list. you can choose from it is for bsocial or protect
+allsub<-read.csv(paste0("~/Box/skinner/data/Redcap Transfer/All protect data/ALL_SUBJECTS_PT.csv"),stringsAsFactors = F)
+var_map<-read.csv('~/Box/skinner/data/Redcap Transfer/variable map/FINAL-np_varmap.csv',stringsAsFactors = FALSE)
 var_map[which(var_map=="",arr.ind = T)]<-NA
 var_map<-unique(var_map)
-#var_map$baseline<-"TRUE"#temperary
-var_map$baseline<-as.logical(var_map$baseline)#temperary
-#var_map<-subset(var_map,!is.na(path)) # temperary remove all rows without paths 
-var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
-var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
+
+# temperary codes. Don't run 
+#var_map$baseline<-"TRUE"
+#var_map$baseline<-as.logical(var_map$baseline)
+#var_map<-subset(var_map,!is.na(path)) # temperarily remove all rows without paths 
+
+# modification for Ham. Don't run if not cleaning Ham 
+#var_map_ham<-subset(var_map,Form_name=="HRSD and BPRS") # seperate ham from ther var map 
+#var_map<-subset(var_map,!Form_name=="HRSD and BPRS") # var map w/o form HRSD and BPRS
+
 ## verify Morgan's var_map. 
-####for the col is.box. NA should mean represent unecessary variables. i.e. 
-# if redcap_var and access_var both exist, is.checkbox cannot be NA
-na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(curdb$data))]
+pt<-bsrc.checkdatabase2(protocol = ptcs$protect) # run this if want to check the correctness of var map 
+#### The col `is.checkbox`: NA means the var is unecessary
+# check1: if redcap_var and access_var both exist, is.checkbox cannot be NA
+na.omit(var_map$redcap_var)[which(!na.omit(var_map$redcap_var)%in%colnames(pt$data))]
 #var_map<-var_map[which(is.na(var_map$redcap_var)|var_map$redcap_var%in%colnames(curdb$data)),] #temperary remove rc var that cannot be found in the protect data
 chckmg<-subset(var_map,select = c('redcap_var','access_var'),is.na(is.checkbox))
 chckmg[which(!is.na(chckmg$redcap_var)&(!is.na(chckmg$access_var))),] #shoule give us nothing other than ID, MISSCODE, RATER
-# vice versa 
+# check2: vice versa 
 chckmg<-subset(var_map,select = c('redcap_var','access_var','is.checkbox','FIX'),!is.na(is.checkbox)&as.logical(FIX))
+sum(is.na(var_map$is.checkbox)) # #of unecessary variabels (based on rows. duplicates included) 
 #which(is.na(chckmg),arr.ind = T) # should give us nothing. if yes, try run the following line of code 
-sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
 #var_map$is.checkbox[which(is.na(var_map$redcap_var)&!var_map$is.checkbox)]<-NA
 #var_map$is.checkbox[which(is.na(var_map$access_var)&!var_map$is.checkbox)]<-NA
 #sum(is.na(var_map$is.checkbox)) #of unecessary variabels (based on rows. duplicates included)
-####remove all blank rows 
 
 #Initialize reports 
 log_out_of_range <- data.frame(id=as.character(),var_name=as.character(),wrong_val=as.character(),
@@ -42,20 +47,17 @@ log_branching <- data.frame(id=as.character(),var_name=as.character(),wrong_val=
                             which_form=as.character(),comments=as.character(),stringsAsFactors = F) # Report issues during combining forms 
 
 #####################################start of the function#########################################
-# rctransfer.dataclean <- function(
-# [VARIABLES]
-#curdb = bsoc
-#protocol.cur <- ptcs$bsocial
-#db = 
-pt<-bsrc.checkdatabase2(protocol = ptcs$protect)
-curdb=pt
+# rctransfer.formcleaning <- function(
+protocol.cur =  ptcs$protect
+curdb<-bsrc.checkdatabase2(protocol = protocol.cur)
 
 forms = NULL # A vector. must be exactly the same as the a subset of the form names in the variable mapping. Case sensitive. Space sensitive. 
-skipotherforms = TRUE
+skipotherforms = FALSE
 remove_dupid = FALSE # if T, remove all rows that involve duplicated IDs  
-replace_w_na = FALSE
+replace_w_na = TRUE
 #) {
 
+######## start of the cleaning process ##########
 # PREPARE variable: access forms
 all_formnm<-with(var_map,gsub(".csv","",unique(na.omit(path)))) #get all redcap formnames  
 if (is.null(forms)){
@@ -131,7 +133,7 @@ STEP1<-function(){
     RAWDATA[which(RAWDATA=="",arr.ind = T)]<-NA
     if(any(is.na(RAWDATA$ID)|is.na(RAWDATA$CDATE))){stop(message(paste("NA in ID or CDATE of RAWDATA. Form:",formname)))}
     if("CDATE"%in%colnames(RAWDATA)){ #if the dataframe has CDATE
-      readline(prompt = paste0("Enter any key to confirm CDATE '",RAWDATA[1,"CDATE"],"' is in format month date year.")) # confirm the format of CDATE
+      readline(prompt = paste0("Press enter to confirm CDATE '",RAWDATA[1,"CDATE"],"' is in format 'month date year'.")) # confirm the format of CDATE
       RAWDATA$CDATE<-mdy(RAWDATA$CDATE)
       RAWDATA$CDATECOPY<-RAWDATA$CDATE # create a col CDATECOPY so that after var mapping the form still has a col called CDATE 
       RAWDATA$IDDATE<-paste0(RAWDATA$ID,RAWDATA$CDATE)
@@ -240,11 +242,11 @@ STEP2<-function(){
       if (length(row_i)==0){
         cat(paste('Fixing issue "range_allowed" GOOD.:', formname,fixmap$redcap_var[step4_i],'are within the range (NA is allowed).\n'))
       }else{
-        log_out_of_range<-report_wrong(report = log_out_of_range,id=ifelse(ifbl,fresh_nonch[row_i,1],fresh_nonch[row_i,"IDDATE"]),which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
+        log_out_of_range<-report_wrong(report = log_out_of_range,id=ifelse(rep(ifbl,length(row_i)),fresh_nonch[row_i,1],fresh_nonch[row_i,"IDDATE"]),which_form = formname, which_var = fixmap$redcap_var[step4_i],wrong_val = thecol[row_i,1],
                                        comments = 'range_allowed')
         if(replace_w_na){ #Replace out-of-range values with NA 
           fresh_nonch[row_i,fixmap$redcap_var[step4_i]]<-NA
-          log_replace<-report_wrong(id=ifelse(ifbl,fresh_nonch[row_i,1],fresh_nonch[row_i,"IDDATE"]),which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "range_allowed": Out of the range.The value is replaced with NA',report = log_replace)
+          log_replace<-report_wrong(id=ifelse(rep(ifbl,length(row_i)),fresh_nonch[row_i,1],fresh_nonch[row_i,"IDDATE"]),which_var = fixmap$redcap_var[row_i], wrong_val = thecol[row_i,1],which_form = formname,comments = 'Fixing "range_allowed": Out of the range.The value is replaced with NA',report = log_replace)
           message('Fixing issue "range_allowed": Some values are out of range. Refer to log_out_of_range for more details. The out-of-range values are replcaed with NA.')}
       }}}}
   #STEP2.03 date: must be converted to date (YYYY-MM-DD)
@@ -296,7 +298,7 @@ STEP3<-function(){
     if(formname=="A_SCIDIV"){# if the the form is "A_SCIDIV", remove the whole row where the value is 0
       i0<-which(!((fresh_nonch[[j]] %in% rg) | is.na(fresh_nonch[[j]])) & fresh_nonch[[j]]==0) # if the wrong value is 0, remove the whole row; in the next step, remove these rows from checkbox df too
       #cat(j);print(i0);next()
-      if(length(i0>0)){log_replace<-report_wrong(id=fresh_nonch[i0,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i0,j], which_form = formname,comments = 'STEP3: Out of range values. The rows are removed.',report = log_replace)
+      if(length(i0>0)&replace_w_na){log_replace<-report_wrong(id=fresh_nonch[i0,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i0,j], which_form = formname,comments = 'STEP3: Out of range values. The rows are removed.',report = log_replace)
       message(paste("col#",j,":",length(i0),"rows are removed from",formname,"because many of them have 0 as an out-of-range value. Row#",fresh_nonch$rownum[i0],"\n"))
       deleted_rows<-rbind(deleted_rows,fresh_nonch[i0,])
       deletedrownum<-append(deletedrownum,fresh_nonch$rownum[i0])
@@ -315,13 +317,12 @@ STEP3<-function(){
     }else{
       log_out_of_range<-report_wrong(report = log_out_of_range,id=fresh_nonch[i,1],which_form = formname, which_var = colnames(fresh_nonch)[j],wrong_val = fresh_nonch[i,j],
                                      comments = paste0('Correct range: ', do.call('paste',as.list(rg)),'. Replaced with NA.'))
-      log_replace<-report_wrong(id=fresh_nonch[i,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'STEP3: Out of range values. Replaced with NA',report = log_replace)
+      if (replace_w_na){
+        log_replace<-report_wrong(id=fresh_nonch[i,"IDDATE"],which_var = colnames(fresh_nonch)[j], wrong_val = fresh_nonch[i,j], which_form = formname,comments = 'STEP3: Out of range values. Replaced with NA',report = log_replace)
+        fresh_nonch[i,j]<-NA
+      }
       message(paste0('Warn: Some values from ',formname," ", colnames(fresh_nonch)[j], ' are out of range. Refer to log_out_of_range for more details.'))
     }
-    # check 295.3 in scid s211 and 29..0 in scid_xii_c168
-    # check 
-    
-    fresh_nonch[i,j]<-NA
     #cat(paste(j,"done."))
   }
   fresh_nonch<<-fresh_nonch
