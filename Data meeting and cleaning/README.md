@@ -1,8 +1,7 @@
 # Access Forms Cleaning Pipeline (Protect)
-Revised on Jan 13 2020  
+Revised on Apr 6 2020  
 ## Setup 
-`rootdir`: Directory of the Access forms to be transferred  
-* Access form: in .csv format  
+`rootdir`: Directory of the Access forms to be transferred. Access form must be in .csv format  
 
 `logdir`: Directory of the folder to save duplicated IDs that are removed from database  
 
@@ -19,13 +18,15 @@ Revised on Jan 13 2020
     * If is.checkbox for CDATE is NA in a form, will get a warning message. 
     * if a non-checkbox access_var matches multiple redcap variables, get a warning message.  
 
-`allsub`: subjects of our lab  
+`allsub`: a .csv file that lists the IDs of all our participants 
+
+`forms`: a vetor that lists the forms to be cleaned. Form names must be exactly the same as the a subset of the form names in the variable map. Case sensitive. Space sensitive. Default is `Null`, in which case all forms will be cleaned. 
 
 `skipotherforms`: If `TRUE`, skip non-baseline forms  
 
 Logs: Out-of-range values, raplce, branching. The logs are initialized before cleaning the forms.   
 
-`curdb`: pt or bsoc  
+`protocol.cur
 
 Functions: 
 * `report_wrong()`: Functiont to report wrong values  
