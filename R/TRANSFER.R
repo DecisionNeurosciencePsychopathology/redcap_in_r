@@ -70,10 +70,10 @@ get_drug<-function(drugname){
 }
 
 
-change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
+change_evt<-function(dty,target_name,arm_num,evtvariname=NULL){
   if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
   
-  switch (protocol_name,
+  switch (target_name,
           "PROTECT2" = {
             dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste("month",gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
             dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste("year",gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
@@ -137,7 +137,16 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
           "EXPLORE" = {
             dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("explore_scan_arm",arm_num,sep="_")
             dty$EVT[grepl("^adda",tolower(dty$EVT))]<-paste("explore_scan_arm",arm_num,sep="_")
-          }
+          },
+          "PROTECT_RC2NUM" = {
+            dty$ARM_NUM <- sapply(strsplit(dty$EVT,split = "_"),function(x) {x[(grep("arm",x)+1)]})
+            dty$NUM_EVT <- gsub("_arm_.*","",dty$EVT)
+            #deal with baseline: 
+            dty$NUM_EVT[grepl("baseline",dty$NUM_EVT)] <- 0
+            dty$NUM_EVT[grepl("month",dty$NUM_EVT)] <- as.numeric(gsub("month_|_month","",dty$NUM_EVT[grepl("month",dty$NUM_EVT)]))
+            dty$NUM_EVT[grepl("year",dty$NUM_EVT)] <- as.numeric(gsub("_",".",gsub("year_|_year","",dty$NUM_EVT[grepl("year",dty$NUM_EVT)]),fixed = T)) * 12
+            dty[[evtvariname]] <- dty$EVT; dty$EVT <- NULL
+          } 
   )
   
   return(dty)

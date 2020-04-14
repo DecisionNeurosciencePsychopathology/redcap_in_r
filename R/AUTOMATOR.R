@@ -32,16 +32,15 @@
 #########################
 
 ######refresh######
-bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=F, upload=T,curdb=NULL,ID, ...) {
-  if (missing(ID)) {ID<-NA}
-  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+bsrc.refresh<-function (ptcs=ptcs,forceskip=F,forceupdate=F, output=F, upload=T, ...) {
+  curdb <-bsrc.checkdatabase2(protocol = ptcs$bsocial, forceskip = forceskip, forceupdate = forceupdate)
   funbsrc<-curdb$data
   funevent<-curdb$eventmap
   funstrc<-curdb$metadata
   ifrun<-curdb$success
-  protocol$redcap_uri->input.uri
-  protocol$token->input.token
-  if(upload) {print("By default the refresh function will always upload to RedCap")}
+  ptcs$bsocial$redcap_uri->input.uri
+  ptcs$bsocial$token->input.token
+  if(upload) {message("By default the refresh function will always upload to RedCap")}
   if (ifrun){
     #get info from registration
     subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
