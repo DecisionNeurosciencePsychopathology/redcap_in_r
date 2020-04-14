@@ -10,9 +10,9 @@ bsrc.score_this_form<-function(df_in=NULL,formname=NULL,...){
 
 # protect <- bsrc.checkdatabase2(protocol = ptcs$protect)
 # 
-df_in = bsrc.getform(formname = "ssi_scale_of_suicidal_ideation",curdb = protect)
+#df_in = bsrc.getform(formname = "ssi_scale_of_suicidal_ideation",curdb = protect)
 
-df_in<-bsrc.matchIDDate(dfx = df_in,db = protect)
+#df_in<-bsrc.matchIDDate(dfx = df_in,db = protect)
 
 
 score_bis36 <- function(df_in=NULL,...){
@@ -38,7 +38,6 @@ score_ssi_scale_of_suicidal_ideation <- function(df_in=NULL,aggregate_by_subj=FA
   df_out <- cbind(df_in[1:(min(grep("ssi_1",names(df_in)))-1)],dta)
   if(aggregate_by_subj) {
     df_out$date <- df_in$date
-
     df_out<-do.call(rbind,lapply(split(df_out,df_out$registration_redcapid),function(dfb){
       #message(unique(dfb$registration_redcapid))
       dff<-dfb[which.max(dfb$ssi_score_worst),c("registration_redcapid","ssi_score_worst","date")]
