@@ -10,12 +10,48 @@ bsrc.score_this_form<-function(df_in=NULL,formname=NULL,...){
 
 # protect <- bsrc.checkdatabase2(protocol = ptcs$protect)
 # 
-# df_in = bsrc.getform(formname = "uppsp",curdb = protect)
+df_in = bsrc.getform(formname = "ssi_scale_of_suicidal_ideation",curdb = protect)
+
+df_in<-bsrc.matchIDDate(dfx = df_in,db = protect)
+
 
 score_bis36 <- function(df_in=NULL,...){
   message("This version of the scoring will only consider the 30 items that are in the \n 
           actual BIS-11, this leave out 6 items  ")
   return(df_in)
+}
+
+score_ssi_scale_of_suicidal_ideation <- function(df_in=NULL,aggregate_by_subj=FALSE,agg_func=max(),...){
+  if(is.null(df_in$date) && aggregate_by_subj) {
+    aggregate_by_subj <- FALSE
+    message("df_in object must include date variable to enable aggregating SSI by subject, disabled for now.")
+  } 
+  vari_name <- c("ssi_1","ssi_2","ssi_3","ssi_4","ssi_5","ssi_6","ssi_7","ssi_8","ssi_9","ssi_10","ssi_11","ssi_12","ssi_13","ssi_14","ssi_15","ssi_16","ssi_17","ssi_18","ssi_19")
+  type_name <- c("worst","curr")
+  dta<-data.frame(do.call(cbind,lapply(type_name,function(xa){
+    dat <- df_in[paste(vari_name,xa,sep = "_")]
+    #doing | statment becasue %in% c('') doesn't work 
+    dat[dat == "" | dat == "na" | dat == "refuse" | dat == "dk"] <- NA
+    apply(dat,1,function(x){sum(as.numeric(x),na.rm = T)})  
+  })))
+  names(dta) <- paste("ssi_score",type_name,sep = "_")
+  df_out <- cbind(df_in[1:(min(grep("ssi_1",names(df_in)))-1)],dta)
+  if(aggregate_by_subj) {
+    df_out$date <- df_in$date
+
+    df_out<-do.call(rbind,lapply(split(df_out,df_out$registration_redcapid),function(dfb){
+      #message(unique(dfb$registration_redcapid))
+      dff<-dfb[which.max(dfb$ssi_score_worst),c("registration_redcapid","ssi_score_worst","date")]
+      names(dff) <- c("registration_redcapid","ssi_score_worst_lifetime","ssi_wl_date")
+      dfh<-dfb[which(dfb$date==max(dfb$date,na.rm = T)),c("ssi_score_curr","date")]
+      if(nrow(dfh)<1){dfh[1,]<-NA} 
+      names(dfh) <- c("ssi_score_most_recent","ssi_mr_date")
+      dfe <- cbind(dff,dfh)
+      return(dfe)
+    }))
+    
+  }
+  return(df_out)
 }
 
 score_uppsp <- function(df_in=NULL,...){
