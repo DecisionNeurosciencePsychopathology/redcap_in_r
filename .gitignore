@@ -1,4 +1,11 @@
 .Rproj.user
 .Rhistory
+.Rproj
 .RData
 .Ruserdata
+.tmp
+.DS_Store
+Data meeting and cleaning/.gitignore
+no_ptcs.csv
+redcap_in_r.Rproj
+shark1.RData
