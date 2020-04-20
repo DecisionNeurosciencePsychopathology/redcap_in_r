@@ -10,8 +10,14 @@ proc_neuropsy_s <- function(dfx){
   )
 
   indx_dt<-lapply(vari_index,function(x){
-    unique(dfx[x])
+    dfy<-unique(dfx[x])
+    if(exists("ID",dfy)){
+      dfy <- dfy[!duplicated(dfy[1:2]),]
+    }
+    return(dfy)
   })
+
+
 
   de_uq <- as.Date(indx_dt$de_varis$DE)
   index_df_match<-data.frame(cdate = as.Date(indx_dt$cdate_varis$CDATE),de=as.Date(NA),stringsAsFactors = F)
@@ -69,4 +75,5 @@ if(length(which(info_df$de - info_df$cdate < 0))){
 }
 
 message("The following have DE / CDATE difference more than 100 days: ")
+info_df$days_to_enter <- info_df$de - info_df$cdate
 info_df[which(info_df$de - info_df$cdate > 100),]
