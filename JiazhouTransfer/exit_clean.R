@@ -3,7 +3,7 @@
 all_exit <- readxl::read_xlsx("~/Box/skinner/data/Redcap\ Transfer/All\ protect\ data/neuropsych/PROTECT_EXIT.xlsx")
 all_exit_sp <- split(all_exit, all_exit$ID)
 proc_neuropsy_s <- function(dfx){
-  stoppoint = 6
+  stoppoint = 5
   vari_index <- list(
     cdate_varis = names(dfx)[1:stoppoint],
     de_varis = names(dfx)[(stoppoint+1):length(dfx)]
