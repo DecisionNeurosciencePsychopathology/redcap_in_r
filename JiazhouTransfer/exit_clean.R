@@ -16,7 +16,7 @@ proc_neuropsy_s <- function(dfx){
   de_uq <- as.Date(indx_dt$de_varis$DE)
   index_df_match<-data.frame(cdate = as.Date(indx_dt$cdate_varis$CDATE),de=as.Date(NA),stringsAsFactors = F)
 
-  for (i in 1:nrow(index_df)){
+  for (i in 1:nrow(index_df_match)){
     diff_q <- de_uq - index_df_match$cdate[i]
     if(length(which(diff_q > 0))>0){
       pos_m <- which(diff_q == min(diff_q[diff_q > 0]))
