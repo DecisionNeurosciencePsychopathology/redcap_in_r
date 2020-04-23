@@ -8,10 +8,9 @@ bsrc.score_this_form<-function(df_in=NULL,formname=NULL,...){
   return(do.call(score_func,argu))
 }
 
-# protect <- bsrc.checkdatabase2(protocol = ptcs$protect)
+ #protect <- bsrc.checkdatabase2(protocol = ptcs$protect)
 #
-#df_in = bsrc.getform(formname = "ssi_scale_of_suicidal_ideation",curdb = protect)
-
+#df_in = bsrc.getform(formname = "uppsp",curdb = protect)
 #df_in<-bsrc.matchIDDate(dfx = df_in,db = protect)
 
 
@@ -55,15 +54,17 @@ score_ssi_scale_of_suicidal_ideation <- function(df_in=NULL,aggregate_by_subj=FA
 
 score_uppsp <- function(df_in=NULL,...){
   df_sc <- df_in[names(df_in) %in% c("registration_redcapid","redcap_event_name")]
-  #it's just me being lazy ;_;
 
-  list(
+  #For convient sake, we
+  index<-list(
     negative_urgency = c(2.5,7.5,12.5,17.5,22.5,29.5,34.5,39.5,44.5,50.5,53, 58.5),
     positive_urgency = c(5.5,10.5,15.5,20.5,25.5,30.5,35.5,40.5,45.5,49.5,52.5,54.5,57.5,59.5),
     sensation_seeking = c(3.5,8.5,13.5,18.5,23.5,26.5,31.5,36.5,41.5,46.5,51.5,56.5),
     premeditation =c(1,6,11,16,21,28,33,38,43,48,55),
     perseverance = c(4,9.5,14,19,24,27,32,37,42,47.5)
   )
+  neg_varis<-as.character(unlist(index))[grepl(".5",as.character(unlist(index)),fixed = T)]
+
 }
 
 score_neoffi <- function(df_in=NULL,return_subscale=F,...){
