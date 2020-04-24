@@ -95,7 +95,7 @@ bsrc.admin.biweekly<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$maste
       nmrisc<-mrisc[which(!mrisc$registration_redcapid %in% merged$registration_redcapid),]
       merged<-merge(merged,nmrisc,all = T)
     }
-    merged[merged==""]<-NA
+    #merged[merged==""]<-NA
     merged$`Event`<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {x[x==""]<-NA;which(x==max(x,na.rm=T))}[1])]
     merged$`Event Date`<-apply(merged[-grep("registration_redcapid|Event",names(merged))],1,max,na.rm=T)
     merged.simp<-subset(merged,select = c("registration_redcapid","Event","Event Date"))
