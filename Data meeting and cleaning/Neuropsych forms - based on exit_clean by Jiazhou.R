@@ -88,12 +88,10 @@ get_cleaned_access_form<-function(all_df=NULL,filename = "PROTECT_EXIT", stoppoi
   return(final_df)
 }
 
+library(tidyverse)
 cleaned_exit<-get_cleaned_access_form()
 all_wtar<-readxl::read_xlsx("~/Box/skinner/data/Redcap\ Transfer/NP DATAPULL/dbo_A_WTAR.xlsx")
 cleaned_wtar<-get_cleaned_access_form(all_df = all_wtar,filename = "dbo_A_WTAR",2,3)
-
-cleaned_wtar %>% add_count(ID) %>% filter(n>1) %>% view()
-
 
 ## CLEAN ACCESS FORMS TO BE CLEANED 
 #startup
@@ -602,15 +600,39 @@ for (form_i in 1:length(forms)) {
     if(!is.null(acvar_chk)){STEP4()}
     STEP5();STEP6()
     assign(paste0("form_",formname),unique(fresh_alldata))
-    write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/form_",formname,"_",Sys.Date(),".csv"))
-    #  write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm_",form_i,".csv"))
-    #  write.csv(unique(log_out_of_range),file = paste0("~/Documents/github/UPMC/TRANSFER/log_out_of_range_",form_i,".csv"))
-    #  write.csv(unique(log_replace),file = paste0("~/Documents/github/UPMC/TRANSFER/log_replace_",form_i,".csv"))
+    #write.csv(unique(fresh_alldata),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/form_",formname,"_",Sys.Date(),".csv"))
   }} 
 
-# check double entries across forms (dbentry)
-#full_join the columns of two forms by IDDATE or ID, get the rows where both cols have values
-dbentry<-subset(dbentry,access_var%in%c("RATER","Q3","Q3a","Q3NEW","Q3aNEW",))
+# WTAR: keep data that is closest to a pt's earliest consent date 
+PT_condate<-md$data %>% 
+  mutate_all(~replace(.,.=="",NA)) %>% 
+  select(1, starts_with("registration_ptcstat___protect"),starts_with("reg_condate_protect")) %>%
+  filter_at(vars(starts_with("registration_ptcstat")),any_vars(.>0)) %>% 
+  mutate_at(vars(starts_with("reg_condate")),~as.Date(.)) %>% 
+  select(1,starts_with("reg_condate")) %>%
+  pivot_longer(-1,names_to = "protocol",names_prefix = "reg_condate_",values_to = "condate",values_drop_na = T) %>% 
+  group_by(registration_redcapid) %>% slice(which.min(condate)) %>% ungroup()
+
+BS_condate<-md$data %>% 
+  mutate_all(~replace(.,.=="",NA)) %>% 
+  select(1, registration_ptcstat___bsocial,reg_condate_bsocial) %>%
+  filter(registration_ptcstat___bsocial>0) %>% 
+  mutate_at(vars(starts_with("reg_condate")),~as.Date(.)) %>% 
+  select(1,starts_with("reg_condate")) %>%
+  pivot_longer(-1,names_to = "protocol",names_prefix = "reg_condate_",values_to = "condate",values_drop_na = T) %>% 
+  group_by(registration_redcapid) %>% slice(which.min(condate)) %>% ungroup()
+  
+form_WTAR_PT<-form_WTAR %>% as.data.frame() %>% bsrc.findid(idmap,"registration_redcapid") %>% 
+    inner_join(PT_condate,by=c("masterdemoid"="registration_redcapid")) %>% 
+    mutate(wtar_date=as.Date(wtar_date)) %>% 
+    group_by(registration_redcapid) %>% slice(which.min(wtar_date-condate)) %>% ungroup()
+
+form_WTAR_BS<-form_WTAR %>% as.data.frame() %>% bsrc.findid(idmap,"registration_redcapid") %>% 
+  inner_join(BS_condate,by=c("masterdemoid"="registration_redcapid")) %>% 
+  mutate(wtar_date=as.Date(wtar_date)) %>% 
+  group_by(registration_redcapid) %>% slice(which.min(wtar_date-condate)) %>% ungroup()
+write.csv(form_WTAR_PT,file = paste0("~/Documents/github/UPMC/TRANSFER/exit wtar mdrs/form_WTAR_PT_",Sys.Date(),".csv"))
+write.csv(form_WTAR_BS,file = paste0("~/Documents/github/UPMC/TRANSFER/exit wtar mdrs/form_WTAR_BS_",Sys.Date(),".csv"))
 
 #write.csv(unique(log_branching),file = paste0("~/Documents/github/UPMC/TRANSFER/PT/log_branching_scidiv_",Sys.Date(),".csv")) #temperary
 #write.csv(unique(log_comb_fm),file = paste0("~/Documents/github/UPMC/TRANSFER/log_comb_fm.csv"))
