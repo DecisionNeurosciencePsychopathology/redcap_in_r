@@ -35,6 +35,38 @@
 percent <- function(x, digits = 2, format = "f", ...) {
   paste0(formatC(100 * x, format = format, digits = digits, ...), "%")
 }
+##########################Graph missiness:
+bsrc.graph_missingness <- function(ptc = NULL,form_names = NULL, output_graphic = FALSE,output_dir=pwd()) {
+  curdb <- bsrc.checkdatabase2(protocol = ptc)
+  p_dates <- bsrc.getIDDateMap(db = protect)
+  p_dates$date<-as.Date(p_dates$date)
+  p_con_date <- aggregate(date~registration_redcapid,data = p_dates,FUN = min)
+  gx<-lapply(form_names,function(fname){
+    df_in <- bsrc.getform(protocol = ptcs$protect,formname = fname,curdb = protect)
+    df_in <- bsrc.matchIDDate(dfx = df_in,db = curdb)
+    df_in$date <- as.Date(df_in$date)
+    df_in$earliest_date <- as.Date(p_con_date$date[match(df_in$registration_redcapid,p_con_date$registration_redcapid)])
+    df_in <- df_in[order(df_in$earliest_date),]
+    df_in$registration_redcapid<-factor(df_in$registration_redcapid,levels = unique(df_in$registration_redcapid))
+    p<-ggplot(df_in,aes(y=date,x=registration_redcapid)) + geom_point() + theme(axis.text.x=element_blank()) +
+      ggtitle(paste0("Missingness graph: ",fname))
+    if(output_graphic) {
+      ggsave(plot = p,filename = file.path(output_dir,paste0("miss_",fname,".pdf")),device = "pdf")
+    }
+    return(p)
+  })
+  names(gx) <- form_names
+  gxt <- gx
+  gxt$newpage=TRUE
+  p_all <- do.call(gridExtra::grid.arrange,gxt)
+  if(output_graphic) {
+    ggsave(plot = p_all,filename = file.path(output_dir,paste0("miss_","all_forms",".pdf")),device = "pdf")
+  }
+  gx$all_forms <- p_all
+  return(gx)
+}
+
+
 ###########################Bi-Weekly Meeting Sheet:
 bsrc.admin.biweekly<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$masterdemo,days=14,n_month_to_get=2,exportpath=NA, curdb=NULL,...){
   if (is.null(curdb)){
