@@ -1,5 +1,6 @@
 #Ksocial
 ksocial <- bsrc.checkdatabase2(ptcs$ksocial,forceupdate = T)
+mdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T)
 
 regi <- bsrc.getform(curdb = ksocial,formname = "registration_and_termination")
 K_cons_IDs <- as.numeric(regi$registration_redcapid); IDs <- IDs[!is.na(IDs)]
@@ -8,11 +9,17 @@ k_scanned <- bsrc.getform(curdb=ksocial,formname = "fmri_prescan_form",at_least 
 k_scan_ID <- k_scanned$registration_redcapid
 
 b_scanned <- bsrc.getform(protocol = ptcs$bsocial,formname = "fmri_session_checklist")
-kb_scan_ID <- b_scanned$registration_redcapid[b_scanned$registration_redcapid %in% K_cons_IDs]
+kb_scan_ID_df <- b_scanned[b_scanned$registration_redcapid %in% K_cons_IDs,c("registration_redcapid","mricheck_scanneddate")]
+kb_scan_ID_df<-kb_scan_ID_df[order(as.Date(kb_scan_ID_df$mricheck_scanneddate)),]
+kb_scan_ID_df$GROUP <- mdemo$registration_group[match(kb_scan_ID_df$registration_redcapid ,mdemo$registration_redcapid)]
+
+kb_scan_ID <-c(kb_scan_ID_df$registration_redcapid[kb_scan_ID_df$GROUP=="HC"][1:15],                     #The HC first 15
+               kb_scan_ID_df$registration_redcapid[kb_scan_ID_df$GROUP!="HC"] #The not HCs
+               )
 
 kb_scanned_joinIDs <- unique(c(k_scan_ID,kb_scan_ID))
 
-mdemo <- bsrc.getform(protocol = ptcs$masterdemo,formname = "record_registration",online = T)
+
 mdemo <- bsrc.checkbox(variablename = "registration_race",dfx = mdemo)
 vri_indx <- data.frame(num=c(1:5,999),txt = c("AmInd","Asian","Black","HawaPaci","White","Unwilling"),stringsAsFactors = F)
 mdemo$registration_race <- sapply(mdemo$registration_race,function(x){ifelse(length(x)>1,"Mixed",vri_indx$txt[match(x,vri_indx$num)])})
