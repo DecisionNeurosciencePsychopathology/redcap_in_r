@@ -87,7 +87,8 @@ ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
 rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
   if(mod) {
     message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
-    #raw[raw==""]<-NA
+    #did not use raw directly because possible conflict with Date class
+    raw[as.data.frame(apply(raw,2,as.character))==""]<-NA
     if (length(grep("___",names(raw))) > 0){
       raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
     }
@@ -393,8 +394,7 @@ bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curd
       message("Calculated fields are excluded. Set no_calc to FALSE to include them.")
       cal_vari<-tempch$field_name[which(tempch$field_type=="calc")]
       raw <- raw[,which(!names(raw) %in% cal_vari)]
-      calmove <- length(cal_vari)
-    } else {calmove<-0}
+    }
 
     new_raw<-rc_na_remove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
