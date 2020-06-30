@@ -85,19 +85,20 @@ ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
 }
 ######
 rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
-  if(mod) {
-    message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
-    #did not use raw directly because possible conflict with Date class
-    raw[as.data.frame(apply(raw,2,as.character))==""]<-NA
-    if (length(grep("___",names(raw))) > 0){
-      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
-    }
-    value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
+  if(!mod) {return(raw)}
+  message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
+  #did not use raw directly because possible conflict with Date class
+  raw[as.data.frame(apply(raw,2,as.character))==""]<-NA
 
-    valid_nums<-which(rowSums(is.na(raw[value_vari])) <= (length(value_vari) - (at_least) ))
-    message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
-    raw_new <- raw[valid_nums,]
-  } else {raw_new <- raw}
+  if (length(grep("___",names(raw))) > 0){
+    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+  }
+  value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
+  valid_nums<-which(rowSums(is.na(raw[value_vari])) <= (length(value_vari) - (at_least) ))
+
+  message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
+  raw_new <- raw[valid_nums,]
+
 
   return(raw_new)
 }
