@@ -5,26 +5,26 @@
 #---
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
 #Version 1.6 & 1.6.1 Changelog:
-  #Revision to refresh function to be compatible with the new data organization method
-  #Refresh function and backup function now fully functional when used in Automator
+#Revision to refresh function to be compatible with the new data organization method
+#Refresh function and backup function now fully functional when used in Automator
 #Version 1.5:
-  #Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
-  #Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
-  #Updated the bsrc.backup() to use new mech to grab date since creataion of files
-  #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed.
-  #Remove the main script from AUTOMATOR so that it only contains functions
-  #Just some updates to the good old bsrc.refresh()
-  #bsrc.refresh() gains the update to fMRI status function
-  #bsrc.refresh() gains the update to EMA protocl and latest IPDE function
+#Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
+#Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
+#Updated the bsrc.backup() to use new mech to grab date since creataion of files
+#Updated bsrc.refresh() to skip 6 mon if 3 mon is completed.
+#Remove the main script from AUTOMATOR so that it only contains functions
+#Just some updates to the good old bsrc.refresh()
+#bsrc.refresh() gains the update to fMRI status function
+#bsrc.refresh() gains the update to EMA protocl and latest IPDE function
 
 #Version 1:
-  #1/1 start up function:
-  #jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
-  #1/1 REFRESH main function, now with single ID mode:
-  #Force update, force run, if output maxevent db, if upload
-  #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
-  #0/0 MetricWire Data Grab and progress update: #See Ecologist Re; bsrc.ema.main
-  #1/1 EMA and MRI status update
+#1/1 start up function:
+#jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
+#1/1 REFRESH main function, now with single ID mode:
+#Force update, force run, if output maxevent db, if upload
+#1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
+#0/0 MetricWire Data Grab and progress update: #See Ecologist Re; bsrc.ema.main
+#1/1 EMA and MRI status update
 
 #########################
 ##  Project AUTOMATOR  ##
@@ -102,7 +102,8 @@ bsrc.refresh<-function (ptcs=ptcs,forceskip=F,forceupdate=F, output=F, upload=T,
     maxevent<-merge(maxevent,ipdedate,all = T)
 
     #rename variables:
-    names(maxevent)<-c("registration_redcapid","registration_consentdate","prog_cage","prog_endor","prog_endor_y","prog_l_visitdate","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_latestipdes_cm","prog_latestipdes_dx")
+    names(maxevent)<-c("registration_redcapid","registration_consentdate","prog_cage","prog_endor","prog_endor_y","prog_l_visitdate","prog_lastfollow",
+                       "prog_diff","prog_endorfu","prog_latestipdedate","prog_latestipdes_cm","prog_latestipdes_dx")
 
     #For fMRI Status:
     #Dates:
@@ -177,12 +178,12 @@ bsrc.refresh<-function (ptcs=ptcs,forceskip=F,forceupdate=F, output=F, upload=T,
     }
 
     if (upload) {
-    result.maxevent<-redcap_upload(maxevent,token = input.token,redcap_uri = input.uri,NAoverwrite = F,retry_whenfailed = T)
-    return(result.maxevent)
-    if (result.maxevent$success) {
-      Print("Congrats, Upload was successful")}
-    else ("Something went wrong during uploading, double check")
-  }
+      result.maxevent<-redcap_upload(maxevent,token = input.token,redcap_uri = input.uri,NAoverwrite = F,retry_whenfailed = T)
+      return(result.maxevent)
+      if (result.maxevent$success) {
+        Print("Congrats, Upload was successful")}
+      else ("Something went wrong during uploading, double check")
+    }
   }
 }
 
@@ -192,31 +193,30 @@ bsrc.refresh<-function (ptcs=ptcs,forceskip=F,forceupdate=F, output=F, upload=T,
 bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path=NULL,clean=T,expiration=30,...) {
   protocol$rdpath->rdpath
   if (is.null(curdb)){
-  curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+    curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
   funbsrc<-curdb$data
-  ifrun<-curdb$success
   if (is.null(path)) {
-    if(is.null(rdpath)){
-    path<-paste(paste(strsplit(rdpath,.Platform$file.sep)[[1]][1:(length(strsplit(rdpath,.Platform$file.sep)[[1]])-1)],collapse = .Platform$file.sep),"Backup",sep = .Platform$file.sep)
-    print("Default Location is BOXSYNC")
+    if(!is.null(rdpath)){
+      path<-paste(paste(strsplit(rdpath,.Platform$file.sep)[[1]][1:(length(strsplit(rdpath,.Platform$file.sep)[[1]])-1)],collapse = .Platform$file.sep),"Backup",sep = .Platform$file.sep)
+      print("Default Location is BOXSYNC")
     } else {stop("No Path")}
-    }
-  if (ifrun) {
-    backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
-    topath<-paste(path,backupname,sep = "/")
-    file.copy(from = rdpath, to = topath, overwrite = T)
+  }
+
+  backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
+  topath<-paste(path,backupname,sep = "/")
+  file.copy(from = rdpath, to = topath, overwrite = T)
 
 
-    lfile<-list.files(path=path,pattern="*RAW.rdata")
-    yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
-    delfile<-lfile[which(yur>expiration)]
-    if (clean & length(delfile)>0) {
-      print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
-      print("Removing old files")
-      delfile<-paste(path,delfile,sep="/")
-      file.remove(delfile)
-    }
-  print("DONE")
+  lfile<-list.files(path=path,pattern="*RAW.rdata")
+  yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
+  delfile<-lfile[which(yur>expiration)]
+  if (clean & length(delfile)>0) {
+    print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
+    print("Removing old files")
+    delfile<-paste(path,delfile,sep="/")
+    file.remove(delfile)
+
+    print("DONE")
   }
 }
 
