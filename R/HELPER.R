@@ -9,19 +9,29 @@ bsrc.getEVTDATEFIELD<-function(protocol,db=NULL) {
 }
 
 
-
+bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
+  gMAPx<-bsrc.getEVTDATEFIELD(db = db)
+  all_gx<-do.call(rbind,lapply(unique(gMAPx$date_variname),function(x){
+    #print(x)
+    dx<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name[which(gMAPx$date_variname == x)]),
+                c(db$metadata$field_name[1],"redcap_event_name",x)]
+    names(dx)<-c(db$metadata$field_name[1],"redcap_event_name","date")
+    dx<-dx[which(dx$date!=""),]
+    dx<-dx[which(!is.na(dx$date)),]
+    if(nrow(dx)<1){return(NULL)}
+    dx$date_vari <- x
+    return(dx)
+  }))
+  rownames(all_gx)<-NULL
+  if(return_id_sp){
+    return(split(all_gx,all_gx[[1]]))
+  } else {
+    return(all_gx)
+  }
+}
 
 bsrc.idevtdatemap<-function(protocol=NULL,rcIDvar="registration_redcapid",filterevt=NULL,cleanup=T,...){
-  db<-bsrc.checkdatabase2(protocol = protocol,output = T,...)
-  gMAPx<-bsrc.getEVTDATEFIELD(db = db)
-  rMAPa<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name),c(rcIDvar,"redcap_event_name",unique(gMAPx$date_variname)),]
-  rMAPa[rMAPa==""]<-NA
-  rMAPb<-reshape2::melt(rMAPa,id.vars=c(rcIDvar,"redcap_event_name"))
-  names(rMAPb)<-c("registration_redcapid","redcap_event_name","variable","date")
-  if(cleanup){
-    rMAPb<-na.omit(rMAPb)
-  }
-  return(rMAPb)
+  message("no longer used. use bsrc.getIDDateMap instead")
 }
 ######This is a very helpful function to check before uploading######################
 ######By check,  I mean verify if certrain informaiton is already in redcap##########
@@ -29,27 +39,27 @@ bsrc.uploadcheck<-function(dfa=NULL,uniqueidvars=c("registration_redcapid","redc
   og_df<-db_data[names(dfa)]
   og_df[og_df==""]<-NA
   og_df<-og_df[which(og_df$redcap_event_name %in% unique(dfa$redcap_event_name)),]
-  
+
   dfa<-as.data.frame(apply(dfa,2,as.character))
   og_df<-as.data.frame(apply(og_df,2,as.character))
-  
+
   dfa$row_num<-1:nrow(dfa)
   df_long<-reshape2::melt(dfa,id.vars=c(uniqueidvars,"row_num"), factorsAsStrings=F)
   df_long<-na.omit(df_long)
   df_long$identity<-do.call(paste,df_long[c(uniqueidvars,"variable")])
-  
+
   og_long<-reshape2::melt(og_df,id.vars=uniqueidvars, factorsAsStrings=F)
   og_long<-na.omit(og_long)
   og_long$identity<-do.call(paste,og_long[c(uniqueidvars,"variable")])
-  
+
   df_long$og_value<-og_long$value[match(df_long$identity,og_long$identity)]
   df_long$ifDiff<-df_long$value != df_long$og_value
-  
-  
-  
+
+
+
   outputx<-df_long[which(is.na(df_long$og_value)),]
   newDF<-reshape2::dcast(data = outputx[c(uniqueidvars,"variable","value")],value.var = "value",formula = as.formula(paste(paste(uniqueidvars,collapse = "+"),"~ variable",sep = " ")))
-  
+
   return(list(DFdifferent=df_long[which(df_long$ifDiff),],DFnew=df_long[which(is.na(df_long$og_value)),],
               uploaddf=newDF))
 }
@@ -57,7 +67,7 @@ bsrc.uploadcheck<-function(dfa=NULL,uniqueidvars=c("registration_redcapid","redc
 
 change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
   if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
-  
+
   switch (protocol_name,
           "PROTECT2" = {
             dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste("month",gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
@@ -69,7 +79,7 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
               if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
                 existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
               }
-              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
+              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")
             }
           },
           "SNAKE" = {
@@ -85,7 +95,7 @@ change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
             dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
           }
   )
-  
+
   return(dty)
 }
 
@@ -140,7 +150,7 @@ cleanup<-function(dtx_dt,EVTvari="EVT",maxDay=30){
 ####for raw data"
 match_evt_clean_up<-function(df_a=NULL,TimeDiffMax=30,protocol_name=NULL,sp_lookup=NULL,cleanout=T){
   df_b<-cbind(df_a,do.call(rbind,lapply(1:nrow(df_a),function(x){getevt(df_a$ID[x],df_a$CDATE[x],protocol_name,sp_lookup)})))
-  
+
   df_c<-df_b[df_b$DIFFDAY <= TimeDiffMax,]
   if(nrow(df_b) != nrow(df_c)){timeRemoveDf= df_b[df_b$DIFFDAY > TimeDiffMax,]} else {timeRemoveDf=NULL}
   message("When multiple protocols are matched, program will take the first match, ordered as the protocol_name object.")
@@ -151,7 +161,7 @@ match_evt_clean_up<-function(df_a=NULL,TimeDiffMax=30,protocol_name=NULL,sp_look
   df_d<-df_c[which(!is.na(df_c$match_protocol)),]
   df_d$EVT<-unlist(apply(df_d,1,function(x){x[match(x[match("match_protocol",names(df_d))],names(df_d))]}),use.names = F)
   #match("match_protocol",names(df_d))
-  
+
   if(cleanout){
     df_e<-df_d[-match(protocol_name,names(df_d))]
   } else {df_e<-df_d}
@@ -168,7 +178,7 @@ trans_cleanup<-function(dfx=NULL,metadata=NULL,ID_fieldname=NULL){
   templsx<-lapply(ahha,function(xj){
     whichones<-which(!dfx[[xj]] %in% bsrc.getchoicemapping(variablenames = xj,metadata = metadata)$choice.code & !is.na(dfx[[xj]]))
     if(length(whichones)>0){
-      #We Now Withheld all of their data instance; instead of just changing one of them 
+      #We Now Withheld all of their data instance; instead of just changing one of them
       ogdata<-dfx[[xj]][whichones]
       ogdatainstance<-dfx[whichones,]
       IDs<-dfx[[ID_fieldname]][whichones]
@@ -189,14 +199,14 @@ get_ThisNotInThat<-function(dfa,dfb,uniquevars=c("ID","CDATE")){
   dfax<-dfa[uniquevars]
   dfa$uID<-paste(dfax$ID,dfax$CDATE)
   message("dfa has duplicated records?: ",any(duplicated(dfax$uID)))
-  
+
   dfbx<-dfb[uniquevars]
   dfb$uID<-paste(dfbx$ID,dfbx$CDATE)
   message("dfb has duplicated records?: ",any(duplicated(dfbx$uID)))
-  
+
   return(list(a_NotIn_b=dfa[which(!dfa$uID %in% dfb$uID),],
               b_NotIn_a=dfb[which(!dfb$uID %in% dfa$uID),]))
-  
+
 }
 
 proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanup=T,protocol_name,ID_fieldname,arm_num) {
@@ -204,30 +214,30 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
   # dty = dtx_ii[which(dtx_ii$MISSCODE %in% misscodeallowed & !is.na(dtx_ii$EVT)),]
   map<-dtx_rp$map
   dty<-dtx_rp$data
-  
-  
+
+
   formname<-unique(metals$varimap$form_name[match(map$RC_name,metals$varimap$field_name,nomatch = 0)])
   supposedevtname<-metals$evtmap$unique_event_name[which(metals$evtmap$form %in% formname)]
-  
+
   dty_i<-bsrc.findid(dty,idmap,id.var = "ID")
   dty_dt<-dty_i[map$OG_name[!is.na(map$RC_name)]]
   names(dty_dt)<-map$RC_name[match(names(dty_dt),map$OG_name)]
-  
+
   dty_dt[[paste0(formname,"_miss")]]<-dty$MISSCODE
-  
+
   allcombodf<-do.call(rbind,lapply(protocol_name,function(evt){
     dty_i$EVT<-dty_i[[evt]]
     dtyx<-change_evt(dty_i,evt,arm_num)
-    
+
     dty_rc<-dtyx[c(ID_fieldname,"EVT")]
     names(dty_rc)<-c(ID_fieldname,"redcap_event_name")
-    
+
     dty_combo<-cbind(dty_rc[which(!is.na(dty_rc$redcap_event_name)),],dty_dt[which(!is.na(dty_rc$redcap_event_name)),])
     dty_combo$ID<-NULL
-    
+
     return(dty_combo)
   }))
-  
+
   ndls<-which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name))
   if(length(ndls)>0) {
     allnadf<-dty_dt[which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name)),]
@@ -236,11 +246,11 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
     allnadf$redcap_event_name<-NA
   } else {allnadf<-NULL}
   dty_combo<-rbind(allcombodf,allnadf)
-  
+
   misscodenotallowed<-which(!dty_combo[[paste0(formname,"_miss")]] %in% misscodeallowed)
   noevent<-which(is.na(dty_combo$redcap_event_name))
   eventnotincluded<-which(!dty_combo$redcap_event_name %in% supposedevtname)
-  
+
   whichtoexclude<-unique( c(misscodenotallowed,noevent,eventnotincluded) )
   lsx<-new.env()
   if(length(whichtoexclude)>0) {
@@ -253,15 +263,15 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
                                                                                     noevent=noevent,
                                                                                     eventnotincluded=eventnotincluded))
                   ,envir = lsx)
-  }                                                                                                     
-  
+  }
+
   if(cleanup){
-    
+
     cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
     lsx$transfer<-cleanoutput$outputdf
     lsx$valuemismatch<-cleanoutput$valuemismatch
   }
-  
+
   if(upload){
     if(nrow(lsx$transfer)>0){
       tryCatch({
@@ -270,15 +280,15 @@ proc_transfer<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),cleanu
         message("upload failed, reason: ",e)
         lsx$status<-"Upload Failed"
       })
-      
+
     } else {
       message("No data to upload.")
       lsx$status<-"No Data to be Uploaded"
     }
-  } 
+  }
   outz<-as.list(lsx)
   rm(lsx)
-  return(outz)  
+  return(outz)
 }
 
 
@@ -287,40 +297,40 @@ proc_transfer2<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),clean
   # dty = dtx_ii[which(dtx_ii$MISSCODE %in% misscodeallowed & !is.na(dtx_ii$EVT)),]
   map<-dtx_rp$map
   dty<-dtx_rp$data
-  
-  
+
+
   formname<-unique(metals$varimap$form_name[match(map$RC_name,metals$varimap$field_name,nomatch = 0)])
   supposedevtname<-metals$evtmap$unique_event_name[which(metals$evtmap$form %in% formname)]
-  
+
   dty_i<-bsrc.findid(dty,idmap,id.var = "ID")
   dty_dt<-dty_i[map$OG_name[!is.na(map$RC_name)]]
   names(dty_dt)<-map$RC_name[match(names(dty_dt),map$OG_name)]
-  
+
   dty_dt[[paste0(formname,"_miss")]]<-dty$MISSCODE
-  
+
   if(!is.null(Replacementlist)){
     for (todo_rp in names(Replacementlist)) {
       dty_dt[[todo_rp]]<-unlist(plyr::revalue(dty_dt[[todo_rp]],replace = Replacementlist[[todo_rp]],warn_missing = F))
     }
   }
-  
+
   allcombodf<-do.call(rbind,lapply(protocol_name,function(evt){
     #print(evt)
     dty_i$EVT<-dty_i[[evt]]
     dtyx<-change_evt(dty_i,evt,arm_num)
-    
+
     dty_rc<-dtyx[c(ID_fieldname,"EVT")]
     names(dty_rc)<-c(ID_fieldname,"redcap_event_name")
-    
+
     dty_combo<-cbind(dty_rc[which(!is.na(dty_rc$redcap_event_name)),],dty_dt[which(!is.na(dty_rc$redcap_event_name)),])
     dty_combo$ID<-NULL
-    
+
     return(dty_combo)
   }))
-  
-  
-  
-  
+
+
+
+
   ndls<-which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name))
   if(length(ndls)>0) {
     allnadf<-dty_dt[which(apply(dty[protocol_name],1,function(z){length(which(is.na(z)))})==length(protocol_name)),]
@@ -329,12 +339,12 @@ proc_transfer2<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),clean
     allnadf$redcap_event_name<-NA
   } else {allnadf<-NULL}
   dty_combo<-rbind(allcombodf,allnadf)
-  
+
   misscodenotallowed<-which(!dty_combo[[paste0(formname,"_miss")]] %in% misscodeallowed)
   noevent<-which(is.na(dty_combo$redcap_event_name))
   eventnotincluded<-which(!dty_combo$redcap_event_name %in% supposedevtname)
   duplicatedentry<-which(duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name)) | duplicated(interaction(dty_combo[[ID_fieldname]],dty_combo$redcap_event_name),fromLast = T))
-  
+
   whichtoexclude<-unique( c(misscodenotallowed,noevent,eventnotincluded,duplicatedentry) )
   lsx<-new.env()
   if(length(whichtoexclude)>0) {
@@ -347,15 +357,15 @@ proc_transfer2<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),clean
                                                                                     noevent=noevent,duplicatedentry=duplicatedentry,
                                                                                     eventnotincluded=eventnotincluded))
                   ,envir = lsx)
-  }                                                                                                     
-  
+  }
+
   if(cleanup){
-    
+
     cleanoutput<-trans_cleanup(dfx = lsx$transfer,metadata = metals$varimap,ID_fieldname = ID_fieldname)
     lsx$transfer<-cleanoutput$outputdf
     lsx$valuemismatch<-cleanoutput$valuemismatch
   }
-  
+
   if(upload){
     if(nrow(lsx$transfer)>0){
       tryCatch({
@@ -364,15 +374,15 @@ proc_transfer2<-function(dtx_rp,idmap,upload=T,metals,misscodeallowed=c(1),clean
         message("upload failed, reason: ",e)
         lsx$status<-"Upload Failed"
       })
-      
+
     } else {
       message("No data to upload.")
       lsx$status<-"No Data to be Uploaded"
     }
-  } 
+  }
   outz<-as.list(lsx)
   rm(lsx)
-  return(outz)  
+  return(outz)
 }
 
 transfer2redcap<-function(dtx_r=NULL,idmap=NULL,metals=NULL,misscodeallowed=NULL,arm_num=NULL,ID_fieldname=NULL,protocol_name=NULL,ifupload=T,clean=T) {
@@ -383,7 +393,7 @@ transfer2redcap<-function(dtx_r=NULL,idmap=NULL,metals=NULL,misscodeallowed=NULL
   }
   output<-proc_transfer(dtx_rp = dtx_rp,idmap = idmap,upload = ifupload,metals = metals,misscodeallowed = misscodeallowed,arm_num=arm_num,
                         cleanup = clean,protocol_name=protocol_name,ID_fieldname=ID_fieldname)
-  
+
   return(output)
 }
 
