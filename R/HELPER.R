@@ -16,7 +16,7 @@ bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
     dx<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name[which(gMAPx$date_variname == x)]),
                 c(db$metadata$field_name[1],"redcap_event_name",x)]
     names(dx)<-c(db$metadata$field_name[1],"redcap_event_name","date")
-    dx<-dx[which(dx$date!=""),]
+    dx<-dx[which(as.character(dx$date)!=""),]
     dx<-dx[which(!is.na(dx$date)),]
     if(nrow(dx)<1){return(NULL)}
     dx$date_vari <- x
