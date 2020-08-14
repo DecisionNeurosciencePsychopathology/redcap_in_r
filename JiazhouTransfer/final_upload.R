@@ -336,4 +336,18 @@ gx<-lapply(f_paths,upload_transfer,
            look_up = p2_rcgo,
            max_allowed = 7)
 
+#################neuropsych:
+##protect exit:
+
+protect <- bsrc.checkdatabase2(protocol = ptcs$protect,online = T)
+
+exit <- bsrc.getform(curdb = protect,formname = "exit")
+IDEvTMap<-bsrc.getIDDateMap(db = protect)
+IDEvTMap$unique<-paste(IDEvTMap$registration_redcapid,IDEvTMap$redcap_event_name,sep = "_x_")
+exit$unique<-paste(exit$registration_redcapid,exit$redcap_event_name,sep = "_x_")
+
+exit$date<- as.Date(IDEvTMap$date[match(exit$unique,IDEvTMap$unique)])
+
+
+
 
