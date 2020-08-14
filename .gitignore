@@ -1,6 +1,5 @@
 .Rproj.user
 .Rhistory
-.Rproj
 .RData
 .Ruserdata
 .tmp
@@ -13,3 +12,4 @@ no_ptcs.csv
 redcap_in_r.Rproj
 shark1.RData
 PROTECT_MDRS.xlsx
+Jiazhou.Startup.R

@@ -55,6 +55,40 @@ bsrc.uploadcheck<-function(dfa=NULL,uniqueidvars=c("registration_redcapid","redc
 }
 ##########################
 
+change_evt<-function(dty,protocol_name,arm_num,evtvariname=NULL){
+  if(!is.null(evtvariname)){dty$EVT<-dty[[evtvariname]]}
+  
+  switch (protocol_name,
+          "PROTECT2" = {
+            dty$EVT[grepl("mo",tolower(dty$EVT))]<-paste("month",gsub("mo","",tolower(dty$EVT)[grepl("mo",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("yr",tolower(dty$EVT))]<-paste("year",gsub("yr","",tolower(dty$EVT)[grepl("yr",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("adda",tolower(dty$EVT))]<-paste("additional",gsub("adda","",tolower(dty$EVT)[grepl("adda",tolower(dty$EVT))]),"arm",arm_num,sep = "_")
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("baseline_arm",arm_num,sep="_")
+            dty$EVT<-gsub(".","",dty$EVT,fixed = T)
+            if(any(grepl("int",tolower(dty$EVT)))){
+              if(!any(grepl("additional_",dty$EVT))){existingADEVT<-0}else{
+                existingADEVT<-max(as.numeric(gsub("additional_([0-9+]*)_.*","\\1",dty$EVT[which(grepl("additional_",dty$EVT))])))
+              }
+              dty$EVT[grepl("int",tolower(dty$EVT))]<-paste("additional",existingADEVT+1:length(which(grepl("int",tolower(dty$EVT)))),"arm",arm_num,sep = "_")   
+            }
+          },
+          "SNAKE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("snake_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
+          },
+          "EYE_DECIDE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("idecide_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
+          },
+          "EXPLORE" = {
+            dty$EVT[grepl("^b$",tolower(dty$EVT))]<-paste("explore_arm",arm_num,sep="_")
+            dty$EVT[grepl("^adda$",tolower(dty$EVT))]<-NA
+          }
+  )
+  
+  return(dty)
+}
+
 ########functions#######
 unpack<-function(dtx_r){
   gx<-list(
@@ -63,15 +97,6 @@ unpack<-function(dtx_r){
   )
   gx$map[gx$map=="NA" | gx$map=="NaN"]<-NA
   return(gx)
-}
-
-rc_na_checkboxremove<-function(raw){
-  message("By default, NA will replace '' and 0 in checkbox items")
-  raw[raw==""]<-NA
-  if (length(grep("___",names(raw))) > 0){
-    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
-  }
-  return(raw)
 }
 
 getevt<-function(ID=NULL,CDATE=NULL,PROTONAME=NULL,sp_lookup=NULL){

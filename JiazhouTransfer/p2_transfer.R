@@ -17,10 +17,10 @@ sp_lookup<-lapply(split(lookuptable,lookuptable$ID),function(krz){
   return(krz)
 })
 
-fixed_para <- c("CDATE","MISSCODE","CONTACT TYPE","OUTCOME","MISSINGNESS","LOCATION1","LOCATION2","COMMENT")
+fixed_para <- c("CDATE","MISSCODE","CONTACT TYPE","OUTCOME","MISSINGNESS","LOCATION1","LOCATION2","COMMENT",)
 
 protect<-bsrc.checkdatabase2(ptcs$protect)
-masterdemo<-bsrc.checkdatabase2(ptcs$masterdemo,online = T,batch_size=100000L)
+masterdemo<-bsrc.checkdatabase2(ptcs$masterdemo,online = T,batch_size=1000L)
 
 metals<-list(
   evtmap=redcap.eventmapping(redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)$data,
@@ -121,12 +121,6 @@ REDCapR::redcap_write(conp_2upload,redcap_uri = ptcs$masterdemo$redcap_uri,token
 ptctoget<-c("PROTECT2")
 sp_lookup$`23260`->dfa
 
-
-
-
-
-
-
 gMAPx<-bsrc.getEVTDATEFIELD(protocol = ptcs$protect)
 sp_rctogo<-lapply(sp_lookup,function(dfa){
   print(unique(dfa$ID))
@@ -152,6 +146,14 @@ allnames<-unique(unlist(lapply(sp_rctogo_ready,names),use.names = F))
 df_rctogo_ready<-do.call(rbind,lapply(sp_rctogo_ready,function(dfz){dfz[allnames[which(!allnames %in% names(dfz))]]<-NA;return(dfz)}))
 protect<-bsrc.checkdatabase2(protocol = ptcs$protect,output = T)
 save(protect,file = file.path(gsub("-","_",paste0("p2_backup",Sys.Date(),".rdata"))))
+
+
+
+
+
+
+
+
 
 REDCapR::redcap_write(df_rctogo_ready,redcap_uri = ptcs$protect$redcap_uri,token = ptcs$protect$token)
 
@@ -623,8 +625,6 @@ REDCapR::redcap_write(output$uploaddf,redcap_uri = ptcs$protect$redcap_uri,token
 
 
 get_ThisNotInThat(SIN_worst$data,SIN_max$data)
-
-#####Continue with other stuff;
 
 
 
