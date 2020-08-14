@@ -2,6 +2,16 @@
 .Rhistory
 .RData
 .Ruserdata
+.tmp
+.DS_Store
+.DS_Store
+.Rbuildignore
+redcap_in_r.Rproj
+Data meeting and cleaning/.gitignore
+no_ptcs.csv
+redcap_in_r.Rproj
+shark1.RData
+PROTECT_MDRS.xlsx
 Jiazhou.Startup.R
 .DS_Store
 .Rbuildignore
@@ -10,3 +20,4 @@ no_ptcs.csv
 redcap_in_r.Rproj
 *.RData
 *.rdata
+
