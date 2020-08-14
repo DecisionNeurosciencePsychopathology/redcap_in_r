@@ -17,6 +17,36 @@ bsrc.score_this_form<-function(df_in=NULL,formname=NULL,...){
 score_bis36 <- function(df_in=NULL,...){
   message("This version of the scoring will only consider the 30 items that are in the \n
           actual BIS-11, this leave out 6 items  ")
+  df_in<-df_in %>% mutate(
+    bis36_1r=4-bis36_1, bis36_7r=4-bis36_7, bis36_8r=4-bis36_8,
+    bis36_9r=4-bis36_9,bis36_10r=4-bis36_10,bis36_12r=4-bis36_11,
+    bis36_13r=4-bis36_13,bis36_15r=4-bis36_15,bis36_20r=4-bis36_20,
+    bis36_29r=4-bis36_29,bis36_30r=4-bis36_30
+  )
+  df_in<-df_in %>% mutate(
+    bis_attention=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(5,'9r',11,'20r',28))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(5,'9r',11,'20r',28))]),NA),
+    bis_cognitive_instability=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(6,24,26))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(6,24,26))]),NA),
+    bis_motor1o=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(2,3,4,17,19,22,25))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(2,3,4,17,19,22,25))]),NA),
+    bis_perseverance=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(16, 21, 23, '30r'))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(16,21,23,'30r'))]),NA),
+    bis_selfcontrol=ifelse(rowSums(is.na(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14))]))==0,
+                         rowSums(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14))]),NA),
+    bis_cognitive_complexity=ifelse(rowSums(is.na(df_in[paste0("bis36_",c('10r', '15r', 18, 27, '29r'))]))==0,
+                         rowSums(df_in[paste0("bis36_",c('10r', '15r', 18, 27, '29r'))]),NA),
+    bis_s_attentional=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(5,'9r',11,'20r',28,6,24,26))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(5,'9r',11,'20r',28,6,24,26))]),NA),
+    bis_s_motor=ifelse(rowSums(is.na(df_in[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]))==0,
+                         rowSums(df_in[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]),ifelse(
+                           rowSums(is.na(df_in[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]))==1,
+                             rowSums(df_in[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))],na.rm=T)*11/10, NA)),
+    bis_s_nonplanning=ifelse(rowSums(is.na(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]))==0,
+                         rowSums(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]),ifelse(
+                           rowSums(is.na(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]))==1,
+                             rowSums(df_in[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))],na.rm=T)*11/10, NA))
+  )
   return(df_in)
 }
 
