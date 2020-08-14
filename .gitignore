@@ -3,4 +3,10 @@
 .RData
 .Ruserdata
 Jiazhou.Startup.R
-
+.DS_Store
+.Rbuildignore
+PROTECT_MDRS.xlsx
+no_ptcs.csv
+redcap_in_r.Rproj
+*.RData
+*.rdata
