@@ -3,14 +3,14 @@ setwd("~/Documents/github/UPMC/data meeting/")
 source("~/Documents/github/UPMC/startup.R")
 
 protocol.cur <- ptcs$masterdemo
-md <- bsrc.checkdatabase2(online = F)
+md <- bsrc.checkdatabase2(online = T)
 plotpath="/Users/mogoverde/Desktop"
 
 #get id 
 MD<-bsrc.getform(formname = 'record_registration',curdb = md)
 #ptcname: ksocial, bsocial,protect3,protect2,protect,suicid2,suicide,EMA,EXPLORE
 #Grabs the variable names based on protocol
-varnames<-function(ptcname){
+  varnames<-function(ptcname){
   id<-c('registration_redcapid', 'registration_wpicid', 'registration_demostatus','registration_group','registration_dob','registration_gender',
         paste0(c('registration_ptcstat___','reg_condate_','reg_term_yesno_','reg_term_reason_','reg_term_excl_'),ptcname))
   if(ptcname=='protect3'){return(c(id,'reg_status_protect3','reg_p3catchup'))
@@ -190,7 +190,6 @@ plot_prep(BS,md)->Ball
   bsrc.findid(Bmriid,idmap = idmap,id.var = "ID")->Bmrimddf
   #Bmrimddf[-which(Bmrimddf$ID=="120517"),]
   Bmrimddf[which(!Bmrimddf$ifexist),] #Should be no one
-  Bmrimddf$masterdemoid
   bsrc.findid(Bspottid,idmap = idmap,id.var = "ID")->Bspottmddf
   Bspottmddf[which(!Bspottmddf$ifexist),] #Should be no one
   #Plotting and final df
@@ -204,10 +203,10 @@ plot_prep(BS,md)->Ball
     bsrc.attachngrab(rdpaths$ema)->ema
     ema$fulldata.ema$info->emainfo
     table(emainfo$Status)
-    #Check IDs
-    emainfo[which(!emainfo$RedcapID %in% Ball$registration_redcapid),"RedcapID"]
     #Remove one person for being ineligible
-    emainfo[-which(emainfo$RedcapID=="440057"),]->emainfo
+    emainfo[-which(emainfo$RedcapID=="440057"),]->emainfo #This is B GAD, r/o after being HC
+    #Check IDs
+    emainfo[which(!emainfo$RedcapID %in% Ball$registration_redcapid),"RedcapID"] #should be none
     #Plotting and df
     Ball[which(Ball$registration_redcapid %in% emainfo$RedcapID),]->Bemaall
     do_for_asub(Bemaall,tit = 'BSOCIAL EMA',plotpath = plotpath,
@@ -235,9 +234,12 @@ plot_prep(BS,md)->Ball
     do_for_asub(Kmriall,tit = 'KSOCIAL',plotpath = plotpath,
                 filename = 'KsocialbyGroup_age_gender.jpeg')
     
-
-
-
+    
+    #Numbers output functions:
+    #Calculate ratio of K to B pts
+    sum(table(unique(Kmriall$registration_redcapid)))==nrow(Kmriall) #Should be T, checks if duplicated IDs
+    message("Ratio of K participants to BSOCIAL:",sum(is.na(Kmriall$registration_ptcstat___bsocial)),"/",nrow(Kmriall))
+    
 
 
 
