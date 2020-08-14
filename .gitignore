@@ -13,3 +13,11 @@ redcap_in_r.Rproj
 shark1.RData
 PROTECT_MDRS.xlsx
 Jiazhou.Startup.R
+.DS_Store
+.Rbuildignore
+PROTECT_MDRS.xlsx
+no_ptcs.csv
+redcap_in_r.Rproj
+*.RData
+*.rdata
+
