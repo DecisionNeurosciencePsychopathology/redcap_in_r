@@ -35,13 +35,45 @@
 percent <- function(x, digits = 2, format = "f", ...) {
   paste0(formatC(100 * x, format = format, digits = digits, ...), "%")
 }
+##########################Graph missiness:
+bsrc.graph_missingness <- function(ptc = NULL,form_names = NULL, output_graphic = FALSE,output_dir=pwd()) {
+  curdb <- bsrc.checkdatabase2(protocol = ptc)
+  p_dates <- bsrc.getIDDateMap(db = protect)
+  p_dates$date<-as.Date(p_dates$date)
+  p_con_date <- aggregate(date~registration_redcapid,data = p_dates,FUN = min)
+  gx<-lapply(form_names,function(fname){
+    df_in <- bsrc.getform(protocol = ptcs$protect,formname = fname,curdb = protect)
+    df_in <- bsrc.matchIDDate(dfx = df_in,db = curdb)
+    df_in$date <- as.Date(df_in$date)
+    df_in$earliest_date <- as.Date(p_con_date$date[match(df_in$registration_redcapid,p_con_date$registration_redcapid)])
+    df_in <- df_in[order(df_in$earliest_date),]
+    df_in$registration_redcapid<-factor(df_in$registration_redcapid,levels = unique(df_in$registration_redcapid))
+    p<-ggplot(df_in,aes(y=date,x=registration_redcapid)) + geom_point() + theme(axis.text.x=element_blank()) +
+      ggtitle(paste0("Missingness graph: ",fname))
+    if(output_graphic) {
+      ggsave(plot = p,filename = file.path(output_dir,paste0("miss_",fname,".pdf")),device = "pdf")
+    }
+    return(p)
+  })
+  names(gx) <- form_names
+  gxt <- gx
+  gxt$newpage=TRUE
+  p_all <- do.call(gridExtra::grid.arrange,gxt)
+  if(output_graphic) {
+    ggsave(plot = p_all,filename = file.path(output_dir,paste0("miss_","all_forms",".pdf")),device = "pdf")
+  }
+  gx$all_forms <- p_all
+  return(gx)
+}
+
+
 ###########################Bi-Weekly Meeting Sheet:
-bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=NA, curdb=NULL,...){
+bsrc.admin.biweekly<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$masterdemo,days=14,n_month_to_get=2,exportpath=NA, curdb=NULL,...){
   if (is.null(curdb)){
-    curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)}
+    curdb<-bsrc.checkdatabase2(protocol = bsocial_ptc,... = ...)}
   funbsrc<-curdb$data
   ifrun<-curdb$success
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb,... = ...)
+  subreg<-bsrc.getform(formname = "progress_check",curdb = curdb)
   if (ifrun) {
     #Find Max Follow-Up Dates:
     funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
@@ -49,7 +81,7 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
     names(maxfudate)<-c("registration_redcapid","Follow-up")
 
     #Get progress:
-    futurefolks<-subreg[,c("registration_redcapid","registration_consentmonth","prog_diff","prog_lastfollow","prog_endor_y")]
+    futurefolks<-subreg[,c("registration_redcapid","prog_diff","prog_lastfollow","prog_endor_y")]
 
 
     #Get EMA Dates:
@@ -61,13 +93,18 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
 
     #Get MRI Dates:
     mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),curdb = curdb)
+    mripgonly[mripgonly==""]<-NA
     mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mricheck_scheudleddate","mricheck_scanneddate"))
     mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_scanneddate)),]
     mripgonly.b$MRI<-apply(mripgonly.b[-grep("registration_redcapid",names(mripgonly.b))],1,max,na.rm=T)
     mripgonly.c<-subset(mripgonly.b, select = c("registration_redcapid","MRI"))
     mrisc<-mripgonly.c[which(mripgonly.c$MRI>Sys.Date()),]
-    colnames(mrisc)[2]<-"MRI Scheduled"
-    mripgonly.d<-mripgonly.c[-which(mripgonly.c$registration_redcapid %in% mrisc$registration_redcapid),]
+    if(nrow(mrisc)>0){
+      colnames(mrisc)[2]<-"MRI Scheduled"
+      mripgonly.d<-mripgonly.c[-which(mripgonly.c$registration_redcapid %in% mrisc$registration_redcapid),]
+    } else {
+      mripgonly.d <- mripgonly.c
+    }
 
     #Get Baseline:
     baseline<-na.omit(subset(bsrc.getform(formname = "bldemo",curdb = curdb),select = c('registration_redcapid',"demo_visitdate")))
@@ -85,50 +122,58 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
     #Merged:
     merged.a<-merge(merge(emapgonly.a,maxfudate,all=T),merge(baseline,consented,all=T),all=T)
     merged<-merge(merged.a,mripgonly.d,all=T)
+
     if (any(!mrisc$registration_redcapid %in% merged$registration_redcapid)){
       nmrisc<-mrisc[which(!mrisc$registration_redcapid %in% merged$registration_redcapid),]
-      merged<-merge(merged,nmrisc,all = T)}
-    merged$`Event`<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {which(x==max(x,na.rm=T))}[1])]
+      merged<-merge(merged,nmrisc,all = T)
+    }
+    #merged[merged==""]<-NA
+    merged$`Event`<-colnames(merged[-grep("registration_redcapid",names(merged))])[apply(merged[-grep("registration_redcapid",names(merged))],1,function(x) {x[x==""]<-NA;which(x==max(x,na.rm=T))}[1])]
     merged$`Event Date`<-apply(merged[-grep("registration_redcapid|Event",names(merged))],1,max,na.rm=T)
     merged.simp<-subset(merged,select = c("registration_redcapid","Event","Event Date"))
+    merged.simp$Event[is.na(merged.simp$Event)]<-"UNKNOWN"
     #Add Status
     merged.simp$`MRI Status`<-subreg$prog_fmristatus[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
     merged.simp$`EMA Status`<-subreg$prog_emastatus[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+
+    masterdemo <-bsrc.getform(protocol = masterdemo_ptc,formname = "record_registration")
+    subreg$registration_status <- masterdemo$reg_status_bsocial[match(subreg$registration_redcapid,masterdemo$registration_redcapid)]
     #Add Initials & Age:
     merged.simp$`Age`<-subreg$prog_cage[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
-    merged.simp$`Initials`<-subreg$registration_initials[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
-    merged.simp$`Group`<-subreg$registration_group[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
+    merged.simp$`Initials`<-masterdemo$registration_initials[match(merged.simp$registration_redcapid,masterdemo$registration_redcapid)]
+    merged.simp$`Group`<-masterdemo$registration_group[match(merged.simp$registration_redcapid,masterdemo$registration_redcapid)]
     merged.simp$`Latest IPDE Date`<-subreg$prog_latestipdedate[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
     merged.simp$`IPDE Dx`<-subreg$prog_latestipdes_dx[match(merged.simp$registration_redcapid,subreg$registration_redcapid)]
     merged.simp$`IPDE Dx`<-plyr::mapvalues(merged.simp$`IPDE Dx`, from = c(1:3), to = c("Negative","Probable","Definite"),warn_missing = F)
 
     #Refine Status:
     ord<-c("Consented","Baseline","Follow-up","MRI","EMA")
+
     merged.simp<-merged.simp[order(match(merged.simp$`Event`,ord),merged.simp$`Event Date`),]
     merged.simp$Group<-plyr::mapvalues(merged.simp$Group,from = c("1","2","3","4","88","89"), to=c("HC","LL","HL","NON-ATT","UNCLEAR","INELIGIBLE"),warn_missing = F)
     colnames(merged.simp)[grep("registration_redcapid",names(merged.simp))]<-"RedCap ID"
     merged.simp$Event[which(merged.simp$Event=="Follow-up")]<-paste(subreg$prog_lastfollow[match(merged.simp[merged.simp$Event=="Follow-up",]$`RedCap ID`,subreg$registration_redcapid)],"Yrs Follow-up")
-    merged.simp$Event[which(merged.simp$Event=="0.5 Yrs Follow-up")]<-"6 Mons Follow-Up"
-    merged.simp$Event[which(merged.simp$Event=="0.25 Yrs Follow-up")]<-"3 Mons Follow-Up"
+    merged.simp$Event[which(merged.simp$Event=="0.5 Yrs Follow-up")]<-"6M Follow-Up"
+    merged.simp$Event[which(merged.simp$Event=="0.25 Yrs Follow-up")]<-"3M Follow-Up"
     #merged.simp$Group[which(merged.simp$`RedCap ID` %in% subreg$registration_redcapid[which(subreg$registration_status=="88")])]<-"INELIGIBLE"
     #merged.simp$Event[which(merged.simp$`RedCap ID` %in% subreg$registration_redcapid[which(subreg$registration_status=="88")])]<-"RULED OUT"
     #FU Month:
 
-    if (lubridate::month(Sys.Date())<6){
-      merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]]
-    }
-    else {
-      merged.simp$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(merged.simp$`RedCap ID`,futurefolks$registration_redcapid)]+6]
-    }
-    merged.simp<-merged.simp[,c("RedCap ID","Initials","Age","Group","Follow-up Month","Event","Event Date","Latest IPDE Date","IPDE Dx","MRI Status","EMA Status")]
+
+    subreg[subreg==""]<-NA
+    subreg$registration_consentmonth <- lubridate::month(subreg$registration_consentdate)
+    merged.simp$consent_month <- lubridate::month(subreg$registration_consentdate)[match(merged.simp$`RedCap ID`,subreg$registration_redcapid)]
+
+
+
 
 
     #########Future Folks
     #curmon<-month(Sys.Date())
-    #getmon<-curmon+monthz-1
+    #getmon<-curmon+n_month_to_get-1
     #getmon<-ifelse(curmon>=12,getmon-12,getmon)
     #threemon<-ifelse(month(Sys.Date())<=3,15-month(Sys.Date()),month(Sys.Date())-3)
-    #getthreemon<-threemon+monthz-1
+    #getthreemon<-threemon+n_month_to_get-1
     #getthreemon<-ifelse(threemon>=12,getthreemon-12,getthreemon)
     #tarmon<-seq(curmon,getmon)
     #tarmonthree<-seq(threemon,getthreemon)
@@ -137,30 +182,38 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
 
     curdate<-Sys.Date()
     plusmon<-Sys.Date()
-    lubridate::month(plusmon)<-lubridate::month(curdate)+monthz-1
+    lubridate::month(plusmon)<-lubridate::month(curdate)+n_month_to_get-1
     tarmon<-lubridate::month(seq.Date(from = curdate, to = plusmon, by="mon"))
-    tarmon[which(tarmon>6)]<-tarmon[which(tarmon>6)]-6
+    tar_mon <- c(tarmon,tarmon+6)
+    tar_mon[tar_mon>12] <- tar_mon[tar_mon>12]-12
 
     #To prevent the Febuary non-sense
     usedate<-Sys.Date()
     if (lubridate::day(Sys.Date())>28) {lubridate::day(usedate)<-28}
-
     threemon<-usedate
     plusthreemon<-usedate
     lubridate::month(threemon)<-lubridate::month(usedate)-3
-    lubridate::month(plusthreemon)<-lubridate::month(threemon)+monthz-1
+    lubridate::year(plusthreemon)<-lubridate::year(threemon)
+    lubridate::month(plusthreemon)<-lubridate::month(threemon)+n_month_to_get-1
     tarmonthree<-lubridate::month(seq.Date(from = threemon, to = plusthreemon, by="mon"))
-    tarmonthree[which(tarmonthree>6)]<-tarmon[which(tarmonthree>6)]-6
+    tarmon_three <- c(tarmonthree,tarmonthree+6)
+    tarmon_three[tarmon_three>12] <- tarmon_three[tarmon_three>12]-12
 
-    futureid.x<-subreg$registration_redcapid[which(subreg$registration_consentmonth %in% tarmon & subreg$prog_diff>0 & subreg$registration_status!="89"& subreg$prog_diff< monthz+0.1)]
-    threemonid<-subreg$registration_redcapid[which(subreg$prog_endor_y==0.25 & subreg$prog_diff>0 & subreg$registration_status!="89" & subreg$registration_consentmonth %in% tarmonthree)]
+    futureid.x<-subreg$registration_redcapid[which(subreg$registration_consentmonth %in% tar_mon & subreg$prog_diff>0 & !subreg$registration_status %in% c("89") & subreg$prog_diff< n_month_to_get+0.1)]
+    threemonid<-subreg$registration_redcapid[which(subreg$prog_endor_y==0.25 & subreg$prog_diff>0 & !subreg$registration_status %in% c("89") & subreg$registration_consentmonth %in% tarmonthree)]
     futureid<-append(futureid.x,threemonid)
 
     future<-merged.simp[match(futureid,merged.simp$`RedCap ID`),]
+    future$cm  <- future$consent_month
+    future$cm[future$cm>6] <- future$cm[future$cm>6] -6
+    future$cm[match(threemonid,future$`RedCap ID`)] <- future$cm[match(threemonid,future$`RedCap ID`)]+3
+
+    future$`Follow-up Month` <- paste(month.abb[future$cm],month.abb[future$cm+6],sep = "/")
+    future<-future[order(match(future$`Follow-up Month`,paste(month.abb[1:6],month.abb[7:12],sep = "/"))),]
     # Change Fu Month on 3 months folks
-    future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)]<-month.name[match(future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)],month.name)+3]
+    future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)]<-paste0(future$`Follow-up Month`[match(threemonid,future$`RedCap ID`)],"_3MonNow")
     #future$`Follow-up Month`<-month.name[futurefolks$registration_consentmonth[match(future$`RedCap ID`,futurefolks$registration_redcapid)]]
-    future<-future[order(match(future$`Follow-up Month`,month.name)),]
+
     future$`Follow-up Due`<-paste(subreg$prog_endor_y[match(future$`RedCap ID`,subreg$registration_redcapid)],"Yrs Follow-up")
     future$`Follow-up Due`[which(future$`Follow-up Due`=="0.5 Yrs Follow-up")]<-"6 Mons Follow-Up"
     future$`Follow-up Due`[which(future$`Follow-up Due`=="0.25 Yrs Follow-up")]<-"3 Mons Follow-Up"
@@ -184,11 +237,12 @@ bsrc.admin.biweekly<-function(protocol=protocol.cur,days=14,monthz=2,exportpath=
   }}
 
 ################# Future update to include automatic sync
-bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
-  curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
-  subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
+bsrc.emastats<-function(bsocial_ptc=ptcs$bsocial,masterdemo_ptc=ptcs$masterdemo,shortlist=T,...) {
+  mastedemo <- bsrc.checkdatabase2(protocol = masterdemo_ptc)
+  idmap <- mastedemo$data[c("registration_redcapid","registration_wpicid","registration_group","registration_lethality")]
+  names(idmap)<-c("masterdemo_id","wpic_id","group_status","lethality")
   #Get funema:
-  funema<-bsrc.getform(formname = "ema_session_checklist",grabnewinfo = T)
+  funema<-bsrc.getform(formname = "ema_session_checklist",online = T,protocol = bsocial_ptc,batch_size = 1000L)
 
   emastate<-funema[c(1,grep("ema_completed___",names(funema)))]
   emastate$status<-names(emastate)[c(-1)][apply(emastate[c(-1)], 1, function(x) {which(x==1)}[1])]
@@ -197,10 +251,20 @@ bsrc.emastats<-function(protocol=protocol.cur,shortlist=T,...) {
                                               to = c("IN PROGRESS","COMPELETED VERSION 2","COMPELETED VERSION 3","DID NOT COMPELETE","Early Termination"), warn_missing = F)
   emastate$`EMA Status`<-emastate$`EMA Status FULL`
   emastate$`EMA Status`[agrep("COMPLETED",emastate$`EMA Status`)]<-"COMPLETED"
-  emastate$group.num<-subreg$registration_group[match(emastate$registration_redcapid,subreg$registration_redcapid)]
-  emastate$`GROUP`<-plyr::mapvalues(emastate$group,from = c("1","2","3","4","88","89"),
-                                    to = c("HEALTHY CONTROL","LOW LETHALITY","HIGH LETHALITY","NON-SUICIDAL","NOT SURE YET","INELIGIBLE (WHY???)"), warn_missing = F)
-  emacount<-xtabs(~GROUP+`EMA Status`,emastate)
+
+  emastate<-bsrc.findid(df = emastate,idmap = idmap,id.var = "registration_redcapid")
+  emastate$masterdemo_id[is.na(emastate$masterdemo_id)] <- paste0(emastate$ID[is.na(emastate$masterdemo_id)],"_UNKNOWN")
+  emastate$registration_redcapid <- emastate$masterdemo_id
+  emastate$group_leth <- emastate$group_status
+  emastate$lethality[is.na(emastate$lethality)] <- ""
+  emastate$group_status[is.na(emastate$group_status)]<-"unknown"
+
+  emastate$group_leth[emastate$group_status == "ATT"] <- toupper(emastate$lethality[emastate$group_status == "ATT"])
+
+  emastate <- emastate[which(emastate$ifexist),]
+  emastate$ogid <- NULL;   emastate$ifexist<-NULL
+
+  emacount<-xtabs(~group_leth+`EMA Status`,emastate)
   emacount<-addmargins(emacount)
 
   if (shortlist){

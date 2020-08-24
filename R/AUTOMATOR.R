@@ -4,57 +4,58 @@
 #Version: 1.6.1
 #---
 #This script use Mac's Automator and calendar event to automatically refresh the b-social RedCap Database
-#Version 1.6 & 1.6.1 Changelog: 
-  #Revision to refresh function to be compatible with the new data organization method
-  #Refresh function and backup function now fully functional when used in Automator
+#Version 1.6 & 1.6.1 Changelog:
+#Revision to refresh function to be compatible with the new data organization method
+#Refresh function and backup function now fully functional when used in Automator
 #Version 1.5:
-  #Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
-  #Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
-  #Updated the bsrc.backup() to use new mech to grab date since creataion of files
-  #Updated bsrc.refresh() to skip 6 mon if 3 mon is completed. 
-  #Remove the main script from AUTOMATOR so that it only contains functions
-  #Just some updates to the good old bsrc.refresh()
-  #bsrc.refresh() gains the update to fMRI status function
-  #bsrc.refresh() gains the update to EMA protocl and latest IPDE function
+#Updated the refresh to better process EMA pt who completed EMA v3; and those who terminated early.
+#Updated the bsrc.refresh() to update local copy of the database & eliminate terminated subs
+#Updated the bsrc.backup() to use new mech to grab date since creataion of files
+#Updated bsrc.refresh() to skip 6 mon if 3 mon is completed.
+#Remove the main script from AUTOMATOR so that it only contains functions
+#Just some updates to the good old bsrc.refresh()
+#bsrc.refresh() gains the update to fMRI status function
+#bsrc.refresh() gains the update to EMA protocl and latest IPDE function
 
 #Version 1:
-  #1/1 start up function: 
-  #jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
-  #1/1 REFRESH main function, now with single ID mode:
-  #Force update, force run, if output maxevent db, if upload
-  #1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
-  #0/0 MetricWire Data Grab and progress update: #See Ecologist Re; bsrc.ema.main
-  #1/1 EMA and MRI status update 
+#1/1 start up function:
+#jiazhou.startup()  ###!!NOT INCLUDED D/T SECURITY CONCERNS!###
+#1/1 REFRESH main function, now with single ID mode:
+#Force update, force run, if output maxevent db, if upload
+#1/1 Backup RedCap full database that can be uploaded online if anything goes wrong
+#0/0 MetricWire Data Grab and progress update: #See Ecologist Re; bsrc.ema.main
+#1/1 EMA and MRI status update
 
 #########################
-##  Project AUTOMATOR  ##  
+##  Project AUTOMATOR  ##
 ##  Part I, Functions  ##
 #########################
 
 ######refresh######
-bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=F, upload=T,curdb=NULL,ID, ...) {
-  if (missing(ID)) {ID<-NA}
-  if (is.null(curdb)){curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+bsrc.refresh<-function (ptcs=ptcs,forceskip=F,forceupdate=F, output=F, upload=T, ...) {
+  curdb <-bsrc.checkdatabase2(protocol = ptcs$bsocial, forceskip = forceskip, forceupdate = forceupdate)
+  masterdemo <- bsrc.checkdatabase2(protocol = ptcs$masterdemo, forceskip = forceskip, forceupdate = forceupdate)
   funbsrc<-curdb$data
   funevent<-curdb$eventmap
   funstrc<-curdb$metadata
   ifrun<-curdb$success
-  protocol$redcap_uri->input.uri
-  protocol$token->input.token
-  if(upload) {print("By default the refresh function will always upload to RedCap")}
+  ptcs$bsocial$redcap_uri->input.uri
+  ptcs$bsocial$token->input.token
+  if(upload) {message("By default the refresh function will always upload to RedCap")}
   if (ifrun){
     #get info from registration
-    subreg<-bsrc.getevent(eventname = "enrollment_arm_1",subreg = T,curdb = curdb)
+    subreg<-bsrc.getform(formname = "record_registration",curdb = masterdemo)
     subreg$curage<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_dob,format = "%Y-%m-%d"), end = Sys.Date()))$year #Get current age
-    subreg$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate,format = "%Y-%m-%d"), end = Sys.Date())) #get since date 
-    subreg$fudue<-round((as.numeric(lubridate::as.period(lubridate::interval(start = as.Date(subreg$registration_consentdate,format = "%Y-%m-%d"), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
-    regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("registration_consentdate",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
-    
+    subreg$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(subreg$reg_condate_bsocial,format = "%Y-%m-%d"), end = Sys.Date())) #get since date
+    subreg$fudue<-round((as.numeric(lubridate::as.period(lubridate::interval(start = as.Date(subreg$reg_condate_bsocial,format = "%Y-%m-%d"), end = Sys.Date()),unit = "month")$month)/12)/0.5)*0.5 #Fu due
+    regitemp<-subreg[,c(grep("registration_redcapid",names(subreg)),grep("reg_condate_bsocial",names(subreg)),grep("curage",names(subreg)):length(names(subreg)))]
+    regitemp <- regitemp[which(regitemp$reg_condate_bsocial!="" & !is.na(regitemp$reg_condate_bsocial)),]
+    regitemp$registration_consentdate <- regitemp$reg_condate_bsocial
     #find max fudate:
     funbsrc$fudemo_visitdate[which(funbsrc$fudemo_visitdate=="")]<-NA
     maxfudate<-aggregate(na.exclude(as.Date(funbsrc$fudemo_visitdate)),by=list(funbsrc$registration_redcapid[!is.na(funbsrc$fudemo_visitdate)]),max)
     names(maxfudate)<-c("registration_redcapid","fudemo_visitdate")
-    
+
     #find max fuevent:
     subevent<-subset(funbsrc,select = c("registration_redcapid","redcap_event_name","fudemo_visitdate"))
     maxevent<-subevent[match(interaction(maxfudate$registration_redcapid,maxfudate$fudemo_visitdate),interaction(subevent$registration_redcapid,subevent$fudemo_visitdate)),]
@@ -66,10 +67,12 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     maxevent$years<-maxevent$months/12
     maxevent$diff<-maxevent$fudue-maxevent$years
     maxevent$daysincefu<-as.numeric(Sys.Date()-as.Date(maxevent$fudemo_visitdate))
+    maxevent$sincelastfu<-lubridate::as.period(lubridate::interval(start = as.Date(maxevent$fudemo_visitdate,format = "%Y-%m-%d"), end = Sys.Date())) #get since date
     maxevent$registration_consentdate<-NULL
     maxevent$redcap_event_name<-NULL
     maxevent$months<-NULL
-    maxevent$fudemo_visitdate<-NULL
+    #maxevent$fudemo_visitdate<-NULL
+
     #Get 3 month
     maxevent$fudue[maxevent$sincelastfu$year==0 & maxevent$sincelastfu$month < 6 & !is.na(maxevent$sincelastfu) & maxevent$fudue == 0 & maxevent$sincelastfu$month > 1]<-0.25
     #if 3 month is completed, skip 6 month.
@@ -79,7 +82,7 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     maxevent$diff[which(maxevent$fudue==0.5 & maxevent$years==0.25)]<-0
     #Refine indicator so folks who got in early will not:
     maxevent$diff[which(maxevent$daysincefu < 60)]<-0
-    
+
     #find IPDE Date:
     funbsrc$ipde_date[which(funbsrc$ipde_date=="")]<-NA
     funbsrc$ipde_bpd_date[which(funbsrc$ipde_bpd_date=="")]<-NA
@@ -94,17 +97,18 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     ipdedateonly$ipde_bpd_dxc<-NULL
     ipdedate<-aggregate(ipdedateonly$ipde_date,by=list(ipdedateonly$registration_redcapid), FUN=max)
     names(ipdedate)<-c("registration_redcapid","ipde_date")
-    ipdedate$ipde_cm <-ipdedateonly$ipde_cm [match(interaction(ipdedate$registration_redcapid,ipdedate$ipde_date),interaction(ipdedateonly$registration_redcapid,ipdedateonly$ipde_date))] 
+    ipdedate$ipde_cm <-ipdedateonly$ipde_cm [match(interaction(ipdedate$registration_redcapid,ipdedate$ipde_date),interaction(ipdedateonly$registration_redcapid,ipdedateonly$ipde_date))]
     ipdedate$ipde_dxc<-ipdedateonly$ipde_dxc[match(interaction(ipdedate$registration_redcapid,ipdedate$ipde_date),interaction(ipdedateonly$registration_redcapid,ipdedateonly$ipde_date))]
     maxevent<-merge(maxevent,ipdedate,all = T)
-    
+
     #rename variables:
-    names(maxevent)<-c("registration_redcapid","prog_cage","prog_endor","prog_endor_y","prog_lastfollow","prog_diff","prog_endorfu","prog_latestipdedate","prog_latestipdes_cm","prog_latestipdes_dx")
-    
+    names(maxevent)<-c("registration_redcapid","registration_consentdate","prog_cage","prog_endor","prog_endor_y","prog_l_visitdate","prog_lastfollow",
+                       "prog_diff","prog_endorfu","prog_latestipdedate","prog_latestipdes_cm","prog_latestipdes_dx")
+
     #For fMRI Status:
     #Dates:
-    mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),mod = F,aggressivecog=0,curdb = curdb) 
-    mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mriscreen_yesno","mricheck_scheudleddate","mricheck_scanneddate","mricheck_mricomplete___0118","mricheck_mricomplete___p16")) 
+    mripgonly<-bsrc.getform(formname = c("fmri_screening_form","fmri_session_checklist"),mod = F,aggressivecog=0,curdb = curdb)
+    mripgonly.a<-subset(mripgonly,select = c("registration_redcapid","mriscreen_yesno","mricheck_scheudleddate","mricheck_scanneddate","mricheck_mricomplete___0118","mricheck_mricomplete___p16"))
     #mripgonly.b<-mripgonly.a[which(!is.na(mripgonly.a$mriscreen_yesno) | !is.na(mripgonly.a$mricheck_scheudleddate) | !is.na(mripgonly.a$mricheck_mricomplete___p16)),]
     mripgonly.c<-mripgonly.a
     mripgonly.c$prog_fmristatus<-NA
@@ -120,10 +124,10 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     mripgonly.e<-na.omit(mripgonly.d)
     #Merge:
     maxevent<-merge(maxevent,mripgonly.d, all = T)
-    
+
     #For EMA Status:
     #Due Date:
-    
+
     emaonly<-bsrc.getform(formname = "ema_session_checklist", curdb=curdb)
     emaonly$ema_setuptime[which(emaonly$ema_setuptime=="")]<-NA
     emaonly<-emaonly[which(!is.na(emaonly$ema_setuptime)),]
@@ -159,97 +163,79 @@ bsrc.refresh<-function (protocol=protocol.cur,forceskip=F,forceupdate=T, output=
     maxevent$prog_endor<-as.character(maxevent$prog_endor)
     maxevent$prog_latestipdedate<-as.character(maxevent$prog_latestipdedate)
     maxevent$prog_emadued<-as.character(maxevent$prog_emadued)
-    
+
     #Take out terminated folks
-    terminatedsublist<-subreg$registration_redcapid[which(!is.na(subreg$terminate_yesno))]
+    terminatedsublist<-subreg$registration_redcapid[which(!is.na(subreg$reg_term_bsocial))]
     maxevent<-maxevent[which(!maxevent$registration_redcapid %in% terminatedsublist),]
-    
+
     #Update back to local database so no need to reload:
     #print("Updating Local Database")
     #funbsrc[match(maxevent$registration_redcapid,funbsrc$registration_redcapid),match(names(maxevent),names(funbsrc))]<-maxevent
     #funbsrc<<-funbsrc
     #subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)
-    
-    idmatch<-data.frame(subreg$registration_id,subreg$registration_soloffid,subreg$registration_redcapid)
-    names(idmatch)<-c('id','soloffid','redcapid')
-    if (!is.na(ID)){
-    if(any(ID %in% idmatch$soloffid | ID %in% idmatch$id)){
-      if(ID %in% idmatch$soloffid) {ID<-as.character(idmatch$redcapid[which(idmatch$soloffid==ID)])}
-      else{ID<-as.character(idmatch$redcapid[which(idmatch$id==ID)])}
-    }
-    if (ID %in% maxevent$registration_redcapid) {
-      singleid<-maxevent[which(maxevent$registration_redcapid==ID),]
-      ids<-idmatch[which(idmatch$redcapid==ID),]
-      upload<-FALSE
-      print("Single ID mode will not refresh RedCap")
-      print(ids)
-      print(singleid)}}
-    
-    if (output) {return(maxevent) 
+    if (output) {return(maxevent)
       print("Here you go, you asked for it.")
     }
 
-    
     if (upload) {
-    result.maxevent<-REDCapR::redcap_write(maxevent,token = input.token,redcap_uri = input.uri)
-    return(result.maxevent)
-    if (result.maxevent$success) {
-      Print("Congrats, Upload was successful")}
-    else ("Something went wrong during uploading, double check")
-  }  
+      result.maxevent<-redcap_upload(maxevent,token = input.token,redcap_uri = input.uri,NAoverwrite = F,retry_whenfailed = T)
+      return(result.maxevent)
+      if (result.maxevent$success) {
+        Print("Congrats, Upload was successful")}
+      else ("Something went wrong during uploading, double check")
+    }
   }
 }
 
-####Missing Assessment Given a Arm####
+####Missing Assessment Given a Arm###
 #Pending
 ####Back-up######
 bsrc.backup<-function(protocol=protocol.cur,forceskip=F,forceupdate=T,curdb=NULL,path=NULL,clean=T,expiration=30,...) {
   protocol$rdpath->rdpath
   if (is.null(curdb)){
-  curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
+    curdb<-bsrc.checkdatabase2(protocol = protocol, forceskip = forceskip, forceupdate = forceupdate,... = ...)}
   funbsrc<-curdb$data
-  ifrun<-curdb$success
   if (is.null(path)) {
-    if(is.null(rdpath)){
-    path<-paste(paste(strsplit(rdpath,.Platform$file.sep)[[1]][1:(length(strsplit(rdpath,.Platform$file.sep)[[1]])-1)],collapse = .Platform$file.sep),"Backup",sep = .Platform$file.sep)
-    print("Default Location is BOXSYNC")
+    if(!is.null(rdpath)){
+      path<-paste(paste(strsplit(rdpath,.Platform$file.sep)[[1]][1:(length(strsplit(rdpath,.Platform$file.sep)[[1]])-1)],collapse = .Platform$file.sep),"Backup",sep = .Platform$file.sep)
+      print("Default Location is BOXSYNC")
     } else {stop("No Path")}
-    }
-  if (ifrun) {
-    backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
-    topath<-paste(path,backupname,sep = "/")
-    file.copy(from = rdpath, to = topath, overwrite = T)
-    
-    
-    lfile<-list.files(path=path,pattern="*RAW.rdata")
-    yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
-    delfile<-lfile[which(yur>expiration)]  
-    if (clean & length(delfile)>0) {
-      print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
-      print("Removing old files")
-      delfile<-paste(path,delfile,sep="/")
-      file.remove(delfile)
-    }
-  print("DONE")
+  }
+
+  backupname<-paste(sep = "_","RedCapFullDataBackUp",Sys.Date(),"RAW.rdata")
+  topath<-paste(path,backupname,sep = "/")
+  file.copy(from = rdpath, to = topath, overwrite = T)
+
+
+  lfile<-list.files(path=path,pattern="*RAW.rdata")
+  yur<-as.numeric(Sys.Date()-as.Date(sapply(strsplit(lfile,split = "_"), "[[",2)))
+  delfile<-lfile[which(yur>expiration)]
+  if (clean & length(delfile)>0) {
+    print("By default, function also clean out database backup thats 30 days old; use clean=F or expiration = (numeric)")
+    print("Removing old files")
+    delfile<-paste(path,delfile,sep="/")
+    file.remove(delfile)
+
+    print("DONE")
   }
 }
 
 #####################Sync Stuff #############################
 # bsrc.sync<-function(ptc.from=NULL){}
-# 
+#
 # ptc.from = ptcs$masterdemo
 # ptc.to = ptcs$bsocial
 # id.var = "registration_redcapid"
-# id.from = "registration_redcapid" 
+# id.from = "registration_redcapid"
 # id.to = "registration_redcapid"
 # ref_df = data.frame(from = c("reg_condate_bsocial"),to=c("registration_consentdate"),stringsAsFactors = F)
 # add.new.id = FALSE
-# 
+#
 # df_from<-redcap_read(fields = c(id.var,ref_df$from),redcap_uri = ptc.from$redcap_uri,token = ptc.from$token,batch_size = 1000L)
 # lapply(1:nrow(ref_df),function(rx){
-# 
-#   
-#   
+#
+#
+#
 # })
 
 

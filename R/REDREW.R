@@ -3,43 +3,43 @@
 #Author: "Jiazhou Chen"
 #Version: 2.2
 #---
-#[Task List]  
-#0/1 Missingness check arm specific 
+#[Task List]
+#0/1 Missingness check arm specific
 #Version 2.2 Changelog:
 #bsec.getchoicemapping() get the choice from metadata object which can be updated according to design, no more fixed codessss
 #General bug fix to redcap connection/check redcap; so that the refresh function can run
 
-#Version 2.1 Changelog: 
+#Version 2.1 Changelog:
 #Some new functions to help backward compatibility and efficiency
 #New version of the bsrc.attachngrab() deals with the new data organization method
-#Updated functions to incooperate changes in Version 2.0 
+#Updated functions to incooperate changes in Version 2.0
 
 #Version 2.0 Changelog: [Major Revision]
 #New data orgnization method to the funbsrc for more effective update method and make cross project data migration possible
 #BRAND NEW MECHANISM FOR IMPORTING DATA; NOW COULD BE USED TO AUTOMATE DATA IMPORT FROM THE BACKGROUD YOOOOOOO
-#Universal function: bsrc.updatedb() 
+#Universal function: bsrc.updatedb()
 #Deal with updating information in one df using info in another.
-#Introduction of universal function: bsrc.checkbox() 
+#Introduction of universal function: bsrc.checkbox()
 #Deal with checkbox items
-#bsrc.getidmatchdb() now has a way more elegant way of getting redcap ID, read for upload in the future. 
-#bsrc.getmwidentifier() is the function that help getting mwidentifier to a database 
+#bsrc.getidmatchdb() now has a way more elegant way of getting redcap ID, read for upload in the future.
+#bsrc.getmwidentifier() is the function that help getting mwidentifier to a database
 #bsrc.getform() and bsrc.getevent() have a better aggressive datasubsetting rule
 #bsrc.getform() has new argument on how agressive it should be and if data modification should happen.
 #Introduction of universal function: redcap.eventmapping()
 #Very useful fucntion in longitudinal study.
 #New function: bsrc.getevent()
 #Subset the database to only certain event and their according forms
-#Aggressive subsetting is automatically off to preserve data. DO NOT recommand to turn on, only there for efficiency. 
+#Aggressive subsetting is automatically off to preserve data. DO NOT recommand to turn on, only there for efficiency.
 #reformed bsrc.getform() with following changes:
 #aggressive argument to aggressively remove irrelavent data, by default on
 #Mechnisim to protect function from error
 #Error message if no form found
 #intergration with bsrc.ema.redcapreform()
 #New mechnisim to match variable names, migth sometimes result in errorous collection of variable names
-#benefit is that it will now include all checkbox items correctly. This is more important. 
-#Since removing irrelavent ones are not so difficult. 
+#benefit is that it will now include all checkbox items correctly. This is more important.
+#Since removing irrelavent ones are not so difficult.
 #Refined bsrc.getevent() and bsrc.getdemo()
-#bsrc.getevent() functional again 
+#bsrc.getevent() functional again
 #New bsrc.findduplicate() function to identify duplicated records in RedCap caused by ID transition
 #Pull RedCap record into a whole datatable [pretty efficient in R, don't export, will break your pc]
 #Pull Demo for given sinlge ID
@@ -47,7 +47,7 @@
 #Get all data of given form
 #Get RedCap ID for Soloff ID [V useful]
 #Get MetircWire Identifier
-#Race/Gender/Status Processing 
+#Race/Gender/Status Processing
 #Missingness check ID specific
 
 #------------Notes-------------
@@ -69,250 +69,71 @@ is.empty<-function(...) {
   return(...=="")
 }
 
-redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5, retry_whenfailed=T,
-                         continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, 
-                         config_options = NULL) 
-{
-  start_time <- base::Sys.time()
-  if (base::missing(redcap_uri)) 
-    base::stop("The required parameter `redcap_uri` was missing from the call to `redcap_write()`.")
-  if (base::missing(token)) 
-    base::stop("The required parameter `token` was missing from the call to `redcap_write()`.")
-  #token <- REDCapR::sanitize_token(token)
-  ds_glossary <- REDCapR::create_batch_glossary(row_count = base::nrow(ds_to_write), 
-                                                batch_size = batch_size)
-  affected_ids <- character(0)
-  excluded_ids <- 
-    lst_status_code <- NULL
-  lst_outcome_message <- NULL
-  success_combined <- TRUE
-  message("Starting to update ", format(nrow(ds_to_write), 
-                                        big.mark = ",", scientific = F, trim = T), " records to be written at ", 
-          Sys.time())
-  for (i in seq_along(ds_glossary$id)) {
-    selected_indices <- seq(from = ds_glossary[i, "start_index"], 
-                            to = ds_glossary[i, "stop_index"])
-    if (i > 0) 
-    Sys.sleep(time = interbatch_delay)
-    message("Writing batch ", i, " of ", nrow(ds_glossary), 
-            ", with indices ", min(selected_indices), " through ", 
-            max(selected_indices), ".")
-    
-    write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,], previousIDs = NULL,retry_whenfailed = T,
-                                          redcap_uri = redcap_uri, token = token, verbose = verbose, 
-                                          config_options = config_options)
-    lst_status_code[[i]] <- write_result$status_code
-    lst_outcome_message[[i]] <- write_result$outcome_message
-    if (!write_result$success) {
-      error_message <- paste0("The `redcap_write()` call failed on iteration ", 
-                              i, ".")
-      error_message <- paste(error_message, ifelse(!verbose, 
-                                                   "Set the `verbose` parameter to TRUE and rerun for additional information.", 
-                                                   ""))
-      if (continue_on_error) 
-        warning(error_message)
-      else stop(error_message)
-    }
-    affected_ids <- c(affected_ids, write_result$affected_ids)
-    success_combined <- success_combined | write_result$success
-    excluded_ids <- c(excluded_ids, write_result$excludedIDs)
-    rm(write_result)
+###########################
+ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
+  proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
+  if(addNAtoNull){
+    allnames<-unique(unlist(lapply(proc_ls,names)))
+    proc_ls<-lapply(proc_ls,function(lsx){
+      lsx[allnames[which(!allnames %in% names(lsx))]]<-NA
+      return(lsx)
+    })
   }
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
-                                         units = "secs"))
-  status_code_combined <- paste(lst_status_code, collapse = "; ")
-  outcome_message_combined <- paste(lst_outcome_message, collapse = "; ")
-  excluded_ids <- excluded_ids[excluded_ids!=""]
-  return(list(success = success_combined, status_code = status_code_combined,excluded_ids=excluded_ids,
-              outcome_message = outcome_message_combined, records_affected_count = length(affected_ids), 
-              affected_ids = affected_ids, elapsed_seconds = elapsed_seconds))
+  proc_ls<-cleanuplist(proc_ls)
+  return(list(list=proc_ls,
+              df=do.call(rbind,proc_ls)))
+}
+######
+rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
+  if(!mod) {return(raw)}
+  message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
+  #did not use raw directly because possible conflict with Date class
+  raw[as.data.frame(apply(raw,2,as.character))==""]<-NA
+
+  if (length(grep("___",names(raw))) > 0){
+    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+  }
+  value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
+  valid_nums<-which(rowSums(is.na(raw[value_vari])) <= (length(value_vari) - (at_least) ))
+
+  message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
+  raw_new <- raw[valid_nums,]
+
+
+  return(raw_new)
 }
 
-
-redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, config_options = NULL,retry_whenfailed=F,previousIDs=NULL) 
-{
-  start_time <- Sys.time()
-  csvElements <- NULL
-  if (missing(redcap_uri)) 
-    stop("The required parameter `redcap_uri` was missing from the call to `redcap_write_oneshot()`.")
-  if (missing(token)) 
-    stop("The required parameter `token` was missing from the call to `redcap_write_oneshot()`.")
-  #token <- REDCapR::sanitize_token(token)
-  con <- base::textConnection(object = "csvElements", open = "w", 
-                              local = TRUE)
-  utils::write.csv(ds, con, row.names = FALSE, na = "")
-  close(con)
-  csv <- paste(csvElements, collapse = "\n")
-  rm(csvElements, con)
-  post_body <- list(token = token, content = "record", format = "csv", 
-                    type = "flat", data = csv, overwriteBehavior = "overwrite", 
-                    returnContent = "ids", returnFormat = "csv")
-  result <- httr::POST(url = redcap_uri, body = post_body, 
-                       config = config_options)
-  status_code <- result$status_code
-  raw_text <- httr::content(result, type = "text")
-  
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
-                                         units = "secs"))
-  success <- (status_code == 200L)
-  if (success) {
-    elements <- unlist(strsplit(raw_text, split = "\\n"))
-    affectedIDs <- elements[-1]
-    recordsAffectedCount <- length(affectedIDs)
-    outcome_message <- paste0(format(recordsAffectedCount, 
-                                     big.mark = ",", scientific = FALSE, trim = TRUE), 
-                              " records were written to REDCap in ", round(elapsed_seconds, 
-                                                                           1), " seconds.")
-    raw_text <- ""
-  }
-  else {
-    if(retry_whenfailed){
-      outcome_message<-outcome_message <- paste0("The upload was not successful:\n", 
-                                                 raw_text,"\n","But we will try again...\n")
-      sp_rawtext<-strsplit(raw_text,split = "\\n")[[1]]
-      allgx<-lapply(sp_rawtext,function(x){xa<-strsplit(gsub("\"","",x),",")[[1]];})
-      mxID<-sapply(allgx,function(sp_rawtext){gsub("ERROR: ","",sp_rawtext[1])})
-      allIDs<-c(previousIDs,mxID)
-      negPos<-as.numeric(na.omit(sapply(allIDs,function(IDX){
-        #print(IDX)
-        a<-unique(which(ds==IDX,arr.ind = T)[,1]);
-        if(length(a)>0){a}else{NA}
-      })))
-      ds_new<-ds[-negPos,]
-      gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
-                                retry_whenfailed = T,previousIDs = allIDs,
-                                config_options = config_options)
-      raw_text<-paste(raw_text,gx$raw_text,sep = "re-try: ")
-      success<-gx$success
-      status_code<-gx$status_code
-      outcome_message<-paste(outcome_message,gx$outcome_message,sep = "re-try: ")
-      recordsAffectedCount<-gx$records_affected_count
-      affectedIDs<-gx$affected_ids
-      elapsed_seconds<-gx$elapsed_seconds
-      previousIDs<-gx$excludedIDs
-    } else {
-      affectedIDs <- numeric(0)
-      recordsAffectedCount <- NA_integer_
-      outcome_message <- paste0("The REDCapR write/import operation was not successful.  The error message was:\n", 
-                                raw_text)
+clean_str <- function(dfx,remove=T,replace_text="") {
+  dfx_back<-dfx
+  logi_frame<-as.data.frame(apply(dfx,2,function(x){grepl("-xIT_WAS_NOT_ASCIIx-",iconv(x, "latin1", "ASCII", sub="-xIT_WAS_NOT_ASCIIx-"))}))
+  vari_to_replace<-apply(logi_frame,2,any)
+  message("These variables: ",paste(names(vari_to_replace)[vari_to_replace],collapse = ", "),", contain data_points that contain illegal characters.")
+  for (vax in names(vari_to_replace)[vari_to_replace]) {
+    message("For variable '",vax,"', the following rows has illegal characters: \n",paste(which(logi_frame[[vax]]),collapse = ","))
+    if(remove){
+      dfx[which(logi_frame[[vax]]),vax] <- iconv(dfx[which(logi_frame[[vax]]),vax], "latin1", "ASCII", sub=replace_text)
     }
   }
-  if (verbose) 
-    message(outcome_message)
-  if (!is.null(previousIDs)){excludedIDs<-previousIDs}else {excludedIDs<-""}
-  return(list(success = success, status_code = status_code, 
-              outcome_message = outcome_message, records_affected_count = recordsAffectedCount, 
-              affected_ids = affectedIDs, elapsed_seconds = elapsed_seconds, excludedIDs = excludedIDs,
-              raw_text = raw_text))
+  return(list(original_df=dfx_back,clean_df=dfx,logical_df=logi_frame))
 }
 
-
-redcap_seq_uplaod<-function(ds,id.var,redcap_uri,token,batch_size=1000L) {
-  ds_sp<-split(ds,do.call(paste,c(ds[id.var],sep="_")))
-  gt <- lapply(ds_sp,function(gx){gx[!apply(gx,2,is.na)]})
-  gt_u_names<-unique(lapply(gt,names))
-  gt_u_index <- sapply(gt,function(gtx){match(list(names(gtx)),gt_u_names)})
-  gyat<-lapply(1:length(gt_u_names),function(g){
-    message("uploading ",g," out of ",length(gt_u_names))
-    redcap_upload(ds_to_write = do.call(rbind,gt[which(gt_u_index == g)]),batch_size = batch_size,redcap_uri = redcap_uri,token = token,continue_on_error = T)
-  })
-  return(list(affected_ids=unlist(sapply(gyat,`[[`,"affected_ids"),use.names = F)))
-}
-
-
-###############Get Event Mapping from RedCap:
-redcap.eventmapping<-function (redcap_uri, token, arms = NULL, message = TRUE, config_options = NULL) {
-  start_time <- Sys.time()
-  if (missing(redcap_uri)) 
-    stop("The required parameter `redcap_uri` was missing from the call to `redcap.eventmapping`.")
-  if (missing(token)) 
-    stop("The required parameter `token` was missing from the call to `redcap.eventmapping`.")
-  #token <- REDCapR::sanitize_token(token)
-  post_body <- list(token = token, content = "formEventMapping", format = "csv", arms = arms)
-  result <- httr::POST(url = redcap_uri, body = post_body, 
-                       config = config_options)
-  status_code <- result$status
-  success <- (status_code == 200L)
-  raw_text <- httr::content(result, "text")
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-  if (success) {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
-        silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {
-      outcome_message <- paste0("The data dictionary describing ", 
-                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
-                                " fields was read from REDCap in ", 
-                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
-                                status_code, ".")
-      raw_text <- ""}
-    else {success <- FALSE
-    ds <- data.frame()
-    outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
-                              status_code, ".  The 'raw_text' returned was '", 
-                              raw_text, "'.")}
+##########################
+tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
+  dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
+  dfx_var_melt[[var.left]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",1)
+  dfx_var_melt[[var.right]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",2)
+  dfx_var_melt$variable<-NULL
+  if (timepos=="right") {
+    timevar<-var.left
+    id.var<-c(id.var,var.right)
+  } else if (timepos=="left") {
+    timevar<-var.right
+    id.var<-c(id.var,var.left)
   }
-  else {
-    ds <- data.frame()
-    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
-                              raw_text)}
-  if (message){ 
-    message(outcome_message)}
-  return(list(data = ds, success = success, status_code = status_code, 
-              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
-              raw_text = raw_text))
-}
+  dfx_reshape<-reshape(dfx_var_melt,timevar = timevar,v.names = "value",idvar = id.var,direction = "wide")
+  names(dfx_reshape)<-gsub("value.","",names(dfx_reshape),fixed = T)
 
-redcap.getreport<-function(redcap_uri, token, reportid = NULL, message = TRUE, config_options = NULL) {
-  
-  library(RCurl)
-  result <- postForm(
-    uri='https://www.ctsiredcap.pitt.edu/redcap/api/',
-    token='F4D36C656D822DF09832B5A4A8F323E6',
-    content='report',
-    format='csv',
-    report_id='8545',
-    rawOrLabel='raw',
-    rawOrLabelHeaders='raw',
-    exportCheckboxLabel='false',
-    returnFormat='json'
-  )
-  
-  start_time <- Sys.time()
-  if (missing(redcap_uri))  {
-    stop("The required parameter `redcap_uri` was missing from the call to `redcap.getreport`.") }
-  if (missing(token)) {
-    stop("The required parameter `token` was missing from the call to `redcap.getreport`.") }
-  #token <- REDCapR::sanitize_token(token)
-  post_body <- list(token = token, content = "report", format = "csv", report_id=as.character(reportid))
-  result <- httr::POST(url = redcap_uri, body = post_body, 
-                       config = config_options)
-  status_code <- result$status
-  success <- (status_code == 200L)
-  raw_text <- httr::content(result, "text")
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
-  if (success) {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
-        silent = TRUE)
-    if (exists("ds") & inherits(ds, "data.frame")) {
-      outcome_message <- paste0("The data dictionary describing ", 
-                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
-                                " fields was read from REDCap in ", 
-                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
-                                status_code, ".")
-      raw_text <- ""} else {success <- FALSE
-      ds <- data.frame()
-      outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
-                                status_code, ".  The 'raw_text' returned was '", 
-                                raw_text, "'.")}
-  } else {
-    ds <- data.frame()
-    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
-                              raw_text)}
-  if (message){ 
-    message(outcome_message)}
-  return(list(data = ds, success = success, status_code = status_code, 
-              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
-              raw_text = raw_text))
+  return(dfx_reshape)
 }
 ##########################Switcher
 bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protocol.cur=F,
@@ -328,18 +149,6 @@ bsrc.switcher<-function(name=NULL,redcap_uri=NULL,token=NULL,rdpath=NULL,protoco
     protocol.cur<<-protocol
   } else {return(protocol)}
 }
-#########################Release to global function
-bsrc.globalrelease<-function(protocol=protocol.cur,skipcheck=F) {
-  if (file.exists(protocol$rdpath)){
-    if (!skipcheck){curdb<-bsrc.checkngrab(protocol=protocol)}
-  }else {message("File don't exist...loading")
-    bsrc.checkdatabase2(protocol = protocol, glob.release = T)}
-  updated.time<-curdb$update.time
-  funbsrc<<-curdb$data
-  funevent<<-curdb$eventmap
-  funstrc<<-curdb$metadata
-  jzc.connection.date<<-curdb$update.date
-}
 #########################Check & Attach
 bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir",envir=new.env()){
   if (is.null(rdpath)) {
@@ -347,7 +156,7 @@ bsrc.attachngrab<-function(rdpath=NULL, protocol=protocol.cur, returnas="envir",
     rdpath<-protocol$rdpath
     } else {stop("ERROR, protocol object is not a list.")}
   } else {message("when rdpath argument available, will always use that")}
-  
+
   if(file.exists(rdpath)){
     loadrdata(rdpath=rdpath,returnas=returnas,envir=envir)
   } else {"No such file...."}
@@ -367,84 +176,86 @@ bsrc.valuetostring<-function(variname=NULL,valuein=NULL,metadata=NULL){
   return(plyr::mapvalues(x = valuein,from = fieldmap$choice.code,to=fieldmap$choice.string))
 }
 
+##########################
+
 #########################New Ver in DEV
-bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=50L,fullupdate=T,output=F,newfile=F,online=F,...) {
+bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,output=F,newfile=F,online=F,...) {
   if (missing(protocol)) {stop("no protocol specified")}
-  
-  if (is.list(protocol)) {message(paste("Got protocol list object, will load protocol: '",protocol$name,"' now...",sep = ""))
-    message(protocol[ protocol != protocol$token ])
+
+  if (is.list(protocol)) {
+    message(paste(names(protocol[ protocol != protocol$token ]),protocol[ protocol != protocol$token ],sep = ": ",collapse = "\n"))
     protocol.n<-protocol$name
     input.uri<-protocol$redcap_uri
     input.token<-protocol$token
     rdpath<-protocol$rdpath
   } else {message("protocol has not sufficient information, using global variables [input.uri/input.token]")}
-  
+
   if (is.na(rdpath) | is.null(rdpath)) {online<-TRUE}
-  
+
   if (!output & updaterd) {
     if (!online) {
       if (file.exists(rdpath) & !newfile) {
         pathsplit<-strsplit(rdpath,split = "/")[[1]]
         topath<-paste(paste(pathsplit[-length(pathsplit)],collapse = "/",sep = ""),"Backup","conredcap.backup.rdata",sep = "/")
+        dir.create(dirname(topath),recursive = T,showWarnings = F)
         file.copy(from = rdpath, to = topath, overwrite = T)
         cur.envir<-bsrc.attachngrab(protocol = protocol, returnas = "envir")
-      }else if (newfile | !file.exists(rdpath)) {"Starting new file..."
+      }else if (newfile | !file.exists(rdpath)) {
+        message("Starting new file...")
         cur.envir<-new.env(parent = emptyenv())
         allobjects<-c(protocol.n)
-        fullupdate<-TRUE}
+      }
     } else {cur.envir<-new.env(parent = emptyenv())}
   } else {cur.envir<-new.env(parent = emptyenv())}
-  anyfailed.s<-FALSE
-  anyfailed.e<-FALSE
-  anyfailed.d<-FALSE
-  funstrc.x<-REDCapR::redcap_metadata_read(redcap_uri = input.uri,token = input.token)
-  if (funstrc.x$success){
-    funstrc<-funstrc.x$data
-  }else{anyfailed.s<-TRUE
-  message("Metadata not loaded")}
-  funevent.x<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)
-  if (funevent.x$success){
-    funevent<-funevent.x$data
-  }else{anyfailed.e<-TRUE
-  message("Event mapping not loaded")}
-  if (fullupdate){
-    funbsrc.x<-REDCapR::redcap_read(batch_size = batch_size,redcap_uri=input.uri, token=input.token)
-    if (funbsrc.x$success){
-      funbsrc<-funbsrc.x$data
-    }else{anyfailed.d<-TRUE
-    message("Main database not loaded")}
-  }else {anyfailed.d<-TRUE}
-  
-  if (!any(anyfailed.s,anyfailed.d)){
-    assign("update.date",Sys.Date(),envir = cur.envir)
-    assign("update.time",Sys.time(),envir = cur.envir)
-    assign("success",TRUE,envir = cur.envir)
-  }else{
-    message("something went wrong, better go check it out.")
-    message("will still update successfully loaded parts.")
-    assign("success",FALSE,envir = cur.envir)
+
+  project_info <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = "project")$output
+
+  if(as.logical(project_info$is_longitudinal)) {
+    toget <- c("metadata","data","eventmap")
+  } else {
+    toget <- c("metadata","data")
   }
-  #New way, use environment:
-  if (!anyfailed.s){
-    assign("metadata",funstrc,envir = cur.envir)
-  }
-  if (!anyfailed.e){
-    assign("eventmap",funevent,envir = cur.envir)
-  }
-  if (!anyfailed.d){
-    assign("data",funbsrc,envir = cur.envir)
-  }
+
+  success_sequence<-sapply(toget,function(xe){
+    if(xe == "data") {
+      dxe <- "record"
+    } else if (xe == "eventmap") {
+      dxe <- "formEventMapping"
+    } else {dxe <- xe}
+    message("loading: ",xe)
+    output <- redcap_api_call(redcap_uri = input.uri,token = input.token,content = dxe,batch_size = batch_size)
+    if (!output$success) {
+      message(xe," did not load successfully. error message is \n",output)
+      return(FALSE)
+    } else {
+      assign(xe,output$output,envir = cur.envir)
+      return(TRUE)
+    }
+  })
+
   assign("name",protocol$name,envir = cur.envir)
-  if (updaterd & !online){
+  assign("is_longitudinal",as.logical(project_info$is_longitudinal),envir = cur.envir)
+  assign("success",!any(!success_sequence),envir = cur.envir)
+  assign("update.date",Sys.Date(),envir = cur.envir)
+  assign("update.time",Sys.time(),envir = cur.envir)
+  if(any(!success_sequence)) {
+    message(paste(names(success_sequence)[which(!success_sequence)],"did not load successfully.",sep=": ",collapse = "\n"))
+    message("will output the rest.")
+  } else {
+    message("success")
+  }
+
+  if (updaterd && !online && !any(!success_sequence)){
     save(list = objects(cur.envir),envir = cur.envir,file = rdpath)
   }
-  
+
   if (output | online) {
     return(cur.envir)
   }
 }
 ##############################Check Date Base
-bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, forceupdate=F, glob.release = F,logicaloutput=F, expiration=3,...) {
+bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, forceupdate=F, glob.release = F,logicaloutput=F,
+                              expiration=3,...) {
   reload<-FALSE
   ifrun<-TRUE
   protocol$rdpath->rdpath
@@ -452,15 +263,20 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
     if(file.exists(rdpath)){
       curdb<-invisible(bsrc.attachngrab(protocol=protocol,returnas = "envir"))
       if (is.null(curdb$update.time)){updated.time<-"2018-01-15 22:15:01 EST"}else {updated.time<-curdb$update.time}
-      if(!forceskip){  
+      if(!forceskip){
         if (curdb$success) {
           if (difftime(Sys.time(),updated.time,units = "hours") > expiration) {
             message(paste("Whelp...it's been more than ",expiration," hours since the db was updated, let's update it..."))
-            reload<-TRUE} }else {message("Something went wrong when loading rdata file...")
-              ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
-              if (!as.logical(ifso)){reload<-T}
-            }
-        
+            reload<-TRUE
+          }
+        }else {
+          message("Something went wrong when loading rdata file...")
+          ifso<-readline(prompt = "To continue with the file, type 'T' or to reload type 'F' : ")
+          if (!as.logical(ifso)){
+            reload<-T
+          }
+        }
+
       }else{message("FORCE SKIP RDATA CHECKS")
         ifrun<-T}
     }else{message("No such file...reloading")
@@ -468,199 +284,118 @@ bsrc.checkdatabase2<-function(protocol = protocol.cur,forceskip=F, online=F, for
   } else {message("Online mode is on")
     reload<-F
     online<-T
-    forceupdate<-F}
-  
+    forceupdate<-F
+  }
+
   if (reload | forceupdate) {
-    bsrc.conredcap2(protocol = protocol,online=online,... = ...)
+    bsrc.conredcap2(protocol = protocol,online=online,...)
     bsrc.checkdatabase2(protocol = protocol,forceupdate = F,...)
   }else {ifrun<-TRUE}
-  
+
   if (online) {
     curdb<-bsrc.conredcap2(protocol = protocol,online=online,... = ...)
     ifrun<-TRUE
   }
-  
-  if (glob.release) {
-    bsrc.globalrelease(skipcheck = T)
-  }
+
   if(ifrun & !logicaloutput) {return(curdb)}
   if(logicaloutput) {return(ifrun)}
 }
-###############Legacy
-bsrc.conredcap<-function(uri,token,batch_size,output=F,notfullupdate=F) {
-  if (missing(uri)) {uri<-'DNPL'
-  message("By default, the location is set to Pitt's RedCap.")}
-  if (missing(batch_size)) {batch_size<-"50" 
-  message("By default, the batch size is 50 unique records")}
-  if (uri == 'DNPL'|uri == 'PITT') {input.uri='https://www.ctsiredcap.pitt.edu/redcap/api/'}
-  else (input.uri<-uri)
-  if (missing(token)) {input.token <- readline(prompt = "Please input the RedCap api token: ")}
-  if (!output){
-    uri<<-input.uri
-    token<<-input.token
-    #test connection:
-    funstrc<<-redcap_metadata_read(redcap_uri = input.uri,token = input.token)$data
-    funevent<<-redcap.eventmapping(redcap_uri = input.uri,token = input.token)$data
-  }
-  if (!notfullupdate){
-    redcap<-redcap_project$new(redcap_uri=input.uri, token=input.token)
-    funbsrc.x<-redcap$read(batch_size = batch_size)
-    if (funbsrc.x$success) {
-      message("Success! Database Loaded")
-      jzc.connection.yesno<<-1
-      jzc.connection.date<<-Sys.Date()
-      funbsrc<<-funbsrc.x$data
-    } #take only the regi part
-    else {
-      message("Connection Failed, Please Try Again.") 
-      jzc.connection.yesno<<-0}
-    if (!output) {subreg<<-bsrc.getevent(eventname = "enrollment_arm_1",forcerun = T,subreg = T)}
-    if (output){
-      return(list(data=funbsrc,metadata=funstrc,eventmapping=funevent))}
-  }
-}
-###############################
-bsrc.checkdatabase<-function(replace,forcerun=F, token, forceupdate=F) {
-  if(missing(token)){token<-input.token}
-  if(!missing(replace)){funbsrc<-replace}
-  if (exists('jzc.connection.yesno')==FALSE | exists('jzc.connection.date')==FALSE){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
-  if (is.null(jzc.connection.date) | is.null(jzc.connection.yesno)){
-    jzc.connection.yesno<-0 
-    jzc.connection.date<-NA}
-  if (forceupdate==TRUE) {
-    message("FORCEUPDATE")
-    bsrc.conredcap(token = token)
-    ifrun<-TRUE
-  }
-  else {ifelse (jzc.connection.yesno == 1, {
-    ifelse(forcerun==TRUE | jzc.connection.date==Sys.Date(), {
-      message("Database is loaded or was loaded today")
-      ifrun<-TRUE}, {message("Local database is out of date, redownload now")
-        ifrun<-FALSE
-        bsrc.conredcap(token = token)
-        ifrun<-bsrc.checkdatabase()})
-  }, 
-  {message("RedCap Connection is not loaded, Retry Now")
-    ifrun<-FALSE
-    bsrc.conredcap(token = token)
-    ifrun<-bsrc.checkdatabase()
-  })
-  }
-  return(ifrun)
-}
-##############################
-
-rc_na_remove <- function(raw,mod=TRUE,IDvar=NULL,at_least=1) {
-  if(mod) {
-    message("NA will replace '' and 0 in checkbox items, Set 'mod' to FALSE to avoid modificaiton to data frame.")
-    raw[raw==""]<-NA
-    if (length(grep("___",names(raw))) > 0){
-      raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
-    }
-    value_vari<-names(raw)[!names(raw) %in% c(IDvar,"redcap_event_name","redcap_repeat_instrument","redcap_repeat_instance")]
-    
-    valid_nums<-which(rowSums(is.na(raw[value_vari])) < (length(value_vari) - (at_least) ))
-    message("Using of ",length(value_vari)," value variables, ",(nrow(raw) - length(valid_nums))," observations were removed.")
-    raw_new <- raw[valid_nums,]
-  } else {raw_new <- raw}
-  
-  return(raw_new)
-}
 
 
 
 ###############################
-bsrc.getform<-function(protocol = protocol.cur,formname,online=F,filter_events=NULL,curdb = NULL,IDvar="registration_redcapid",mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
-  
+bsrc.getform<-function(protocol = NULL,formname,online=F,filter_events=NULL,curdb = NULL,mod=T,at_least=1, no_calc=T,batch_size=1000L,...) {
+
   #Get necessary data
   if (online) {
-    metadata <- REDCapR::redcap_metadata_read(redcap_uri = protocol$redcap_uri,token = protocol$token,verbose = F)$data
-    eventdata <- redcap.eventmapping(redcap_uri = protocol$redcap_uri,token = ptcs$masterdemo$token)
-    if(nrow(eventdata$data)<1){eventdata<-NULL}
+    project_info <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "project")
+    metadata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "metadata")$output
+    is_longitudinal <- as.logical(project_info$output$is_longitudinal)
+    if(is_longitudinal){
+      eventdata <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "formEventMapping")$output
+    } else {eventdata <- NULL}
   } else {
-    if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)} 
+    if (is.null(curdb) ) {curdb <- bsrc.checkdatabase2(protocol = protocol,forceskip = T)}
     stopifnot(exprs = {curdb$success})
     data <- curdb$data
     metadata <- curdb$metadata
-    eventdata <- curdb$eventmap
+    is_longitudinal <- curdb$is_longitudinal
+    if(is_longitudinal) {
+      eventdata <- curdb$eventmap
+    }
   }
-  
-  #Determine if this project has events
-  if(is.null(eventdata)){
-    no_evt_rc<-TRUE;message("This RedCap project does not have multiple events.")
-    fix_variables<-IDvar
-  } else {
-    no_evt_rc<-FALSE
-    fix_variables<-c(IDvar,"redcap_event_name")
-  }
+  IDvar <- metadata$field_name[1]
   #Get form name(s) if not specified
   if (missing(formname)){
     message("Here's a list of forms: ")
     print(unique(as.character(metadata$form_name)))
     formname<-readline(prompt = "Please type in form name (single value only, to get multiple forms at once, use argument 'formname'): ")
   }
-  
+
   if (any(as.character(formname) %in% as.character(metadata$form_name))) {
-    
+
     #Get variable names and events if applicable
     lvariname<-as.character(metadata$field_name[which(metadata$form_name %in% formname)])
     #lvariname<-
-    if(!no_evt_rc){
+    if(is_longitudinal){
       eventname<-eventdata$unique_event_name[which(eventdata$form %in% formname)]
       if (!is.null(filter_events)) {
         eventname<-eventname[which(eventname %in% filter_events)]
       }
+      fix_variables <- c(IDvar,"redcap_event_name")
     } else {
       eventname <- NULL
+      fix_variables <- c(IDvar)
     }
-    
-    
+
+
     if (online) {
       #Do online version:
       message("Getting form data directly from RedCap.")
-      
-      renew<-REDCapR::redcap_read(redcap_uri = protocol$redcap_uri ,token = protocol$token, fields = c(fix_variables,lvariname), events = eventname,batch_size = batch_size)
+      renew <- redcap_api_call(redcap_uri = protocol$redcap_uri,token = protocol$token,content = "record",
+                               fields = c(fix_variables,lvariname),events = eventname,batch_size = batch_size)
       if (renew$success){
-        raw<-renew$data
-      }else {stop("Failed... Try again?")}
-      
+        raw<-renew$output
+        rownames(raw)<-NULL
+      } else if (nrow(renew$data)==0) {
+        return(NULL)
+      } else {stop("Failed... Try again?")}
+
     } else {
       #Do offline version:
       message("Getting form data from saved RedCap data.")
       #Offline version is a bit problematic with check box thing; spliting the list of variables to get by if they are checkbox or not
+      lvariname <- lvariname[!lvariname %in% fix_variables]
       check_box_varis<-split(lvariname,metadata$field_type[match(lvariname, metadata$field_name)] == "checkbox")
-      
+
       #Get a (fixed variables) and b (non-checkbox data)
       #return(list(data,check_box_varis,fix_variables))
-      raw_a <- data[,fix_variables]
-      
-      raw_b <- data[,check_box_varis$`FALSE`[which(check_box_varis$`FALSE` %in% names(data))]]
-      
-      
+      raw_a <- as.data.frame(data[fix_variables])
+
+      raw_b <- data[check_box_varis$`FALSE`[which(check_box_varis$`FALSE` %in% names(data))]]
+
+
       if(is.null(check_box_varis$`TRUE`)) {
-        #No checkbox 
+        #No checkbox
         raw <- cbind(raw_a,raw_b)
       } else {
         #If there are check box in this form
-        raw_c <- data[,unlist(lapply(check_box_varis$`TRUE`,function(x){grep(x,names(data),value = T)}))]
+        raw_c <- data[unique(unlist(lapply(check_box_varis$`TRUE`,function(x){grep(x,names(data),value = T)})))]
         raw <- cbind(raw_a,raw_b,raw_c)
       }
-      
+
       if(!is.null(eventname)) {
         #Event filtering
         raw <- raw[which(raw$redcap_event_name %in% eventname),]
       }
     }
-    
+
     tempch<-metadata[which(metadata$form_name %in% formname),]
     if (no_calc){
       message("Calculated fields are excluded. Set no_calc to FALSE to include them.")
       cal_vari<-tempch$field_name[which(tempch$field_type=="calc")]
       raw <- raw[,which(!names(raw) %in% cal_vari)]
-      calmove <- length(cal_vari)
-    } else {calmove<-0}
+    }
 
     new_raw<-rc_na_remove(raw = raw,mod=mod,IDvar=IDvar,at_least = at_least)
     return(new_raw)
@@ -689,11 +424,11 @@ bsrc.findid<-function(df,idmap=NULL,id.var="ID",onlyoutput=NULL){
     })
     names(t)<-df[[id.var]]
     if(any(sapply(t,nrow)>1)){
-      
+
       message("Duplicated ID map entry found for singular ID, terminate and return list of ID identified.")
       return(t[sapply(t,nrow)>1])
     }
-    
+
     tx<-do.call(rbind,t)
     if (!is.null(onlyoutput)){tx<-tx[c(onlyoutput)]}
     lx<-cbind(df,tx)
@@ -726,12 +461,12 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
       x<-x[!is.na(x)]
       if (any(is.character(x))) {x<-x[x!=""]}
       x<-unique(x)
-      
+
       if (length(event)<1) {
         dbx[which(dbx[[id.var]]==id),vartodo]->xrc
       } else {
         dbx[which(dbx[[id.var]]==id & dbx$redcap_event_name==event),vartodo]->xrc}
-      
+
       if (is.list(xrc)){
         xrc<-lapply(xrc,function(x){if(length(x)<1) {return(NULL)} else return(x)})
         xrc<-unlist(cleanuplist(xrc))
@@ -739,12 +474,12 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
       xrc<-xrc[!is.na(xrc)]
       if (any(is.character(xrc))) {xrc<-xrc[xrc!=""]}
       xrc<-unique(xrc)
-      
+
       if(length(xrc)<1 |is.null(xrc) |!any(!is.na(xrc))) {xrc<-NA
       } else if (length(xrc)>1 && any(is.na(xrc))) {xrc<-na.omit(xrc)}
       if(length(x)<1 |is.null(x) |!any(!is.na(x))) {x<-NA
       } else if (length(x)>1 && any(is.na(x))) {x<-na.omit(x)}
-      
+
       if (any(is.na(xrc))) {return(x)
       } else if (any(is.na(x))) {return(xrc)
       } else if (length(xrc)!=length(x) | any(!xrc %in% x)){
@@ -752,19 +487,19 @@ bsrc.refineupload<-function(dfx=NULL,id.var="registration_redcapid",perference="
         if (perference == "data") {return(x)}
         if (perference == "NA") {return(NA)}
       } else return(xrc)
-      
+
     })
     #do duplicate action here:
     if (!any(sapply(xk,length)>1) ) {xk<-unlist(xk)}
     dfx[[vartodo]]<-xk
   }
-  
+
   if(onlyrc) {
     if(any(is.null(dfx$redcap_event_name))) {dfx<-dfx[,c(id.var,varstodo)]} else {
       dfx<-dfx[,c(id.var,"redcap_event_name",varstodo)]}
   }
   if (cbyes){dfx<-bsrc.choice2checkbox(dfx = dfx,metadata = metd)}
-  
+
   return(dfx)
 }
 
@@ -788,7 +523,7 @@ bsrc.choice2checkbox<-function(dfx=NULL,metadata=NULL,cleanupog=T){
         warning(paste0("variable ",var," contains unmatched value: ",xa,", will return NA"))
         xc<-NA
       }
-      
+
       dk <- data.frame(matrix(ncol = length(choicemap$choice.code), nrow = 1,data = 0))
       names(dk)<-paste(var,choicemap$choice.code,sep = "___")
       if (!any(is.na(xc))) {
@@ -802,8 +537,6 @@ bsrc.choice2checkbox<-function(dfx=NULL,metadata=NULL,cleanupog=T){
   }
   return(dfx)
 }
-
-######
 
 ####Find duplicate RedCap IDs
 bsrc.findduplicate <- function(protocol = protocol.cur) {
@@ -831,83 +564,66 @@ bsrc.gettimeframe<-function(dfx=NULL,curdb=NULL,returnmap=F,returndfx=T,protocol
   datesx$event_date<-sapply(1:length(datesx$registration_redcapid), function(iz) {
     if (!is.na(datesx[iz,]$demo_visitdate)) {return(datesx[iz,]$demo_visitdate)
     } else if (!is.na(datesx[iz,]$fudemo_visitdate)) {return(datesx[iz,]$fudemo_visitdate)
-    } else {return(NA)} 
+    } else {return(NA)}
   })
   datesz<-datesx[!is.na(datesx$event_date),c("registration_redcapid","redcap_event_name","event_date")]
   datesz$timeframe<-as.numeric(gsub("([0-9]+).*$", "\\1", datesz$redcap_event_name))
   datesz$timeframe[datesz$redcap_event_name=="baseline_arm_1"]<-0
-  
+
   if (is.null(dfx) | returnmap) {
     return(datesz)
   } else if (returndfx) {
-    
+
   } else {message("unable to return based on input argument")}
-  
+
 }
-#####################
-dnpl.bso.getsahx<-function(curdb=NULL) {
-  metd<-curdb$metadata
-  sahx<-bsrc.getform(formname = "suicide_history",curdb = curdb)
-  cbvars<-metd$field_name[which(metd$form_name=="suicide_history" & metd$field_type=="checkbox")]
-  for (varx in cbvars) {
-    sahx<-bsrc.checkbox(varx,sahx,returnstring = T)
-  }   
-  varying<-names(sahx)[grep("[0-9]+",names(sahx))]
-  notvarying<-names(sahx)[-grep("[0-9]+",names(sahx))]
-  dfz<-tolong_multivalue(dfx = sahx, varying = varying, notvarying = notvarying,id.var = c("registration_redcapid","redcap_event_name"),
-                         var.left = "type",var.right="attempt",sep = "_at",timepos = "right")
-  dfe<-dfz[!is.na(dfz$sahx_sadate),]
-  idmap<-bsrc.getform(curdb = curdb,formname="record_registration")[c("registration_id","registration_redcapid","registration_soloffid")]
-  dff<-bsrc.findid(dfe,idmap,id.var = "registration_redcapid",onlyoutput = "registration_soloffid")
-  return(dff)
-}
+
 ###########################
-bsrc.getSUIHX_index<-function(protocol=protocol.cur,suicide_formname="suicide_history"){
-  metadata<-bsrc.getform(protocol = protocol,formname = suicide_formname,aggressivecog = F,mod = F,online = T,batch_size=1000L)
-  sui_names<-names(metadata)
-  index_df<-data.frame(names=sui_names,rxsim1=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
-  index_df$SingleEntry<-index_df$names==index_df$rxsim1
-  index_df$is_checkbox<-grepl("___",index_df$names)
-  index_df$root_names<-index_df$names;index_df$checkbox_names<-NA
+bsrc.getSUIHX_index<-bsrc.sahx_index<-function(sahx_df){
+  sui_names<-names(sahx_df)
+  index_df<-data.frame(vari_names=sui_names,attempt_num=gsub(".*_(at[0-9]*$)",'\\1',gsub("___.*","",sui_names),perl = T),stringsAsFactors = F)
+  index_df$single_entry<-index_df$vari_names==index_df$attempt_num
+  index_df$is_checkbox<-grepl("___",index_df$vari_names)
+  index_df$root_names<-index_df$vari_names;
   index_df$root_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
   index_df$checkbox_names[index_df$is_checkbox]<-gsub("___.*$","",index_df$root_names[index_df$is_checkbox])
+  index_df$choice_name[index_df$is_checkbox] <- gsub(".*___","",index_df$vari_names[index_df$is_checkbox])
   index_df$root_names<-gsub("_at[0-9]*$","\\1",index_df$root_names)
-  return(index_df)
+  index_df$vari_to_use<-index_df$root_names
+  index_df$vari_to_use[index_df$is_checkbox]<-paste(index_df$root_names[index_df$is_checkbox],index_df$choice_name[index_df$is_checkbox],sep = "___")
+  #index_df$rxsim1<-NULL
+  index_df$index_num <- suppressWarnings(as.numeric(gsub("at","",index_df$attempt_num),warning=F))
 }
 
-###########################
-ProcApply<-function(listx=NULL,FUNC=NULL,...,addNAtoNull=T) {
-  proc_ls<-lapply(X = listx,FUN = FUNC,... = ...)
-  if(addNAtoNull){
-    allnames<-unique(unlist(lapply(proc_ls,names)))
-    proc_ls<-lapply(proc_ls,function(lsx){
-      lsx[allnames[which(!allnames %in% names(lsx))]]<-NA
-      return(lsx)
-    })
-  }
-  proc_ls<-cleanuplist(proc_ls)
-  return(list(list=proc_ls,
-              df=do.call(rbind,proc_ls)))
+bsrc.getMEDLS_index <- function(medlist_df) {
+  medlist_name <- names(medlist_df)
+
 }
 
-##########################
-tolong_multivalue<-function(dfx=NULL,varying=NULL,notvarying=NULL,id.var=c("registration_redcapid","redcap_event_name"),var.left="type",var.right="attempt",sep="_at",timepos="right") {
-  dfx_var_melt<-reshape2::melt(data = dfx,id.vars=notvarying)
-  dfx_var_melt[[var.left]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",1)
-  dfx_var_melt[[var.right]]<-sapply(strsplit(as.character(dfx_var_melt$variable),split = sep,fixed = T),"[[",2)
-  dfx_var_melt$variable<-NULL
-  if (timepos=="right") {
-    timevar<-var.left
-    id.var<-c(id.var,var.right)
-  } else if (timepos=="left") {
-    timevar<-var.right
-    id.var<-c(id.var,var.left)
-  }
-  dfx_reshape<-reshape(dfx_var_melt,timevar = timevar,v.names = "value",idvar = id.var,direction = "wide")
-  names(dfx_reshape)<-gsub("value.","",names(dfx_reshape),fixed = T)
-  
-  return(dfx_reshape)
+
+bsrc.proc_multientry<-function(long_df=NULL,index_df=NULL,long_df_type = c("SUIHX","MEDLIST"),
+                               IDvar = "registration_redcapid",
+                               at_least=1){
+  #single_entry df:
+  SE_df <- long_df[index_df$vari_names[which(index_df$single_entry)]]
+  hx_mdf <- long_df[index_df$vari_names[which(!index_df$single_entry)]]
+  hx_mdf[[IDvar]]<-SE_df[[IDvar]]
+  hx_shdf<-do.call(rbind,lapply(1:max(index_df$index_num,na.rm = T),function(xa){
+    #print(xa)
+    sub_indx<-index_df[which(index_df$index_num == xa),]
+    sub_div<-hx_mdf[c(IDvar,sub_indx$vari_names)]
+    subm_div<-suppressMessages(rc_na_remove(raw = sub_div,mod = T,IDvar = IDvar,at_least = 1))
+    if(nrow(subm_div)>0){
+      names(subm_div)<-c(IDvar,sub_indx$vari_to_use)
+      subm_div$index_num <- xa
+      return(subm_div)
+    } else {return(NULL)}
+  }))
+  sp_shdf<-split(hx_shdf,hx_shdf[[IDvar]])
+  return(list(long_df = hx_shdf,list = sp_shdf))
 }
+
+
 ################# Universal Function to deal with checkbox items:
 bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T,cleandf=T,returnstring=F,collapse=",",...) {
   varionly<-dfx[grep(paste(variablename,"___",sep = ""),names(dfx))]
@@ -919,7 +635,7 @@ bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T
   dfx[[paste(variablename,"__string",sep = "")]]<-sapply(dfx[[variablename]], function(x) {paste(na.omit(x),collapse = collapse)})
   dfx[[paste(variablename,"__ifmultiple",sep = "")]]<-sapply(dfx[[variablename]],function(x) {length(x)>1})
   if (returndf) {
-    if (cleandf) { 
+    if (cleandf) {
       dfx<-dfx[-c(grep(paste(variablename,"___",sep = ""),names(dfx)),
                   grep(paste(paste(variablename,c("string","ifmultiple"),sep = "__"),collapse = "|"),names(dfx)))]
       if (returnstring) {dfx[[variablename]]<-sapply(dfx[[variablename]], function(x) {paste(na.omit(x),collapse = collapse)})}
@@ -930,7 +646,8 @@ bsrc.checkbox<-function(variablename = "registration_race",dfx=NULL,returndf = T
                     Checkbox_ifmultiple=dfx[[paste(variablename,"__ifmultiple",sep = "")]]))}
 }
 ####### get choice mapping and its list varient
-bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
+bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,
+                                varifield="field_name",choicefield="select_choices_or_calculations",typefield="field_type",protocol=protocol.cur,...){
   if (is.null(variablenames)){stop("No variable name provided. Give me at least one name please!")}
   if (is.null(metadata)){
     curdb<-bsrc.checkdatabase2(protocol = protocol, ... = ...)
@@ -940,16 +657,20 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
   names(metasub)<-c("fieldname","fieldtype","choice")
   variname.list<-as.list(variablenames)
   xzej<-lapply(variname.list,FUN = function(x){
+    #print(x)
     argk<-which(metasub$fieldname==x)
     if (metasub$fieldtype[argk] %in% c("dropdown","checkbox","radio")){
       tarstr<-metasub$choice[argk]
+      tarstr<-gsub("[^ ] \\|[^ ]"," | ",tarstr)
       firstspilt<-strsplit(tarstr,split = " | ",fixed = T)[[1]]
+      if(length(grep(", ",firstspilt))!=length(firstspilt)) {firstspilt<-gsub(",",",  ",firstspilt)}
       secondspilt<-strsplit(firstspilt,split = ", ")
       choice.code<-as.character(sapply(secondspilt,"[[",1))
       choice.string<-as.character(sapply(secondspilt,"[[",2))
       xk<-data.frame(choice.code,choice.string)
       xk$choice.code<-as.character(xk$choice.code)
       xk$choice.string<-as.character(xk$choice.string)
+      xk$choice.string[xk$choice.string==" "]<-""
       return(xk)
     } else if (metasub$fieldtype[argk] %in% c("yesno")) {
       xk<-data.frame(choice.code=c(1,0),choice.string=c("Yes","No"))
@@ -961,13 +682,13 @@ bsrc.getchoicemapping<-function(variablenames = NULL ,metadata=NULL,varifield="f
 }
 ########
 bsrc.reg.group<-function(x,protocol,reverse=F){
-  switch(protocol, 
+  switch(protocol,
          "bsocial"={
-           f.from = c(1:4,88,89) 
+           f.from = c(1:4,88,89)
            f.to = c("HC","LL ATT","HL ATT","NON-ATT","NOTSURE BPD","INELIGIBLE")},
          "ksocial"={
-           f.from = c(1:7,88,89) 
-           f.to = c("HC","DEP","DO NOT USE","IDE","ATT","LL ATT","HL ATT","NOT SURE","INELIGIBLE")
+           f.from = c(1:7,88,89)
+           f.to = c("HC","DEP","DO NOT USE","IDE","ATT","LL ATT","HL ATT","NOTSURE PROTECT","INELIGIBLE")
          })
   if (reverse) {
     f.from->from.x
@@ -980,7 +701,7 @@ bsrc.reg.group<-function(x,protocol,reverse=F){
 }
 ##############################
 bsrc.reg.race<-function(x,reverse=F){
-  f.from = c(1:5,999) 
+  f.from = c(1:5,999)
   f.to = c("American Indian/ALNative","Asian","African American","HINative/Pacific Islander","White","NO INFO")
   if (reverse) {
     f.from->from.x
@@ -997,7 +718,7 @@ bsrc.reg.race<-function(x,reverse=F){
 bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=F,aggressivecog=1,...){
   if (is.null(curdb)) {
     if (grabnewinfo) {
-      curdb<-bsrc.conredcap2(protocol = protocol, fullupdate = F, output = T, updaterd = F,... = ...)
+      curdb<-bsrc.conredcap2(protocol = protocol, output = T, updaterd = F,... = ...)
       ifrun<-TRUE
     }else if (!grabnewinfo) {
       curdb<-bsrc.checkdatabase2(protocol = protocol,... = ...)
@@ -1009,34 +730,55 @@ bsrc.getevent<-function(eventname,protocol=protocol.cur,curdb=NULL,nocalc=T,mod=
     funbsrc<-curdb$data
     ifrun<-curdb$success
     funevent<-curdb$eventmap
-  } 
-  
+  }
+
   if(ifrun) {
     if (missing(eventname)){
       message(as.character(unique(funbsrc$redcap_event_name)))
       eventname<-readline(prompt = "Please type in the event name: ")
     }
-    
+
     eventonly<-funbsrc[which(funbsrc$redcap_event_name %in% eventname),]
     formname<-funevent$form[funevent$unique_event_name %in% eventname]
     eventonly.r<-bsrc.getform(formname = formname,curdb = curdb,res.event = eventname,forceskip = T,aggressivecog = aggressivecog,
                               nocalc=nocalc,mod=mod)
-    
+
     return(eventonly.r)
   }
 }
 #####################################
-#Functions to get all data from given forms: 
-
-
-rc_na_checkboxremove<-function(raw){
-  message("By default, NA will replace '' and 0 in checkbox items")
-  raw[raw==""]<-NA
-  if (length(grep("___",names(raw))) > 0){
-    raw[,grep("___",names(raw))][raw[,grep("___",names(raw))] == "0"]<-NA
+#Functions to get all data from given forms:
+bsrc.getIDDateMap <- function(db = NULL,return_id_sp=FALSE) {
+  gMAPx<-bsrc.getEVTDATEFIELD(db = db)
+  all_gx<-do.call(rbind,lapply(unique(gMAPx$date_variname),function(x){
+    #print(x)
+    dx<-db$data[which(db$data$redcap_event_name %in% gMAPx$unique_event_name[which(gMAPx$date_variname == x)]),
+                c(db$metadata$field_name[1],"redcap_event_name",x)]
+    names(dx)<-c(db$metadata$field_name[1],"redcap_event_name","date")
+    dx<-dx[which(dx$date!=""),]
+    dx<-dx[which(!is.na(dx$date)),]
+    if(nrow(dx)<1){return(NULL)}
+    dx$date_vari <- x
+    return(dx)
+  }))
+  rownames(all_gx)<-NULL
+  if(return_id_sp){
+    return(split(all_gx,all_gx[[1]]))
+  } else {
+    return(all_gx)
   }
-  return(raw)
 }
+
+bsrc.matchIDDate <- function(dfx = NULL, db =NULL,id.var="registration_redcapid") {
+  mapx<-bsrc.getIDDateMap(db = db)
+  dfx$ID_UNX <- paste(dfx[[id.var]],dfx$redcap_event_name,sep="-x-")
+  mapx$ID_UNX <- paste(mapx[[1]],mapx$redcap_event_name,sep="-x-")
+  dfy <- merge(dfx,mapx[c("ID_UNX","date")],by = "ID_UNX",all.x = T)
+  dfy$ID_UNX <- NULL
+  return(dfy)
+}
+
+
 
 #########################
 ### MATACH FUNCTIONS ####
@@ -1085,7 +827,7 @@ bsrc.assignaid<-function(df,idfieldname="redcapID",aidfieldname="aID",allinfo=T)
   eval(parse(text=exculine))
   names(idtack)<-c(idfieldname,aidfieldname)
   df<-merge(df,idtack,all = allinfo)
-  return(df)  
+  return(df)
 }
 
 ########################## function call
@@ -1094,7 +836,7 @@ bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=
   evtmap<-dbx$eventmap[which(dbx$eventmap$form %in% metadfx$form_name),]
   evtmap$date_variname<-metadfx$field_name[match(evtmap$form,metadfx$form_name)]
   return(evtmap)
-  
+
   IDEVT_a<-dbx$data[which(dbx$data$redcap_event_name %in% evtmap$unique_event_name & !dbx$data$redcap_event_name %in% evt_filter),
                     c(rcIDvar,"redcap_event_name",metadfx$field_name)]
   IDEVT_w<-melt(IDEVT_a,id.vars=c(rcIDvar,"redcap_event_name"))
@@ -1108,7 +850,7 @@ bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=
 #                                                                  y=NULL)
 #                                                    )
 #                                               ), envir=parent.env()) {
-#   
+#
 #   lapply(lfunc.object, function(x) {message(x)
 #   if (class(x$call)=="function") {
 #     mode=FALSE
@@ -1118,10 +860,10 @@ bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=
 #   do.call(x$call,args = x$argument,quote = FALSE,envir = envir)
 #   lfunc.object=list(list(call=max,argument=list(numtest),functionname="max"))
 #   })
-# } 
-# 
-# 
-# 
+# }
+#
+#
+#
 
 
 
@@ -1129,7 +871,7 @@ bsrc.getIDEVTDate<-function(dbx=NULL,rcIDvar="registration_redcapid",evt_filter=
 ####### IN DEVELOPMENT ########
 ###############################
 if (FALSE){
-  
+
   bsrc.process.race<-function(odk,Race) {
     for (i in 1:length(odk$ID)) {
       if  (is.na(odk$Race[i])) {
@@ -1149,7 +891,7 @@ if (FALSE){
           odk$registration_race___5[i]<-0
           odk$registration_race___999[i]<-0
         }
-        
+
         if  (odk$Race[i]==2) {
           odk$registration_race___1[i]<-0
           odk$registration_race___2[i]<-1
@@ -1158,7 +900,7 @@ if (FALSE){
           odk$registration_race___5[i]<-0
           odk$registration_race___999[i]<-0
         }
-        
+
         if  (odk$Race[i]==3) {
           odk$registration_race___1[i]<-0
           odk$registration_race___2[i]<-0
@@ -1229,7 +971,7 @@ bsrc.change_grp_ptcs<-function(input=NULL,origin=c("bsocial","protect","masterde
                        masterdemo="startup_group",stringsAsFactors = F
   )
   if(!is.data.frame(input)){input<-as.character(input)}
-  
+
   switch (class(input),
           "character" = {
             noorder<-is.na(input)
@@ -1250,40 +992,40 @@ bsrc.change_grp_ptcs<-function(input=NULL,origin=c("bsocial","protect","masterde
 ###############################
 ####### SHINY######### ########
 ###############################
-#Following is for Shiny Web App, 
+#Following is for Shiny Web App,
 if (FALSE) {
   #This chunk is for shiny web app
   library(shiny)
-  
+
   #Will run the database here and generate informaiton in a dataframe
   #Get code from chuck 2
-  
+
   #Define UI here:
   ui <- fluidPage(
     titlePanel("B-Social Single Participant "),
-    
+
     sidebarLayout(
       numericInput(inputId = "id", label = h3("Please input their 6 digits ID"), value = 1),
-      helpText("Note: help text isn't a true widget,", 
+      helpText("Note: help text isn't a true widget,",
                "but it provides an easy way to add text to",
                "accompany other widgets."),
       actionButton(inputId = "changeid", "Submit")),
-    
+
     mainPanel(tableOutput("view"))
   )
-  
+
   # Define server logic here:
   server <- function(input, output) {
-    
+
     randomVals <- eventReactive(input$changeid, {
       runif(input$id)
     })
-    
+
     output$plot <- renderPlot({
       hist(randomVals())
     })
   }
-  
+
   # Run the app ----
   shinyApp(ui = ui, server = server)
 }
