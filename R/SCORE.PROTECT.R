@@ -1,5 +1,6 @@
 #Protect Scoring
 bsrc.score<-function(df=NULL,formname=NULL,...){
+  library(dplyr)
   possible_forms<-c("exit","drs","bis","isel","iip","neo","paibor","spsi","uppsp")
   if(is.null(formname)){
     message("No form name supplied, choose one of these options:")
