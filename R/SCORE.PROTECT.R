@@ -5,8 +5,8 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   if(is.null(formname)){
     message("No form name supplied, choose one of these options:")
     print(possible_forms)
-  }
-  if(tolower(formname)=="wtar"){
+    stop()
+  }else if(tolower(formname)=="wtar"){
     stop("WTAR is already scored (see wtar_s_adj)")
   }
   argu <- list(...)
