@@ -57,35 +57,35 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   score.bis<-function(df=NULL){
     #Make reverse scores
     df<-df %>% mutate(
-      bis36_1r=5-bis36_1, bis36_7r=5-bis36_7, bis36_8r=5-bis36_8,
-      bis36_9r=5-bis36_9,bis36_10r=5-bis36_10,bis36_12r=5-bis36_12,
-      bis36_13r=5-bis36_13,bis36_15r=5-bis36_15,bis36_20r=5-bis36_20,
-      bis36_29r=5-bis36_29,bis36_30r=5-bis36_30
-    ) #Fixed scoring to be 5- not 4-
-    df<-df %>% mutate(
-      bis_attention=ifelse(rowSums(is.na(df[paste0("bis36_",c(5,'9r',11,'20r',28))]))==0,
-                           rowSums(df[paste0("bis36_",c(5,'9r',11,'20r',28))]),NA),
-      bis_cognitive_instability=ifelse(rowSums(is.na(df[paste0("bis36_",c(6,24,26))]))==0,
-                           rowSums(df[paste0("bis36_",c(6,24,26))]),NA),
-      bis_motor=ifelse(rowSums(is.na(df[paste0("bis36_",c(2,3,4,17,19,22,25))]))==0,
-                           rowSums(df[paste0("bis36_",c(2,3,4,17,19,22,25))]),NA),
-      bis_perseverance=ifelse(rowSums(is.na(df[paste0("bis36_",c(16, 21, 23, '30r'))]))==0,
-                           rowSums(df[paste0("bis36_",c(16,21,23,'30r'))]),NA),
-      bis_selfcontrol=ifelse(rowSums(is.na(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14))]))==0,
-                           rowSums(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14))]),NA),
-      bis_cognitive_complexity=ifelse(rowSums(is.na(df[paste0("bis36_",c('10r', '15r', 18, 27, '29r'))]))==0,
-                           rowSums(df[paste0("bis36_",c('10r', '15r', 18, 27, '29r'))]),NA),
-      bis_s_attentional=ifelse(rowSums(is.na(df[paste0("bis36_",c(5,'9r',11,'20r',28,6,24,26))]))==0,
-                           rowSums(df[paste0("bis36_",c(5,'9r',11,'20r',28,6,24,26))]),NA),
-      bis_s_motor=ifelse(rowSums(is.na(df[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]))==0,
-                           rowSums(df[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]),ifelse(
-                             rowSums(is.na(df[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))]))==1,
-                               round(rowSums(df[paste0("bis36_",c(2,3,4,17,19,22,25,16,21,23,'30r'))],na.rm=T)*11/10), NA)),
-      bis_s_nonplanning=ifelse(rowSums(is.na(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]))==0,
-                           rowSums(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]),ifelse(
-                             rowSums(is.na(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))]))==1,
-                               round(rowSums(df[paste0("bis36_",c('1r','7r','8r','12r','13r',14,'10r', '15r', 18, 27, '29r'))],na.rm=T)*11/10), NA))
-    )
+    bis36_1r=5-bis36_1, bis36_5r=5-bis36_5,bis36_6r=5-bis36_6,
+    bis36_7r=5-bis36_7, bis36_8r=5-bis36_8,bis36_10r=5-bis36_10,
+    bis36_11r=5-bis36_11,bis36_13r=5-bis36_13,bis36_19r=5-bis36_19,
+    bis36_30r=5-bis36_30,bis36_35r=5-bis36_35
+  ) 
+  df<-df %>% mutate(
+    bis_attention=ifelse(rowSums(is.na(df[paste0("bis36_",c(32,'7r',36,'19r',29))]))==0,
+                         rowSums(df[paste0("bis36_",c(32,'7r',36,'19r',29))]),NA),
+    bis_cognitive_instability=ifelse(rowSums(is.na(df[paste0("bis36_",c(4,34,27))]))==0,
+                         rowSums(df[paste0("bis36_",c(4,34,27))]),NA),
+    bis_motor=ifelse(rowSums(is.na(df[paste0("bis36_",c(2,31,3,15,18,21,25))]))==0,
+                         rowSums(df[paste0("bis36_",c(2,31,3,15,18,21,25))]),NA),
+    bis_perseverance=ifelse(rowSums(is.na(df[paste0("bis36_",c(14, 20, 33, '30r'))]))==0,
+                         rowSums(df[paste0("bis36_",c(14, 20, 33,'30r'))]),NA),
+    bis_selfcontrol=ifelse(rowSums(is.na(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12))]))==0,
+                         rowSums(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12))]),NA),
+    bis_cognitive_complexity=ifelse(rowSums(is.na(df[paste0("bis36_",c('8r', '13r', 16, 28, '35r'))]))==0,
+                         rowSums(df[paste0("bis36_",c('8r', '13r', 16, 28, '35r'))]),NA),
+    bis_s_attentional=ifelse(rowSums(is.na(df[paste0("bis36_",c(4,34,27,32,'7r',36,'19r',29))]))==0,
+                         rowSums(df[paste0("bis36_",c(4,34,27,32,'7r',36,'19r',29))]),NA),
+    bis_s_motor=ifelse(rowSums(is.na(df[paste0("bis36_",c(2,31,3,15,18,21,25,14, 20, 33, '30r'))]))==0,
+                         rowSums(df[paste0("bis36_",c(2,31,3,15,18,21,25,14, 20, 33, '30r'))]),ifelse(
+                           rowSums(is.na(df[paste0("bis36_",c(2,31,3,15,18,21,25,14, 20, 33, '30r'))]))==1,
+                             round(rowSums(df[paste0("bis36_",c(2,31,3,15,18,21,25,14, 20, 33, '30r'))],na.rm=T)*11/10), NA)),
+    bis_s_nonplanning=ifelse(rowSums(is.na(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12,'8r', '13r', 16, 28, '35r'))]))==0,
+                         rowSums(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12,'8r', '13r', 16, 28, '35r'))]),ifelse(
+                           rowSums(is.na(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12,'8r', '13r', 16, 28, '35r'))]))==1,
+                             round(rowSums(df[paste0("bis36_",c('1r','5r','6r','10r','11r',12,'8r', '13r', 16, 28, '35r'))],na.rm=T)*11/10), NA))
+  )
     return(df)
   }
   
