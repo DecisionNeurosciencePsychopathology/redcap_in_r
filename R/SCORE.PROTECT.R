@@ -181,6 +181,19 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
     return(df)
   }
   
+  #PB scoring
+  score.pb<-function(df=NULL){
+  df<-df %>% mutate(
+      pb_6fr=(2-pb_6f)
+      )
+  
+  df<-df %>% mutate(
+    pb_total=ifelse(rowSums(is.na(df[c("pb_6a","pb_6b","pb_6c","pb_6d","pb_6e","pb_6f")]))==0,
+                  rowSums(df[c("pb_6a","pb_6b","pb_6c","pb_6d","pb_6e","pb_6fr")]),NA)
+    )
+  return(df)
+  }
+  
   #SPSI scoring
   score.spsi<-function(df=NULL){
     df<-df %>% mutate(
