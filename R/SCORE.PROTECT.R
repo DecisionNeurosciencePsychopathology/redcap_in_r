@@ -169,8 +169,8 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
                                       rowSums(df[paste0("paibor_",c(3, 6, 9, '12r', 16, '20r'))]),NA),
       paibor_affective_instability=ifelse(rowSums(is.na(df[paste0("paibor_",c(1,4,'7r',10,'14r',18))]))==0,
                                         rowSums(df[paste0("paibor_",c(1,4,'7r',10,'14r',18))]),NA),
-      paibor_selfharm=ifelse(rowSums(is.na(df[paste0("paibor_",c(13,17,21,22,'24r'))]))==0,
-                                        rowSums(df[paste0("paibor_",c(13,17,21,22,'24r'))]),NA),
+      paibor_selfharm=ifelse(rowSums(is.na(df[paste0("paibor_",c(13,17,21,22,23,'24r'))]))==0,
+                                        rowSums(df[paste0("paibor_",c(13,17,21,22,23,'24r'))]),NA),
       paibor_total=ifelse(rowSums(is.na(df[paste0("paibor_",c(1:6,'7r',8:11,'12r',13,'14r',15:18,'19r','20r',21:23,'24r'))]))==0,
                                         rowSums(df[paste0("paibor_",c(1:6,'7r',8:11,'12r',13,'14r',15:18,'19r','20r',21:23,'24r'))]),ifelse(
                                         rowSums(is.na(df[paste0("paibor_",c(1:6,'7r',8:11,'12r',13,'14r',15:18,'19r','20r',21:23,'24r'))]))==1,
