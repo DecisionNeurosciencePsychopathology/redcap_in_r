@@ -229,8 +229,8 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
       ssd_12nd=ifelse(ssd_12a>0 | ssd_12b>0,1,0),ssd_9nd=ifelse(ssd_9>0,1,0),
       ssd_10nd=ifelse(ssd_10a>0,1,0),ssd_11nd=ifelse(ssd_11==1,1,0),
       #number of people in network
-      ssd_1ppl=ifelse(ssd_1==1,1,0), ssd_2ppl=ssd_2a, ssd_3ppl=recode(ssd_3a,'0'='0','1'='1','2'='1','3'='2'),
-      ssd_4ppl=recode(ssd_4a,'0'='0','1'='1','2'='1','3'='2','9'='0'), ssd_5ppl=ssd_5a,
+      ssd_1ppl=ifelse(ssd_1==1,1,0), ssd_2ppl=ssd_2a, ssd_3ppl=recode(ssd_3a,'0'=0,'1'=1,'2'=1,'3'=2),
+      ssd_4ppl=recode(ssd_4a,'0'=0,'1'=1,'2'=1,'3'=2,'9'=0), ssd_5ppl=ssd_5a,
       ssd_6ppl=ssd_6a, ssd_7ppl=ssd_7a, ssd_8ppl=ssd_8a, ssd_12ppl=ssd_12a+ssd_12b,
       ssd_9ppl=ssd_9, ssd_10ppl=ssd_10)
     #Score
