@@ -1,7 +1,7 @@
 #Protect Scoring
 bsrc.score<-function(df=NULL,formname=NULL,...){
   library(dplyr)
-  possible_forms<-c("exit","drs","bis","isel","iip","neo","paibor","spsi","uppsp")
+  possible_forms<-c("exit","drs","bis","isel","iip","neo","paibor","spsi","ssd","uppsp")
   if(is.null(formname)){
     message("No form name supplied, choose one of these options:")
     print(possible_forms)
@@ -215,6 +215,29 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
                             round(rowSums(df[paste0("spsi_",c(1:25))],na.rm=T)*25/23),NA)))
     )
     return(df)
+  }
+  
+  #SSD Scoring
+  score.ssd<-function(df=NULL){
+  #Recode variables (ND means for network diversity, ppl= Number of people)
+    df<-df %>% mutate(
+      #network diversity
+      ssd_1nd=ifelse(ssd_1==1,1,0),ssd_2nd=ifelse(ssd_2a>0,1,0),
+      ssd_3nd=ifelse(ssd_3a>0,1,0),ssd_4nd=ifelse(ssd_4a>0,1,0),
+      ssd_5nd=ifelse(ssd_5a>0,1,0),ssd_6nd=ifelse(ssd_6a>0,1,0),
+      ssd_7nd=ifelse(ssd_7a>0,1,0),ssd_8nd=ifelse(ssd_8a>0,1,0),
+      ssd_12nd=ifelse(ssd_12a>0 | ssd_12b>0,1,0),ssd_9nd=ifelse(ssd_9>0,1,0),
+      ssd_10nd=ifelse(ssd_10a>0,1,0),ssd_11nd=ifelse(ssd_11==1,1,0),
+      #number of people in network
+      ssd_1ppl=ifelse(ssd_1==1,1,0), ssd_2ppl=ssd_2a, ssd_3ppl=recode(ssd_3a,'0'='0','1'='1','2'='1','3'='2'),
+      ssd_4ppl=recode(ssd_4a,'0'='0','1'='1','2'='1','3'='2','9'='0'), ssd_5ppl=ssd_5a,
+      ssd_6ppl=ssd_6a, ssd_7ppl=ssd_7a, ssd_8ppl=ssd_8a, ssd_12ppl=ssd_12a+ssd_12b,
+      ssd_9ppl=ssd_9, ssd_10ppl=ssd_10)
+    #Score
+    df<-df %>% mutate(
+      ssd_network_diversity=rowSums(df[names(df) %in% paste("ssd_",c(1:12),"nd",sep="")],na.rm=T),
+      ssd_num_of_people=rowSums(df[names(df) %in% paste("ssd_",c(1:10,12),"ppl",sep="")],na.rm=T)
+    )
   }
   
   #UPPSP scoring
