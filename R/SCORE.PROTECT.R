@@ -238,6 +238,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
       ssd_network_diversity=rowSums(df[names(df) %in% paste("ssd_",c(1:12),"nd",sep="")],na.rm=T),
       ssd_num_of_people=rowSums(df[names(df) %in% paste("ssd_",c(1:10,12),"ppl",sep="")],na.rm=T)
     )
+    return(df)
   }
   
   #UPPSP scoring
