@@ -197,23 +197,29 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   #SPSI scoring
   score.spsi<-function(df=NULL){
     df<-df %>% mutate(
-      spsi_pos_problemorient=ifelse(rowSums(is.na(df[paste0("spsi_",c(4,5,9,13,15))]))==0,
-                                        rowSums(df[paste0("spsi_",c(4,5,9,13,15))]),NA),
-      spsi_neg_problemorient=ifelse(rowSums(is.na(df[paste0("spsi_",c(1,3,7,8,11))]))==0,
-                                        rowSums(df[paste0("spsi_",c(1,3,7,8,11))]),NA),
-      spsi_rational_problemsolve=ifelse(rowSums(is.na(df[paste0("spsi_",c(16,19,12,21,23))]))==0,
-                                        rowSums(df[paste0("spsi_",c(16,19,12,21,23))]),NA),
-      spsi_impulsecareless=ifelse(rowSums(is.na(df[paste0("spsi_",c(2,14,20,24,25))]))==0,
-                                  rowSums(df[paste0("spsi_",c(2,14,20,24,25))]),NA),
-      spsi_avoidance=ifelse(rowSums(is.na(df[paste0("spsi_",c(10,18,6,17,22))]))==0,
-                                  rowSums(df[paste0("spsi_",c(10,18,6,17,22))]),NA),
-      spsi_total=ifelse(rowSums(is.na(df[paste0("spsi_",c(1:25))]))==0,
-                        rowSums(df[paste0("spsi_",c(1:25))]),ifelse(
-                          rowSums(is.na(df[paste0("spsi_",c(1:25))]))==1,
-                          round(rowSums(df[paste0("spsi_",c(1:25))],na.rm=T)*25/24),ifelse(
-                            rowSums(is.na(df[paste0("spsi_",c(1:25))]))==2,
-                            round(rowSums(df[paste0("spsi_",c(1:25))],na.rm=T)*25/23),NA)))
-    )
+    #Subscores (positive and rational are positive, negative, impulsecare and avoid are negative)
+    spsi_pos_problemorient=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(4,5,9,13,15))]))==0,
+                                      rowSums(SPSI[paste0("spsi_",c(4,5,9,13,15))]),NA),
+    spsi_neg_problemorient=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(1,3,7,8,11))]))==0,
+                                      rowSums(SPSI[paste0("spsi_",c(1,3,7,8,11))]),NA),
+    spsi_rational_problemsolve=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(16,19,12,21,23))]))==0,
+                                      rowSums(SPSI[paste0("spsi_",c(16,19,12,21,23))]),NA),
+    spsi_impulsecareless=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(2,14,20,24,25))]))==0,
+                                rowSums(SPSI[paste0("spsi_",c(2,14,20,24,25))]),NA),
+    spsi_avoidance=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(10,18,6,17,22))]))==0,
+                                rowSums(SPSI[paste0("spsi_",c(10,18,6,17,22))]),NA),
+    #Reverse items in negative, impulsecare, and avoidance for total calculation
+    spsi_1r=4-spsi_1, spsi_3r=4-spsi_3, spsi_7r=4-spsi_7, spsi_8r=4-spsi_8, spsi_11r=4-spsi_11,
+    spsi_2r=4-spsi_2, spsi_14r=4-spsi_14, spsi_20r=4-spsi_20, spsi_24r=4-spsi_24, spsi_25r=4-spsi_25,
+    spsi_10r=4-spsi_10, spsi_18r=4-spsi_18, spsi_6r=4-spsi_6, spsi_17r=4-spsi_17, spsi_22r=4-spsi_17)
+    
+    #Total
+    df<-df %>% mutate(
+    spsi_total=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(1:25))]))==0,
+          rowSums(SPSI[paste0("spsi_",c(4,5,9,13,15,16,19,12,21,23,'1r','3r','7r','8r','11r','2r','14r','20r','24r','25r','10r','18r','6r','17r','22r'))]),ifelse(
+            rowSums(is.na(SPSI[paste0("spsi_",c(1:25))]))==1,round(rowSums(SPSI[paste0("spsi_",c(4,5,9,13,15,16,19,12,21,23,'1r','3r','7r','8r','11r','2r','14r','20r','24r','25r','10r','18r','6r','17r','22r'))],na.rm=T)*25/24),ifelse(
+                rowSums(is.na(SPSI[paste0("spsi_",c(1:25))]))==2,round(rowSums(SPSI[paste0("spsi_",c(4,5,9,13,15,16,19,12,21,23,'1r','3r','7r','8r','11r','2r','14r','20r','24r','25r','10r','18r','6r','17r','22r'))],na.rm=T)*25/23),NA)))
+  )
     return(df)
   }
   
