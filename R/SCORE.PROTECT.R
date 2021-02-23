@@ -238,12 +238,30 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
       ssd_1ppl=ifelse(ssd_1==1,1,0), ssd_2ppl=ssd_2a, ssd_3ppl=recode(ssd_3a,'0'=0,'1'=1,'2'=1,'3'=2),
       ssd_4ppl=recode(ssd_4a,'0'=0,'1'=1,'2'=1,'3'=2,'9'=0), ssd_5ppl=ssd_5a,
       ssd_6ppl=ssd_6a, ssd_7ppl=ssd_7a, ssd_8ppl=ssd_8a, ssd_12ppl=ssd_12a+ssd_12b,
-      ssd_9ppl=ssd_9, ssd_10ppl=ssd_10)
+      ssd_9ppl=ssd_9, ssd_10ppl=ssd_10,
+      #embedded networks
+      ssd_1en=ifelse(ssd_1==1,1,0), ssd_2en=ifelse(ssd_2a>0,1,0),
+      ssd_3en=ifelse(ssd_3a>0,1,0), ssd_4en=ifelse(ssd_4a>0 & ssd_4a!=9,1,0),
+      ssd_5en=ifelse(ssd_5a>0,1,0))
+    #Embedded Networks family score
+    df<-df %>% mutate(
+      ssd_famen1=rowSums(df[c("ssd_1en", "ssd_2en", "ssd_3en", "ssd_4en", "ssd_5en")],na.rm=T),
+      ssd_famen2=rowSums(df[c("ssd_1ppl","ssd_2ppl", "ssd_3ppl", "ssd_4ppl", "ssd_5ppl")],na.rm=T))
     #Score
     df<-df %>% mutate(
       ssd_network_diversity=rowSums(df[names(df) %in% paste("ssd_",c(1:12),"nd",sep="")],na.rm=T),
       ssd_num_of_people=rowSums(df[names(df) %in% paste("ssd_",c(1:10,12),"ppl",sep="")],na.rm=T)
     )
+    for (i in 1:nrow(df)){
+       df[i,"ssd_embedded_network"]<-
+         ifelse(!is.na(df[i,"ssd_famen1"]) & df[i,"ssd_famen1"]>2 & !is.na(df[i,"ssd_famen2"]) & df[i,"ssd_famen2"]>3,1,0)+
+         ifelse(!is.na(df[i,"ssd_6a"]) & df[i,"ssd_6a"]>3,1,0)+
+         ifelse(!is.na(df[i, "ssd_7a"])& df[i, "ssd_7a"]>3,1,0)+
+         ifelse(!is.na(df[i, "ssd_8a"])& df[i, "ssd_8a"]>3,1,0)+
+         ifelse(!is.na(df[i, "ssd_12a"])& !is.na(df[i, "ssd_12b"]) & df[i, "ssd_12a"]+df[i, "ssd_12b"]>3,1,0)+
+         ifelse(!is.na(df[i, "ssd_9"]) & df[i, "ssd_9"]>3,1,0)+
+         ifelse(!is.na(df[i, "ssd_10a"])& df[i, "ssd_10a"]>3,1,0)
+      }
     return(df)
   }
   
