@@ -1,7 +1,7 @@
 #Protect Scoring
 bsrc.score<-function(df=NULL,formname=NULL,...){
   library(dplyr)
-  possible_forms<-c("exit","drs","bis","isel","iip","neo","paibor","spsi","ssd","uppsp")
+  possible_forms<-c("ham","cirsg","exit","drs","bis","isel","iip","neo","paibor","spsi","ssd","uppsp")
   if(is.null(formname)){
     message("No form name supplied, choose one of these options:")
     print(possible_forms)
@@ -14,10 +14,63 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   score_func<-get(paste0("score.",tolower(formname)),envir = loadNamespace("bsrc"))
   return(do.call(score_func,argu))
 }
+#Clinical
+  #HAM scoring
+    score.ham<-function(df=NULL){
+    #Change names to ham_1 through ham_24
+    paste0("ham_",1:24)->names(df)[names(df) %in% c("ham_1_dm","ham_2_gf","ham_3_su","ham_4_ii","ham_5_im","ham_6_di","ham_7_wi","ham_8_re",
+    "ham_9_ag","ham_10_psya","ham_11_soma","ham_12_gi","ham_12_gi","ham_13_gs","ham_14_sex","ham_15_hd","ham_16_li",
+    "ham_17_weight","ham_18_rt","ham_19_dp","ham_20_prsx","ham_21_ocsx","ham_22_xhelp","ham_23_xhope","ham_24_xworth")]
+    #Need to be numeric to score, change to numeric
+    df<-df %>% mutate_at(vars(paste0("ham_",c(1:24))),as.numeric)
+    #Score
+    df<-df %>% mutate(
+    ham_17_sui=ifelse(rowSums(is.na(df[paste0("ham_",c(1:17))]))==0,
+                      rowSums(df[paste0("ham_",c(1:17))]),ifelse(
+                        rowSums(is.na(df[paste0("ham_",c(1:17))]))==1,
+                      round(rowSums(df[paste0("ham_",c(1:17))],na.rm=T)*17/16),NA)),
+    ham_17_nosui=ifelse(rowSums(is.na(df[paste0("ham_",c(1:2,4:17))]))==0,
+                      rowSums(df[paste0("ham_",c(1:2,4:17))]),ifelse(
+                        rowSums(is.na(df[paste0("ham_",c(1:2,4:17))]))==1,
+                      round(rowSums(df[paste0("ham_",c(1:2,4:17))],na.rm=T)*16/15),NA)),
+    ham_24_sui=ifelse(rowSums(is.na(df[paste0("ham_",c(1:24))]))==0,
+                      rowSums(df[paste0("ham_",c(1:24))]),ifelse(
+                        rowSums(is.na(df[paste0("ham_",c(1:24))]))==1,
+                      round(rowSums(df[paste0("ham_",c(1:24))],na.rm=T)*24/23),ifelse(
+                      rowSums(is.na(df[paste0("ham_",c(1:24))]))==2,
+                      round(rowSums(df[paste0("ham_",c(1:24))],na.rm=T)*24/22),NA))),
+    ham_24_nosui=ifelse(rowSums(is.na(df[paste0("ham_",c(1:2,4:24))]))==0,
+                      rowSums(df[paste0("ham_",c(1:2,4:24))]),ifelse(
+                        rowSums(is.na(df[paste0("ham_",c(1:2,4:24))]))==1,
+                      round(rowSums(df[paste0("ham_",c(1:2,4:24))],na.rm=T)*24/23),ifelse(
+                      rowSums(is.na(df[paste0("ham_",c(1:2,4:24))]))==2,
+                      round(rowSums(df[paste0("ham_",c(1:2,4:24))],na.rm=T)*24/22),NA)))
+    )
+    return(df)
+  }
+
+  #CIRS-G scoring
+    score.cirsg<-function(df=NULL){
+    #Need to be numeric to score, change to numeric
+    df<-df %>% mutate_at(vars(paste("cirsg_",c(1:13),"_s",sep="")),as.numeric)
+    #Score
+    df<-df %>% mutate(
+    cirs_total=ifelse(rowSums(is.na(df[paste("cirsg_",c(1:13),"_s",sep="")]))==0,
+                      rowSums(df[paste("cirsg_",c(1:13),"_s",sep="")]),ifelse(
+                        rowSums(is.na(df[paste("cirsg_",c(1:13),"_s",sep="")]))==1,
+                      round(rowSums(df[paste("cirsg_",c(1:13),"_s",sep="")],na.rm=T)*13/12),NA)),
+    cirs_3or4=ifelse(rowSums(is.na(df[paste("cirsg_",c(1:13),"_s",sep="")]))==0,
+                      rowSums(cirs[paste("cirsg_",c(1:13),"_s",sep="")]>2),ifelse(
+                        rowSums(is.na(df[paste("cirsg_",c(1:13),"_s",sep="")]))==1,
+                      round(rowSums(cirs[paste("cirsg_",c(1:13),"_s",sep="")]>2,na.rm=T)*13/12),NA))
+    )
+    return(df)
+  }
 
 #Neuropsych
   #EXIT scoring
   score.exit<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("exit_",c(1:25))),as.numeric)
     df<-df %>% mutate(
     exit_total=ifelse(rowSums(is.na(df[paste0("exit_",c(1:25))]))==0,
                       rowSums(df[paste0("exit_",c(1:25))]),ifelse(
@@ -31,6 +84,10 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #DRS scoring
   score.drs<-function(df=NULL){
+    drs_vars<-paste0("drs_",c('a','b','c','d','e','f','g','h','i','j','k','l','m','n','o',
+                                              'p','q','r','s','t','u','v','w','x','y','z','ab',
+                                              'ac','ad','ae','af','ag','ah','ai','aj','ak'))
+    df<-df %>% mutate_at(vars(drs_vars),as.numeric)
     df<-df %>% mutate(
     drs_attention=ifelse(rowSums(is.na(df[paste0("drs_",c('a','b','c','d'))]))==0,
                          rowSums(df[paste0("drs_",c('a','b','c','d'))]),NA),
@@ -44,10 +101,10 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
                          rowSums(df[paste0("drs_",c('v','w','x','y','z','ab'))]),NA),
     drs_memory=ifelse(rowSums(is.na(df[paste0("drs_",c('ac','ad','ae','af','ag','ah','ai','aj','ak'))]))==0,
                          rowSums(df[paste0("drs_",c('ac','ad','ae','af','ag','ah','ai','aj','ak'))]),NA),
-    drs_total=ifelse(rowSums(is.na(df))==0, rowSums(df[!names(df) %in% c("masterdemoid","redcap_event_name","drs_date")]),ifelse(
-      rowSums(is.na(df))==1, round(rowSums(df[!names(df) %in% c("masterdemoid","redcap_event_name","drs_date")],na.rm=T)*36/35),ifelse(
-        rowSums(is.na(df))==2,round(rowSums(df[!names(df) %in% c("masterdemoid","redcap_event_name","drs_date")],na.rm=T)*36/34),ifelse(
-          rowSums(is.na(df))==3,round(rowSums(df[!names(df) %in% c("masterdemoid","redcap_event_name","drs_date")],na.rm=T)*36/33),NA))))
+    drs_total=ifelse(rowSums(is.na(df))==0, rowSums(df[drs_vars]),ifelse(
+      rowSums(is.na(df))==1, round(rowSums(df[drs_vars],na.rm=T)*36/35),ifelse(
+        rowSums(is.na(df))==2,round(rowSums(df[drs_vars],na.rm=T)*36/34),ifelse(
+          rowSums(is.na(df))==3,round(rowSums(df[drs_vars],na.rm=T)*36/33),NA))))
     )
     return(df)
   }
@@ -55,6 +112,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
 #Self reports
   #BIS-36 Scoring
   score.bis<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("bis36_",1:36)),as.numeric)
     #Make reverse scores
     df<-df %>% mutate(
     bis36_1r=5-bis36_1, bis36_5r=5-bis36_5,bis36_6r=5-bis36_6,
@@ -91,6 +149,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #ISEL scoring
   score.isel<-function(df=NULL){
+  df<-df %>% mutate_at(vars(paste0("isel_",1:16)),as.numeric)
   df<-df %>% mutate(
       isel_selfesteem=ifelse(rowSums(is.na(df[paste0("isel_",c(1,10,13,16))]))==0,
                              1+isel_1+isel_10-isel_13+isel_16,NA),
@@ -106,6 +165,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #IIP scoring
   score.iip<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("iip15_",1:15)),as.numeric)
     df<-df %>% mutate(
       iip_interpersonal_sensitivity=ifelse(rowSums(is.na(df[paste0("iip15_",c(5,8,10,12,13))]))==0,
                                            rowSums(df[paste0("iip15_",c(5,8,10,12,13))]),NA),
@@ -119,6 +179,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #NEO scoring
   score.neo<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("neoffi_",1:60)),as.numeric)
     df<-df %>% mutate(
       neoffi_1r=6-neoffi_1,neoffi_3r=6-neoffi_3,neoffi_8r=6-neoffi_8, neoffi_9r=6-neoffi_9,
       neoffi_12r=6-neoffi_12, neoffi_14r=6-neoffi_14, neoffi_15r=6-neoffi_15,
@@ -157,6 +218,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #PAIBOR scoring
   score.paibor<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("paibor_",1:24)),as.numeric)
     #Reverse scoring
     df<-df %>% mutate(
       paibor_7r=3-paibor_7, paibor_12r=3-paibor_12, paibor_14r=3-paibor_14,
@@ -183,6 +245,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #PB scoring
   score.pb<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("pb_",c('6a','6b','6c','6d','6e','6f'))),as.numeric)
     df<-df %>% mutate(
       pb_6fr=(2-pb_6f)
       )
@@ -196,6 +259,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #SPSI scoring
   score.spsi<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("spsi",1:25),as.numeric))  
     df<-df %>% mutate(
     #Subscores (positive and rational are positive, negative, impulsecare and avoid are negative)
     spsi_pos_problemorient=ifelse(rowSums(is.na(SPSI[paste0("spsi_",c(4,5,9,13,15))]))==0,
@@ -226,6 +290,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   #SSD Scoring
   score.ssd<-function(df=NULL){
   #Recode variables (ND means for network diversity, ppl= Number of people)
+    df<-df %>% mutate_at(vars(paste0("ssd_",c(1:12,'2a','3a','4a','5a','6a','7a','8a','10a','12a','12b'))),as.numeric)
     df<-df %>% mutate(
       #network diversity
       ssd_1nd=ifelse(ssd_1==1,1,0),ssd_2nd=ifelse(ssd_2a>0,1,0),
@@ -267,6 +332,7 @@ bsrc.score<-function(df=NULL,formname=NULL,...){
   
   #UPPSP scoring
   score.uppsp<-function(df=NULL){
+    df<-df %>% mutate_at(vars(paste0("uppsp_",1:47)),as.numeric)
     #Reverse Scoring
     df<-df %>% mutate(
       uppsp_2r=5-uppsp_2, uppsp_6r=5-uppsp_6, uppsp_10r=5-uppsp_10,
