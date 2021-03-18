@@ -1,20 +1,50 @@
 #Protect Scoring
 bsrc.score<-function(df=NULL,formname=NULL,...){
   library(dplyr)
-  possible_forms<-c("ham","cirsg","exit","drs","bis","isel","iip","neo","paibor","spsi","ssd","uppsp")
+  possible_forms<-c("athf","ham","cirsg","exit","drs","wtar","mmse",
+                    "bis","isel","iip","neo","paibor","spsi","ssd","uppsp")
   if(is.null(formname)){
     message("No form name supplied, choose one of these options:")
     print(possible_forms)
     stop()
   }else if(tolower(formname)=="wtar"){
     stop("WTAR is already scored (see wtar_s_adj)")
-  }
+  }else if(tolower(formname)=="athf"){
+    stop("ATHF is already scored (see athf_maxnum)")
+  }else if(tolower(formname)=="mmse"){
+    stop("MMSE is already scored (see mmse_s_adj)")}
   argu <- list(...)
   argu$df = df
   score_func<-get(paste0("score.",tolower(formname)),envir = loadNamespace("bsrc"))
   return(do.call(score_func,argu))
 }
 #Clinical
+  #SIS scoring
+    score.sis<-function(df=NULL){
+    #Need to be numeric to score, change to numeric
+    df<-df %>% mutate_at(vars(paste0("sis_max_",c(1:18)),paste0("sis_recent_",c(1:18))),as.numeric)
+    #Reverse score Q8
+    df<-df %>% mutate(
+      sis_max_8r=2-sis_max_8, sis_recent_8r=2-sis_recent_8
+    )
+    #Score
+    df<-df %>% mutate(
+    sis_max_plan=ifelse(rowSums(is.na(df[paste0("sis_max_",c(1:7,'8r'))]))==0,
+                      rowSums(df[paste0("sis_max_",c(1:7,'8r'))]),NA),
+    sis_recent_plan=ifelse(rowSums(is.na(df[paste0("sis_recent_",c(1:7,'8r'))]))==0,
+                      rowSums(df[paste0("sis_recent_",c(1:7,'8r'))]),NA),
+    sis_max_total=ifelse(rowSums(is.na(df[paste0("sis_max_",c(1:7,'8r',9:15))]))==0,
+                      rowSums(df[paste0("sis_max_",c(1:7,'8r',9:15))]),ifelse(
+                        rowSums(is.na(df[paste0("sis_max_",c(1:7,'8r',9:15))]))==1,
+                      round(rowSums(df[paste0("sis_max_",c(1:7,'8r',9:15))],na.rm=T)*15/14),NA)),
+    sis_recent_total=ifelse(rowSums(is.na(df[paste0("sis_recent_",c(1:7,'8r',9:15))]))==0,
+                      rowSums(df[paste0("sis_recent_",c(1:7,'8r',9:15))]),ifelse(
+                        rowSums(is.na(df[paste0("sis_recent_",c(1:7,'8r',9:15))]))==1,
+                      round(rowSums(df[paste0("sis_recent_",c(1:7,'8r',9:15))],na.rm=T)*15/14),NA))
+    )
+    return(df)
+  }
+  
   #HAM scoring
     score.ham<-function(df=NULL){
     #Change names to ham_1 through ham_24
