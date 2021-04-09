@@ -190,7 +190,9 @@ bsrc.conredcap2<-function(protocol=protocol.cur,updaterd=T,batch_size=1000L,outp
     rdpath<-protocol$rdpath
   } else {message("protocol has not sufficient information, using global variables [input.uri/input.token]")}
 
-  if (is.na(rdpath) | is.null(rdpath)) {online<-TRUE}
+  if (is.null(rdpath) || is.na(rdpath)) {
+    message("No local path provided, forcing online mode.")
+    online<-TRUE}
 
   if (!output & updaterd) {
     if (!online) {

@@ -1,13 +1,13 @@
 #Basics:
 #' redcap_uri=ptcs$protect$redcap_uri
 #' token=ptcs$protect$token
-#' 
+#'
 #' action = NULL
 #' content = NULL
 #' arms = NULL
 #' records = NULL
 #' fields = NULL
-#' 
+#'
 #' message = TRUE
 
 
@@ -50,7 +50,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
   if (content == "record" && action == "") {
     vari_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body[which(names(post_body)!="fields")],content = "exportFieldNames")
     record_list <-  redcap_api_call(redcap_uri= redcap_uri,post_body = post_body,content = "record",fields=vari_list$output$original_field_name[1],action = "record_single_run")
-    
+
     if (nrow( record_list$output) > batch_size) {
       return(redcap_get_large_records(redcap_uri= redcap_uri,post_body = post_body,record_list = record_list,batch_size = batch_size,carryon = carryon))
     }
@@ -64,7 +64,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
     }
   elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
   simple_df_contents <- c("formEventMapping","metadata","event","exportFieldNames","participantList","project","instrument","user","record","generateNextRecordName")
-  
+
   if(content %in% simple_df_contents && action %in% c("record_single_run","")) {
     try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), silent = TRUE)
     if (!exists("ds")){
@@ -75,7 +75,7 @@ redcap_api_call<-function (redcap_uri=NULL, token=NULL,
       } else {
         return(list(output=ds,success=TRUE))
       }
-      
+
     } else if (result$status != 200L) {
       message("redcap api call failed (HTTP code is not 200), returning raw text")
       return(list(output=ds,success=FALSE))
@@ -102,12 +102,12 @@ redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_lis
     return(dfx)
     }))
   records_sp<-split(records_evt_fixed,records_evt_fixed$count)
-  message("pulling large records in batchs")  
+  message("pulling large records in batchs")
   ifTerminate <- FALSE
   output_sum<-cleanuplist(lapply(records_sp,function(tgt){
     if(ifTerminate && !carryon) {return(NULL)}
     message("pulling batch ",unique(tgt$count)," out of ",max(records_evt_fixed$count))
-    output<-redcap_api_call(redcap_uri = redcap_uri, post_body = post_body, 
+    output<-redcap_api_call(redcap_uri = redcap_uri, post_body = post_body,
                             content = "record",
                             records = unique(tgt$registration_redcapid),
                             action = "record_single_run")
@@ -132,33 +132,33 @@ redcap_get_large_records <- function(redcap_uri = NULL,post_body=NULL,record_lis
 
 redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5, retry_whenfailed=T,
                          continue_on_error = FALSE, redcap_uri, token, verbose = TRUE, NAoverwrite = F,
-                         config_options = NULL) 
+                         config_options = NULL)
 {
   start_time <- base::Sys.time()
-  if (base::missing(redcap_uri)) 
+  if (base::missing(redcap_uri))
     base::stop("The required parameter `redcap_uri` was missing from the call to `redcap_write()`.")
-  if (base::missing(token)) 
+  if (base::missing(token))
     base::stop("The required parameter `token` was missing from the call to `redcap_write()`.")
   #token <- REDCapR::sanitize_token(token)
-  ds_glossary <- REDCapR::create_batch_glossary(row_count = base::nrow(ds_to_write), 
+  ds_glossary <- REDCapR::create_batch_glossary(row_count = base::nrow(ds_to_write),
                                                 batch_size = batch_size)
   affected_ids <- character(0)
-  excluded_ids <- 
+  excluded_ids <-
     lst_status_code <- NULL
   lst_outcome_message <- NULL
   success_combined <- TRUE
-  message("Starting to update ", format(nrow(ds_to_write), 
-                                        big.mark = ",", scientific = F, trim = T), " records to be written at ", 
+  message("Starting to update ", format(nrow(ds_to_write),
+                                        big.mark = ",", scientific = F, trim = T), " records to be written at ",
           Sys.time())
   for (i in seq_along(ds_glossary$id)) {
-    selected_indices <- seq(from = ds_glossary[i, "start_index"], 
+    selected_indices <- seq(from = ds_glossary[i, "start_index"],
                             to = ds_glossary[i, "stop_index"])
-    if (i > 0) 
+    if (i > 0)
       Sys.sleep(time = interbatch_delay)
-    message("Writing batch ", i, " of ", nrow(ds_glossary), 
-            ", with indices ", min(selected_indices), " through ", 
+    message("Writing batch ", i, " of ", nrow(ds_glossary),
+            ", with indices ", min(selected_indices), " through ",
             max(selected_indices), ".")
-    
+
     write_result <- redcap_oneshot_upload(ds = ds_to_write[selected_indices,], previousIDs = NULL,retry_whenfailed = T,
                                           redcap_uri = redcap_uri, token = token, verbose = verbose,
                                           NAoverwrite = NAoverwrite,
@@ -166,12 +166,12 @@ redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5,
     lst_status_code[[i]] <- write_result$status_code
     lst_outcome_message[[i]] <- write_result$outcome_message
     if (!write_result$success) {
-      error_message <- paste0("The `redcap_write()` call failed on iteration ", 
+      error_message <- paste0("The `redcap_write()` call failed on iteration ",
                               i, ".")
-      error_message <- paste(error_message, ifelse(!verbose, 
-                                                   "Set the `verbose` parameter to TRUE and rerun for additional information.", 
+      error_message <- paste(error_message, ifelse(!verbose,
+                                                   "Set the `verbose` parameter to TRUE and rerun for additional information.",
                                                    ""))
-      if (continue_on_error) 
+      if (continue_on_error)
         warning(error_message)
       else stop(error_message)
     }
@@ -180,13 +180,13 @@ redcap_upload<-function (ds_to_write, batch_size = 100L, interbatch_delay = 0.5,
     excluded_ids <- c(excluded_ids, write_result$excludedIDs)
     rm(write_result)
   }
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time,
                                          units = "secs"))
   status_code_combined <- paste(lst_status_code, collapse = "; ")
   outcome_message_combined <- paste(lst_outcome_message, collapse = "; ")
   excluded_ids <- excluded_ids[excluded_ids!=""]
   return(list(success = success_combined, status_code = status_code_combined,excluded_ids=excluded_ids,
-              outcome_message = outcome_message_combined, records_affected_count = length(affected_ids), 
+              outcome_message = outcome_message_combined, records_affected_count = length(affected_ids),
               affected_ids = affected_ids, elapsed_seconds = elapsed_seconds))
 }
 
@@ -194,41 +194,41 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, NAoverwr
   overwriteBehavior = ifelse(NAoverwrite,"overwrite","normal")
   start_time <- Sys.time()
   csvElements <- NULL
-  if (missing(redcap_uri)) 
+  if (missing(redcap_uri))
     stop("The required parameter `redcap_uri` was missing from the call to `redcap_write_oneshot()`.")
-  if (missing(token)) 
+  if (missing(token))
     stop("The required parameter `token` was missing from the call to `redcap_write_oneshot()`.")
   #token <- REDCapR::sanitize_token(token)
-  con <- base::textConnection(object = "csvElements", open = "w", 
+  con <- base::textConnection(object = "csvElements", open = "w",
                               local = TRUE)
   utils::write.csv(ds, con, row.names = FALSE, na = "")
   close(con)
   csv <- paste(csvElements, collapse = "\n")
   rm(csvElements, con)
-  post_body <- list(token = token, content = "record", format = "csv", 
-                    type = "flat", data = csv, overwriteBehavior = overwriteBehavior, 
+  post_body <- list(token = token, content = "record", format = "csv",
+                    type = "flat", data = csv, overwriteBehavior = overwriteBehavior,
                     returnContent = "ids", returnFormat = "csv")
-  result <- httr::POST(url = redcap_uri, body = post_body, 
+  result <- httr::POST(url = redcap_uri, body = post_body,
                        config = config_options)
   status_code <- result$status_code
   raw_text <- httr::content(result, type = "text")
-  
-  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, 
+
+  elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time,
                                          units = "secs"))
   success <- (status_code == 200L)
   if (success) {
     elements <- unlist(strsplit(raw_text, split = "\\n"))
     affectedIDs <- elements[-1]
     recordsAffectedCount <- length(affectedIDs)
-    outcome_message <- paste0(format(recordsAffectedCount, 
-                                     big.mark = ",", scientific = FALSE, trim = TRUE), 
-                              " records were written to REDCap in ", round(elapsed_seconds, 
+    outcome_message <- paste0(format(recordsAffectedCount,
+                                     big.mark = ",", scientific = FALSE, trim = TRUE),
+                              " records were written to REDCap in ", round(elapsed_seconds,
                                                                            1), " seconds.")
     raw_text <- ""
   }
   else {
     if(retry_whenfailed){
-      outcome_message<-outcome_message <- paste0("The upload was not successful:\n", 
+      outcome_message<-outcome_message <- paste0("The upload was not successful:\n",
                                                  raw_text,"\n","But we will try again...\n")
       sp_rawtext<-strsplit(raw_text,split = "\\n")[[1]]
       allgx<-lapply(sp_rawtext,function(x){xa<-strsplit(gsub("\"","",x),",")[[1]];})
@@ -240,7 +240,7 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, NAoverwr
         if(length(a)>0){a}else{NA}
       })))
       ds_new<-ds[-negPos,]
-      gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose, 
+      gx<-redcap_oneshot_upload(ds = ds_new, redcap_uri = redcap_uri, token = token, verbose = verbose,
                                 retry_whenfailed = T,previousIDs = allIDs,
                                 config_options = config_options)
       raw_text<-paste(raw_text,gx$raw_text,sep = "re-try: ")
@@ -254,15 +254,15 @@ redcap_oneshot_upload<-function (ds, redcap_uri, token, verbose = TRUE, NAoverwr
     } else {
       affectedIDs <- numeric(0)
       recordsAffectedCount <- NA_integer_
-      outcome_message <- paste0("The REDCapR write/import operation was not successful.  The error message was:\n", 
+      outcome_message <- paste0("The REDCapR write/import operation was not successful.  The error message was:\n",
                                 raw_text)
     }
   }
-  if (verbose) 
+  if (verbose)
     message(outcome_message)
   if (!is.null(previousIDs)){excludedIDs<-previousIDs}else {excludedIDs<-""}
-  return(list(success = success, status_code = status_code, 
-              outcome_message = outcome_message, records_affected_count = recordsAffectedCount, 
+  return(list(success = success, status_code = status_code,
+              outcome_message = outcome_message, records_affected_count = recordsAffectedCount,
               affected_ids = affectedIDs, elapsed_seconds = elapsed_seconds, excludedIDs = excludedIDs,
               raw_text = raw_text))
 }
@@ -290,33 +290,33 @@ redcap.getreport<-function(redcap_uri, token, reportid = NULL, message = TRUE, c
     stop("The required parameter `token` was missing from the call to `redcap.getreport`.") }
   #token <- REDCapR::sanitize_token(token)
   post_body <- list(token = token, content = "report", format = "csv", report_id=as.character(reportid))
-  result <- httr::POST(url = redcap_uri, body = post_body, 
+  result <- httr::POST(url = redcap_uri, body = post_body,
                        config = config_options)
   status_code <- result$status
   success <- (status_code == 200L)
   raw_text <- httr::content(result, "text")
   elapsed_seconds <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
   if (success) {
-    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE), 
+    try(ds <- utils::read.csv(text = raw_text, stringsAsFactors = FALSE),
         silent = TRUE)
     if (exists("ds") & inherits(ds, "data.frame")) {
-      outcome_message <- paste0("The data dictionary describing ", 
-                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE), 
-                                " fields was read from REDCap in ", 
-                                round(elapsed_seconds, 1), " seconds.  The http status code was ", 
+      outcome_message <- paste0("The data dictionary describing ",
+                                format(nrow(ds), big.mark = ",", scientific = FALSE, trim = TRUE),
+                                " fields was read from REDCap in ",
+                                round(elapsed_seconds, 1), " seconds.  The http status code was ",
                                 status_code, ".")
       raw_text <- ""} else {success <- FALSE
       ds <- data.frame()
-      outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ", 
-                                status_code, ".  The 'raw_text' returned was '", 
+      outcome_message <- paste0("The REDCap metadata export failed.  The http status code was ",
+                                status_code, ".  The 'raw_text' returned was '",
                                 raw_text, "'.")}
   } else {
     ds <- data.frame()
-    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n", 
+    outcome_message <- paste0("The REDCapR metadata export operation was not successful.  The error message was:\n",
                               raw_text)}
-  if (message){ 
+  if (message){
     message(outcome_message)}
-  return(list(data = ds, success = success, status_code = status_code, 
-              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds, 
+  return(list(data = ds, success = success, status_code = status_code,
+              outcome_message = outcome_message, elapsed_seconds = elapsed_seconds,
               raw_text = raw_text))
 }
